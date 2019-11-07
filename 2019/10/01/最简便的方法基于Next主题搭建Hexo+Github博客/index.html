@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="前言Hexo，反正我第一眼看到就喜欢上了它的简约，感受一下吧。如果你喜欢写作，我觉得你可以试试gitbook或者跟着本文搭建一个属于自己的博客空间（即使你不是IT行业的一员），不再受限于第三方博客地址，当然Hexo搭建的博客也是基于github托管的，但是并不需要你购买域名。经过两天的探索加爬坑，终于把博客在git上安家了，感谢开源的大哥大姐们，由于并非js开发，所以遇到了很多坑，于是也想整理一篇">
+<meta name="keywords" content="hexo,博客">
+<meta property="og:type" content="article">
+<meta property="og:title" content="最简便的方法基于Next主题搭建Hexo+Github博客">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;10&#x2F;01&#x2F;%E6%9C%80%E7%AE%80%E4%BE%BF%E7%9A%84%E6%96%B9%E6%B3%95%E5%9F%BA%E4%BA%8ENext%E4%B8%BB%E9%A2%98%E6%90%AD%E5%BB%BAHexo+Github%E5%8D%9A%E5%AE%A2&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="前言Hexo，反正我第一眼看到就喜欢上了它的简约，感受一下吧。如果你喜欢写作，我觉得你可以试试gitbook或者跟着本文搭建一个属于自己的博客空间（即使你不是IT行业的一员），不再受限于第三方博客地址，当然Hexo搭建的博客也是基于github托管的，但是并不需要你购买域名。经过两天的探索加爬坑，终于把博客在git上安家了，感谢开源的大哥大姐们，由于并非js开发，所以遇到了很多坑，于是也想整理一篇">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160531_10.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_11.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_11.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_11.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_12.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_13.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_14.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_15.png">
+<meta property="og:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160601_18.png">
+<meta property="og:updated_time" content="2019-11-06T00:42:55.444Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;7xuupy.com1.z0.glb.clouddn.com&#x2F;Snip20160531_10.png">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/10/01/%E6%9C%80%E7%AE%80%E4%BE%BF%E7%9A%84%E6%96%B9%E6%B3%95%E5%9F%BA%E4%BA%8ENext%E4%B8%BB%E9%A2%98%E6%90%AD%E5%BB%BAHexo+Github%E5%8D%9A%E5%AE%A2/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>最简便的方法基于Next主题搭建Hexo+Github博客 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/10/01/%E6%9C%80%E7%AE%80%E4%BE%BF%E7%9A%84%E6%96%B9%E6%B3%95%E5%9F%BA%E4%BA%8ENext%E4%B8%BB%E9%A2%98%E6%90%AD%E5%BB%BAHexo+Github%E5%8D%9A%E5%AE%A2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          最简便的方法基于Next主题搭建Hexo+Github博客
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-10-01 21:45:53" itemprop="dateCreated datePublished" datetime="2019-10-01T21:45:53+08:00">2019-10-01</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-11-06 08:42:55" itemprop="dateModified" datetime="2019-11-06T08:42:55+08:00">2019-11-06</time>
+              </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>22k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>20 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>Hexo，反正我第一眼看到就喜欢上了它的简约，<a href="http://geoffen.github.io/">感受一下吧</a>。<br>如果你喜欢写作，我觉得你可以试试gitbook或者跟着本文搭建一个属于自己的博客空间（即使你不是IT行业的一员），不再受限于第三方博客地址，当然Hexo搭建的博客也是基于github托管的，但是并不需要你购买域名。<br>经过两天的探索加爬坑，终于把博客在git上安家了，感谢开源的大哥大姐们，由于并非js开发，所以遇到了很多坑，于是也想整理一篇比较完整的博客。</p>
+<p>ps:我选择的主题是<a href="https://github.com/iissnan/hexo-theme-next" target="_blank" rel="noopener">Next</a></p>
+<a id="more"></a>
+
+<h2 id="环境配置"><a href="#环境配置" class="headerlink" title="环境配置"></a>环境配置</h2><h3 id="安装Node-js"><a href="#安装Node-js" class="headerlink" title="安装Node.js"></a>安装Node.js</h3><p><a href="https://nodejs.org/download/" target="_blank" rel="noopener">下载Node.js</a><br>参考地址：<a href="http://www.w3cschool.cc/nodejs/nodejs-install-setup.html" target="_blank" rel="noopener">安装Node.js</a></p>
+<h3 id="安装Git"><a href="#安装Git" class="headerlink" title="安装Git"></a>安装Git</h3><p>下载地址：<a href="http://git-scm.com/download/" target="_blank" rel="noopener">http://git-scm.com/download/</a></p>
+<h3 id="安装Hexo"><a href="#安装Hexo" class="headerlink" title="安装Hexo"></a>安装Hexo</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ cd d:/hexo</span><br><span class="line">$ npm install hexo-cli -g</span><br><span class="line">$ hexo init blog</span><br><span class="line">$ cd blog</span><br><span class="line">$ npm install</span><br><span class="line">$ hexo g # 或者hexo generate</span><br><span class="line">$ hexo s # 或者hexo server，可以在http://localhost:4000/ 查看</span><br></pre></td></tr></table></figure>
+
+<p>这里有必要提下Hexo常用的几个命令：</p>
+<ol>
+<li>hexo generate (hexo g) 生成静态文件，会在当前目录下生成一个新的叫做public的文件夹</li>
+<li>hexo server (hexo s) 启动本地web服务，用于博客的预览</li>
+<li>hexo deploy (hexo d) 部署播客到远端（比如github, heroku等平台）</li>
+</ol>
+<p>另外还有其他几个常用命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new &quot;postName&quot; #新建文章</span><br><span class="line">$ hexo new page &quot;pageName&quot; #新建页面</span><br></pre></td></tr></table></figure>
+
+<p>常用简写</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ hexo n == hexo new</span><br><span class="line">$ hexo g == hexo generate</span><br><span class="line">$ hexo s == hexo server</span><br><span class="line">$ hexo d == hexo deploy</span><br></pre></td></tr></table></figure>
+
+<p>常用组合</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo d -g #生成部署</span><br><span class="line">$ hexo s -g #生成预览</span><br></pre></td></tr></table></figure>
+
+<p>现在我们打开<a href="http://localhost:4000/" target="_blank" rel="noopener">http://localhost:4000/</a> 已经可以看到一篇内置的blog了。</p>
+<h3 id="Hexo主题设置"><a href="#Hexo主题设置" class="headerlink" title="Hexo主题设置"></a>Hexo主题设置</h3><p>这里以主题yilia为例进行说明。</p>
+<h4 id="安装主题"><a href="#安装主题" class="headerlink" title="安装主题"></a>安装主题</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo clean</span><br><span class="line">$ git clone https://github.com/litten/hexo-theme-yilia.git themes/yilia</span><br></pre></td></tr></table></figure>
+
+<h4 id="启用主题"><a href="#启用主题" class="headerlink" title="启用主题"></a>启用主题</h4><p>修改Hexo目录下的_config.yml配置文件中的theme属性，将其设置为yilia。</p>
+<h4 id="更新主题"><a href="#更新主题" class="headerlink" title="更新主题"></a>更新主题</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ cd themes/yilia</span><br><span class="line">$ git pull</span><br><span class="line">$ hexo g # 生成</span><br><span class="line">$ hexo s # 启动本地web服务器</span><br></pre></td></tr></table></figure>
+
+<p>现在打开<a href="http://localhost:4000/" target="_blank" rel="noopener">http://localhost:4000/</a> ，会看到我们已经应用了一个新的主题。</p>
+<h3 id="hexo部署"><a href="#hexo部署" class="headerlink" title="hexo部署"></a>hexo部署</h3><h4 id="使用hexo-deploy部署"><a href="#使用hexo-deploy部署" class="headerlink" title="使用hexo deploy部署"></a>使用hexo deploy部署</h4><p>hexo deploy可以部署到很多平台，具体可以<a href="https://hexo.io/docs/deployment.html" target="_blank" rel="noopener">参考这个链接</a>. 如果部署到github，需要在配置文件_config.xml中作如下修改：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">deploy:</span><br><span class="line">  type: git</span><br><span class="line">  repo: git@github.com:geoffen/geoffen.github.io.git</span><br><span class="line">  branch: master</span><br></pre></td></tr></table></figure>
+
+<p>然后在命令行中执行</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo d</span><br></pre></td></tr></table></figure>
+
+<p>即可完成部署。</p>
+<p>注意需要提前安装一个扩展：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ npm install hexo-deployer-git --save</span><br></pre></td></tr></table></figure>
+
+<h3 id="使用git命令行部署"><a href="#使用git命令行部署" class="headerlink" title="使用git命令行部署"></a>使用git命令行部署</h3><p>不幸的是，上述命令虽然简单方便，但是偶尔会有莫名其妙的问题出现，因此，我们也可以追本溯源，使用git命令来完成部署的工作。</p>
+<h4 id="clone-github-repo"><a href="#clone-github-repo" class="headerlink" title="clone github repo"></a>clone github repo</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ cd d:/hexo/blog</span><br><span class="line"></span><br><span class="line">$ git clone https://github.com/geoffen/geoffen.github.io.git .deploy/geoffen.github.io</span><br></pre></td></tr></table></figure>
+
+<p>将我们之前创建的repo克隆到本地，新建一个目录叫做.deploy用于存放克隆的代码。</p>
+<h4 id="创建一个deploy脚本文件"><a href="#创建一个deploy脚本文件" class="headerlink" title="创建一个deploy脚本文件"></a>创建一个deploy脚本文件</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">hexo generate</span><br><span class="line">cp -R public/* .deploy/geoffen.github.io</span><br><span class="line">cd .deploy/geoffen.github.io</span><br><span class="line">git add .</span><br><span class="line">git commit -m “update”</span><br><span class="line">git push origin master</span><br></pre></td></tr></table></figure>
+
+<p>简单解释一下，hexo generate生成public文件夹下的新内容，然后将其拷贝至geoffen.github.io的git目录下，然后使用git commit命令提交代码到geoffen.github.io这个repo的master branch上。</p>
+<p>需要部署的时候，执行这段脚本就可以了（比如可以将其保存为deploy.sh）。执行过程中可能需要让你输入Github账户的用户名及密码，按照提示操作即可。</p>
+<h3 id="添加插件"><a href="#添加插件" class="headerlink" title="添加插件"></a>添加插件</h3><p>添加sitemap和feed插件</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ npm install hexo-generator-feed</span><br><span class="line">$ npm install hexo-generator-sitemap</span><br></pre></td></tr></table></figure>
+
+<p>修改_config.yml，增加以下内容</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"># Extensions</span><br><span class="line">Plugins:</span><br><span class="line">- hexo-generator-feed</span><br><span class="line">- hexo-generator-sitemap</span><br><span class="line"></span><br><span class="line">#Feed Atom</span><br><span class="line">feed:</span><br><span class="line">  type: atom</span><br><span class="line">  path: atom.xml</span><br><span class="line">  limit: 20</span><br><span class="line"></span><br><span class="line">#sitemap</span><br><span class="line">sitemap:</span><br><span class="line">  path: sitemap.xml</span><br></pre></td></tr></table></figure>
+
+<p>配完之后，就可以访问<code>http://geoffen.github.io/atom.xml</code>和<code>http://geoffen.github.io/sitemap.xml</code>，发现这两个文件已经成功生成了。</p>
+<h3 id="添加404公益"><a href="#添加404公益" class="headerlink" title="添加404公益"></a>添加404公益</h3><p>GitHub Pages有提供制作404页面的指引：<a href="https://help.github.com/articles/custom-404-pages" target="_blank" rel="noopener">Custom 404 Pages</a>。</p>
+<p>直接在根目录下创建自己的404.html或者404.md就可以。但是自定义404页面仅对绑定顶级域名的项目才起作用，GitHub默认分配的二级域名是不起作用的，使用hexo server在本机调试也是不起作用的。</p>
+<p>推荐使用<a href="http://www.qq.com/404/" target="_blank" rel="noopener">腾讯公益404</a>。</p>
+<h3 id="添加about页面"><a href="#添加about页面" class="headerlink" title="添加about页面"></a>添加about页面</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new page &quot;about&quot;</span><br></pre></td></tr></table></figure>
+
+<p>之后在sourceaboutindex.md目录下会生成一个index.md文件，打开输入个人信息即可，如果想要添加版权信息，可以在文件末尾添加：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">&lt;div style=&quot;font-size:12px;border-bottom: #ddd 1px solid; BORDER-LEFT: #ddd 1px solid; BACKGROUND: #f6f6f6; HEIGHT: 120px; BORDER-TOP: #ddd 1px solid; BORDER-RIGHT: #ddd 1px solid&quot;&gt;</span><br><span class="line">&lt;div style=&quot;MARGIN-TOP: 10px; FLOAT: left; MARGIN-LEFT: 5px; MARGIN-RIGHT: 10px&quot;&gt;</span><br><span class="line">&lt;IMG alt=&quot;&quot; src=&quot;https://avatars1.githubusercontent.com/u/168751?v=3&amp;s=140&quot; width=90 height=100&gt;</span><br><span class="line">&lt;/div&gt;</span><br><span class="line">&lt;div style=&quot;LINE-HEIGHT: 200%; MARGIN-TOP: 10px; COLOR: #000000&quot;&gt;</span><br><span class="line">本文链接：&lt;a href=&quot;&lt;%= post.link %&gt;&quot;&gt;&lt;%= post.title %&gt;&lt;/a&gt; &lt;br/&gt;</span><br><span class="line">作者： </span><br><span class="line">&lt;a href=&quot;http://geoffen.github.io/&quot;&gt;令狐葱&lt;/a&gt; &lt;br/&gt;出处： </span><br><span class="line">&lt;a href=&quot;http://geoffen.github.io/&quot;&gt;http://geoffen.github.io/&lt;/a&gt;</span><br><span class="line">&lt;br/&gt;本文基于&lt;a target=&quot;_blank&quot; title=&quot;Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)&quot; href=&quot;http://creativecommons.org/licenses/by-sa/4.0/&quot;&gt; 知识共享署名-相同方式共享 4.0 &lt;/a&gt;</span><br><span class="line">国际许可协议发布，欢迎转载，演绎或用于商业目的，但是必须保留本文的署名 </span><br><span class="line">&lt;a href=&quot;http://geoffen.github.io/&quot;&gt;令狐葱&lt;/a&gt;及链接。</span><br><span class="line">&lt;/div&gt;</span><br><span class="line">&lt;/div&gt;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="添加Fork-me-on-Github"><a href="#添加Fork-me-on-Github" class="headerlink" title="添加Fork me on Github"></a>添加Fork me on Github</h3><p><a href="https://github.com/blog/273-github-ribbons" target="_blank" rel="noopener">获取代码</a>，选择你喜欢的代码添加到hexo/themes/yilia/layout/layout.ejs的末尾即可，注意要将代码里的you改成你的Github账号名。</p>
+<h3 id="添加支付宝捐赠按钮及二维码支付"><a href="#添加支付宝捐赠按钮及二维码支付" class="headerlink" title="添加支付宝捐赠按钮及二维码支付"></a>添加支付宝捐赠按钮及二维码支付</h3><p>支付宝捐赠按钮在D:/hexo/themes/yilia/layout_widget目录下新建一个zhifubao.ejs文件，内容如下</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">&lt;p class=&quot;asidetitle&quot;&gt;打赏他&lt;/p&gt;</span><br><span class="line">&lt;div&gt;</span><br><span class="line">&lt;form action=&quot;https://shenghuo.alipay.com/send/payment/fill.htm&quot; method=&quot;POST&quot; target=&quot;_blank&quot; accept-charset=&quot;GBK&quot;&gt;</span><br><span class="line">    &lt;br/&gt;</span><br><span class="line">    &lt;input name=&quot;optEmail&quot; type=&quot;hidden&quot; value=&quot;your 支付宝账号&quot; /&gt;</span><br><span class="line">    &lt;input name=&quot;payAmount&quot; type=&quot;hidden&quot; value=&quot;默认捐赠金额(元)&quot; /&gt;</span><br><span class="line">    &lt;input id=&quot;title&quot; name=&quot;title&quot; type=&quot;hidden&quot; value=&quot;博主，打赏你的！&quot; /&gt;</span><br><span class="line">    &lt;input name=&quot;memo&quot; type=&quot;hidden&quot; value=&quot;你Y加油，继续写博客！&quot; /&gt;</span><br><span class="line">    &lt;input name=&quot;pay&quot; type=&quot;image&quot; value=&quot;转账&quot; src=&quot;http://7xig3q.com1.z0.glb.clouddn.com/alipay-donate-website.png&quot; /&gt;</span><br><span class="line">&lt;/form&gt;</span><br><span class="line">&lt;/div&gt;</span><br></pre></td></tr></table></figure>
+
+<p>添加完该文件之后，要在D:/hexo/themes/yilia/_config.yml文件中启用，如下所示，添加zhifubao</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">widgets:</span><br><span class="line">- category</span><br><span class="line">- tag</span><br><span class="line">- links</span><br><span class="line">- tagcloud</span><br><span class="line">- zhifubao</span><br><span class="line">- rss</span><br></pre></td></tr></table></figure>
+
+<p>或者</p>
+<p>很简单，打开主题配置文件_config.yml<br>添加字段：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">reward_comment: 坚持原创技术分享，您的支持将鼓励我继续创作！</span><br><span class="line">alipay: http://ww3.sinaimg.cn/small/937882b5jw1f4dalzfc5nj20p00vu0um.jpg</span><br></pre></td></tr></table></figure>
+
+<p><code>alipay:</code> 填写的是支付宝或者微信的收款二维码图片地址。</p>
+<h2 id="生成部署三部曲"><a href="#生成部署三部曲" class="headerlink" title="生成部署三部曲"></a>生成部署三部曲</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">hexo clean #清空缓存</span><br><span class="line">hexo g #生成静态网页</span><br><span class="line">hexo d #部署到github</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="主题优化"><a href="#主题优化" class="headerlink" title="主题优化"></a>主题优化</h2><p><a href="http://chaserr.github.io/" target="_blank" rel="noopener">样式预览</a></p>
+<h3 id="Next主题的安装使用"><a href="#Next主题的安装使用" class="headerlink" title="Next主题的安装使用"></a>Next主题的安装使用</h3><p>首先从github上clone到本地，在终端cd / 切换到你通过Hexo init生成的根目录，<br>然后在终端输入命令：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ git clone https://github.com/iissnan/hexo-theme-next themes/next</span><br></pre></td></tr></table></figure>
+
+<p>进入站点的全局配置文件：_config.yml<br>找到theme字段：设置为</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">theme: next</span><br></pre></td></tr></table></figure>
+
+<p>到这里可以验证一下主题是否被启用。终端输入：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo s -- debug</span><br></pre></td></tr></table></figure>
+
+<p>然后本地访问<a href="http://localhost:4000%EF%BC%8C%E7%9C%8B%E7%9C%8B%E6%95%88%E6%9E%9C%EF%BC%8C%E5%9C%A8%E6%B2%A1%E6%9C%89%E9%83%A8%E7%BD%B2%E5%88%B0github%E4%B8%8A%E4%B9%8B%E5%89%8D%EF%BC%8C%E4%B8%80%E8%88%AC%E9%83%BD%E5%8F%AF%E4%BB%A5%E8%BF%99%E6%A0%B7%E5%9C%A8%E6%9C%AC%E5%9C%B0%E8%BF%9B%E8%A1%8C%E9%A2%84%E8%A7%88%E3%80%82/" target="_blank" rel="noopener">http://localhost:4000，看看效果，在没有部署到github上之前，一般都可以这样在本地进行预览。</a></p>
+<p>关于站点全局_config.yml配置文件的其他一些参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"># Site</span><br><span class="line">title: 朝夕 #博客名</span><br><span class="line">subtitle: 朝闻道，夕死可以。 #博客副标题</span><br><span class="line">description: #给搜索引擎看的，对站点的描述，可以自定义</span><br><span class="line">author: 童星 #作者名称，显示在网站最底部</span><br><span class="line">language: zh-Hans #语言选择，这里表示中文</span><br><span class="line">email: #你的联系邮箱</span><br><span class="line">timezone:</span><br><span class="line"></span><br><span class="line"># URL</span><br><span class="line">## If your site is put in a subdirectory, set url as &apos;http://yoursite.com/child&apos; and root as &apos;/child/&apos;</span><br><span class="line">url: chaserr.github.io  #可以填写你的站点域名</span><br><span class="line">root: /</span><br><span class="line">permalink: :year/:month/:day/:title/</span><br><span class="line">permalink_defaults:</span><br><span class="line"></span><br><span class="line"># Directory</span><br><span class="line">source_dir: source</span><br><span class="line">public_dir: public</span><br><span class="line">tag_dir: tags</span><br><span class="line">archive_dir: archives</span><br><span class="line">category_dir: categories</span><br><span class="line">code_dir: downloads/code</span><br><span class="line">i18n_dir: :lang</span><br><span class="line">skip_render:</span><br><span class="line"></span><br><span class="line"># Writing , 设置生成博文的默认格式</span><br><span class="line">new_post_name: :title.md # File name of new posts</span><br><span class="line">default_layout: post #默认布局</span><br><span class="line">titlecase: false # Transform title into titlecase</span><br><span class="line">external_link: true # Open external links in new tab</span><br><span class="line">filename_case: 0 #把文件名称转换为（1）小写或者大写</span><br><span class="line">render_drafts: #显示草稿</span><br><span class="line">post_asset_folder: false  #启动Asset文件夹</span><br><span class="line">relative_link: false #把链接改为与根目录相对位置</span><br><span class="line">future: true #显示未来的文章</span><br><span class="line">highlight: #代码块的设置</span><br><span class="line">  enable: true</span><br><span class="line">  line_number: true</span><br><span class="line">  auto_detect: false</span><br><span class="line">  tab_replace:</span><br></pre></td></tr></table></figure>
+
+<p>默认的大致就这些，另外给主题添加相关功能的时候后面会慢慢加上其他一些参数。</p>
+<h4 id="给站点添加rss和sitemap功能"><a href="#给站点添加rss和sitemap功能" class="headerlink" title="给站点添加rss和sitemap功能"></a>给站点添加rss和sitemap功能</h4><p>打开终端，切换到站点根目录，输入：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ npm install hexo-generator-feed</span><br><span class="line">$ npm install hexo-generator-sitemap</span><br></pre></td></tr></table></figure>
+
+<p>在全局配置文件_config.yml进行插件配置：（为防止好找，在最下面进行配置）</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">#插件配置</span><br><span class="line">plugins: hexo-generator-feed </span><br><span class="line">#- hexo-generator-sitemap </span><br><span class="line"></span><br><span class="line">feed:</span><br><span class="line">  type: atom ##feed类型 atom或者rss2</span><br><span class="line">  path: atom.xml ##feed路径</span><br><span class="line">  limit: 20  ##feed文章最小数量</span><br></pre></td></tr></table></figure>
+
+<h4 id="给站点添加本地搜索功能"><a href="#给站点添加本地搜索功能" class="headerlink" title="给站点添加本地搜索功能"></a>给站点添加本地搜索功能</h4><ul>
+<li>使用swiftype添加站内搜索</li>
+</ul>
+<p>去swiftype官网注册一个账号，按照步骤选择自己喜欢的搜索样式，配置完成后，选择install，然后会出现<a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160531_10.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160531_10.png" alt="Snip20160531_10"></a><br>如图所示，我不知道为什么，这个代码框无法滚动，所以我们必须将它全部复制出来</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;script type=&quot;text/javascript&quot;&gt;</span><br><span class="line">  (function(w,d,t,u,n,s,e)&#123;w[&apos;SwiftypeObject&apos;]=n;w[n]=w[n]||function()&#123;</span><br><span class="line">  (w[n].q=w[n].q||[]).push(arguments);&#125;;s=d.createElement(t);</span><br><span class="line">  e=d.getElementsByTagName(t)[0];s.async=1;s.src=u;e.parentNode.insertBefore(s,e);</span><br><span class="line">  &#125;)(window,document,&apos;script&apos;,&apos;//s.swiftypecdn.com/install/v2/st.js&apos;,&apos;_st&apos;);</span><br><span class="line">  </span><br><span class="line">  _st(&apos;install&apos;,&apos;7Qoo1zkKbfSsp5bzUjQu&apos;,&apos;2.0.0&apos;);</span><br><span class="line">&lt;/script&gt;</span><br></pre></td></tr></table></figure>
+
+<p>然后复制install —-2.0.0之间的一段代码，添加到全局配置文件里：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"># 搜索插件 hexo-generator-sitemap</span><br><span class="line">swiftype_key: 7Qoo1zkKbfSsp5bzUjQu</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>添加本地搜索</li>
+</ul>
+<p>直接在全局配置文件添加参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">search:</span><br><span class="line">  path: search.xml</span><br><span class="line">  field: post</span><br></pre></td></tr></table></figure>
+
+<p>search.xml这些都是默认带有的</p>
+<h4 id="给站点添加友情链接功能"><a href="#给站点添加友情链接功能" class="headerlink" title="给站点添加友情链接功能"></a>给站点添加友情链接功能</h4><p>直接在全局配置文件添加参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">links_title: 友情链接</span><br><span class="line">links:</span><br><span class="line">	#百度: http://www.baidu.com/</span><br><span class="line">	#新浪: http://example.com/</span><br></pre></td></tr></table></figure>
+
+<p>其实也可以新建一个文件专门放置这些需要链接的网站，这样方便管理，不必每次都对全局配置文件进行更改</p>
+<blockquote>
+<p>如果没有链接，那么友情链接不会显示，为了测试，可以随便写一个</p>
+</blockquote>
+<h4 id="给站点添加多说评论、热评、分享功能"><a href="#给站点添加多说评论、热评、分享功能" class="headerlink" title="给站点添加多说评论、热评、分享功能"></a>给站点添加多说评论、热评、分享功能</h4><p>直接在全局配置文件添加参数：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"># Disqus  disqus评论,  与多说类似, 国内一般使用多说</span><br><span class="line">#disqus_shortname: </span><br><span class="line">duoshuo_shortname: chaser</span><br><span class="line"></span><br><span class="line"># 多说热评文章 true 或者 false</span><br><span class="line">duoshuo_hotartical: true</span><br><span class="line"></span><br><span class="line"># 多说分享服务</span><br><span class="line">duoshuo_share: true</span><br><span class="line">duoshuo_info:</span><br><span class="line">  ua_enable: true</span><br><span class="line">  admin_enable: false</span><br><span class="line">  user_id:</span><br><span class="line">	  admin_nickname:</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><strong>注意：</strong>这里的<code>duoshuo_shortname</code>是需要你去多说主页 – <a href="http://duoshuo.com/" target="_blank" rel="noopener">传送门</a> 注册一个账号，然后填写你的多说域名，这里填写的就是你在多说填写的域名<br>例如：我的是：<code>http://chaser.duoshuo.com/</code>，那么我填写的就是<code>chaser</code></p>
+<ul>
+<li>这里配置的是所有页面都支持评论，但是后面有的页面不需要，比如标签页，分类页，关于等等，那么就单独设置。</li>
+</ul>
+</blockquote>
+<h3 id="Next主题的优化"><a href="#Next主题的优化" class="headerlink" title="Next主题的优化"></a>Next主题的优化</h3><p>这之前，先对主题配置文件进行一些配置，打开博客根目录/themes/next，这个路径，然后打开，主题配置文件_config.yml：</p>
+<h4 id="配置个人头像"><a href="#配置个人头像" class="headerlink" title="配置个人头像"></a>配置个人头像</h4><p>在主题配置文件里找到avatar字段，(如果没有就添加)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># Sidebar Avatar</span><br><span class="line"># in theme directory(source/images): /images/avatar.jpg</span><br><span class="line"># in site  directory(source/uploads): /uploads/avatar.jpg</span><br><span class="line">avatar: http://ww4.sinaimg.cn/small/937882b5jw1f4db4lroy9j20hs0npmy6.jpg</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>我采用的是地址，并没有将图片放在本地（采用新浪博客相册）</p>
+</blockquote>
+<h4 id="Next主题选择"><a href="#Next主题选择" class="headerlink" title="Next主题选择"></a>Next主题选择</h4><p>在主题配置文件_config.yml里，找到scheme字段</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"># ---------------------------------------------------------------</span><br><span class="line"># Scheme Settings</span><br><span class="line"># ---------------------------------------------------------------</span><br><span class="line"></span><br><span class="line"># Schemes</span><br><span class="line">#scheme: Muse</span><br><span class="line">#scheme: Mist</span><br><span class="line">scheme: Pisces</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>Muse - 默认 Scheme，这是 NexT 最初的版本，黑白主调，大量留白</p>
+</li>
+<li><p>Mist - Muse 的紧凑版本，整洁有序的单栏外观</p>
+</li>
+<li><p>Pisces - 双栏 Scheme，小家碧玉似的清新</p>
+<p>我选择的是第三种，去掉</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">#</span><br></pre></td></tr></table></figure>
+
+<p>，然后把第一个前面加上</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">#</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>每进行一步都可以自己去进行预览：</p>
+<p>hexo s –debug</p>
+</blockquote>
+</li>
+</ul>
+<h4 id="Next主题菜单配置"><a href="#Next主题菜单配置" class="headerlink" title="Next主题菜单配置"></a>Next主题菜单配置</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"># ---------------------------------------------------------------</span><br><span class="line"># Menu Settings</span><br><span class="line"># ---------------------------------------------------------------</span><br><span class="line"></span><br><span class="line"># When running the site in a subdirectory (e.g. domain.tld/blog), remove the leading slash (/archives -&gt; archives)</span><br><span class="line">menu:</span><br><span class="line">  home: / #主页</span><br><span class="line">  categories: /categories #分类页面</span><br><span class="line">  about: /about #关于</span><br><span class="line">  archives: /archives #归档</span><br><span class="line">  tags: /tags #标签</span><br><span class="line">  commonweal: /404.html  #公益404</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"># Enable/Disable menu icons.</span><br><span class="line"># Icon Mapping:</span><br><span class="line">#   Map a menu item to a specific FontAwesome icon name.</span><br><span class="line">#   Key is the name of menu item and value is the name of FontAwsome icon. Key is case-senstive.</span><br><span class="line">#   When an question mask icon presenting up means that the item has no mapping icon.</span><br><span class="line">menu_icons:</span><br><span class="line">  enable: true #是否显示图标</span><br><span class="line">  #KeyMapsToMenuItemKey: NameOfTheIconFromFontAwesome</span><br><span class="line">  home: home</span><br><span class="line">  about: user</span><br><span class="line">  categories: th</span><br><span class="line">  tags: tags</span><br><span class="line">  archives: archive</span><br><span class="line">  commonweal: heartbeat</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<ol>
+<li>如果需要添加你自己自定义的菜单，那么就只需要在menu下添加相关的菜单项，然后新建页面与之匹配，然后去next主题目录的<code>languages</code>目录下找到我们之前配置的主题所使用的语言，（我们用的是<code>zh-Hans</code>）对其进行国际化。</li>
+<li>menu_icon的设置采用<code>key-value</code>。key对应上面的menu里面的菜单项，大小写一致，value就是对应<a href="http://www.bootcss.com/p/font-awesome/#icons-web-app" target="_blank" rel="noopener">FontAwsome icon</a>这个网站的图标的名字，去掉前缀icon</li>
+</ol>
+<p>关于这里的所有的图标都支持从<code>FontAwsome icon</code>这个网站获取，当然也可以自己放在资源文件夹里（一般比如个人头像(<code>avatar</code>)，网站图标(<code>favicon</code>)等)。<br>当然也支持从网址获取，推荐使用<code>七牛</code>云存储。当然也可以使用新浪博客的相册，谷歌相册，甚至QQ空间，都可以，只要能获取到图片网址，并且你不会轻易删掉。</p>
+</blockquote>
+<h5 id="添加关于，标签，分类，公益404页面"><a href="#添加关于，标签，分类，公益404页面" class="headerlink" title="添加关于，标签，分类，公益404页面"></a>添加关于，标签，分类，公益404页面</h5><p>菜单配置好了，但是我们还得新建一些页面与之相匹配，否则点击进去找不到。这里说一下，对于<code>标签页</code>和<code>分类页</code>，我们需要在新建一篇文章的时候指定它的标签和分类。对于刚开始建立的博客，点进去可能是空的，所以等会新建一篇文章试试，这之前，先建立相关页面。</p>
+<h6 id="添加标签页"><a href="#添加标签页" class="headerlink" title="添加标签页"></a>添加标签页</h6><p>打开终端，进入博客根站点，输入：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo new page tags</span><br></pre></td></tr></table></figure>
+
+<p>进入博客根目录/source路径，找到tags文件夹，可以看到生成了index.md文件。可以使用编辑器打开<br>在里面添加<code>tags</code>和<code>comments</code><br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" alt="Snip20160531_11"></a></p>
+<blockquote>
+<ol>
+<li><code>tags</code>设置页面的类型</li>
+<li><code>comments</code>用来控制是否显示评论。</li>
+</ol>
+</blockquote>
+<h6 id="添加分类页"><a href="#添加分类页" class="headerlink" title="添加分类页"></a>添加分类页</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo new page categories</span><br></pre></td></tr></table></figure>
+
+<p>进入博客根目录/source路径，找到categories文件夹，可以看到生成了index.md文件。可以使用编辑器打开<br>在里面添加<code>tags</code>和<code>comments</code><br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" alt="Snip20160531_11"></a></p>
+<blockquote>
+<ol>
+<li><code>tags</code>设置页面的类型</li>
+<li><code>comments</code>用来控制是否显示评论。</li>
+</ol>
+</blockquote>
+<h6 id="添加关于页"><a href="#添加关于页" class="headerlink" title="添加关于页"></a>添加关于页</h6><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo new page about</span><br></pre></td></tr></table></figure>
+
+<p>进入博客根目录/source路径，找到categories文件夹，可以看到生成了index.md文件。可以使用编辑器打开<br>在里面添加<code>tags</code>和<code>comments</code><br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_11.png" alt="Snip20160531_11"></a></p>
+<blockquote>
+<ol>
+<li><code>tags</code>设置页面的类型</li>
+<li><code>comments</code>用来控制是否显示评论。</li>
+</ol>
+</blockquote>
+<p>about这个页面一般都是填写一些你的个人信息，要不要无所谓，我这里给about页面添加了一个背景音乐盒.去网易云音乐，创建一个自己的歌单，然后分享，然后找到自己分享的动态，点击链接，<a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_12.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_12.png" alt="Snip20160531_12"></a><br>出现如图的页面，然后点击生成’’外链播放器’’字样。将出现的代码复制，粘贴到你的about页面<br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_13.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_13.png" alt="Snip20160531_13"></a></p>
+<p>新建一篇文章给它添加分类和标签试试吧：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">hexo new &quot;Hexo教程&quot;</span><br></pre></td></tr></table></figure>
+
+<p>通过mou编辑器打开：添加<code>tags</code>和<code>categories</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">---</span><br><span class="line">title: title #文章標題</span><br><span class="line">date: 2016-06-01 23:47:44 #文章生成時間</span><br><span class="line">categories: &quot;Hexo教程&quot; #文章分類目錄 可以省略</span><br><span class="line">tags: #文章標籤 可以省略</span><br><span class="line">	 - 标签1</span><br><span class="line">	 - 标签2</span><br><span class="line"> description: #你對本頁的描述 可以省略</span><br><span class="line">---</span><br></pre></td></tr></table></figure>
+
+<h6 id="添加公益404页面"><a href="#添加公益404页面" class="headerlink" title="添加公益404页面"></a>添加公益404页面</h6><p>直接在根目录的source路径下，新建一个404.html文件，就可以了<br>附：404.html</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">&lt;!DOCTYPE HTML&gt;</span><br><span class="line">&lt;html&gt;</span><br><span class="line">&lt;head&gt;</span><br><span class="line">  &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html;charset=utf-8;&quot;/&gt;</span><br><span class="line">  &lt;meta http-equiv=&quot;X-UA-Compatible&quot; content=&quot;IE=edge,chrome=1&quot; /&gt;</span><br><span class="line">  &lt;meta name=&quot;robots&quot; content=&quot;all&quot; /&gt;</span><br><span class="line">  &lt;meta name=&quot;robots&quot; content=&quot;index,follow&quot;/&gt;</span><br><span class="line">&lt;/head&gt;</span><br><span class="line">&lt;body&gt;</span><br><span class="line"></span><br><span class="line">&lt;script type=&quot;text/javascript&quot; src=&quot;http://www.qq.com/404/search_children.js&quot;</span><br><span class="line">        charset=&quot;utf-8&quot; homePageUrl=&quot;your site url &quot;</span><br><span class="line">        homePageName=&quot;回到我的主页&quot;&gt;</span><br><span class="line">&lt;/script&gt;</span><br><span class="line"></span><br><span class="line">&lt;/body&gt;</span><br><span class="line">&lt;/html&gt;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>提示：<code>homePageUrl</code>记得修改成你的博客域名</p>
+</blockquote>
+<h3 id="Next主题侧边栏社交链接"><a href="#Next主题侧边栏社交链接" class="headerlink" title="Next主题侧边栏社交链接"></a>Next主题侧边栏社交链接</h3><p>打开主题配置文件_config.yml：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"># ---------------------------------------------------------------</span><br><span class="line"># Sidebar Settings</span><br><span class="line"># ---------------------------------------------------------------</span><br><span class="line"># Social Links</span><br><span class="line">social:</span><br><span class="line">	GitHub: https://github.com/chaserr</span><br><span class="line">	新浪微博: http://weibo.com/lovaxiang</span><br><span class="line">	FaceBook: https://www.facebook.com/x.tongxing</span><br><span class="line">	GooglePlus : https://plus.google.com/u/0/117848542581702766384</span><br><span class="line">	豆瓣: https://www.douban.com/people/lovax/</span><br><span class="line"></span><br><span class="line"># Social Links Icons</span><br><span class="line">social_icons:</span><br><span class="line"> enable: true #控制是否显示图标</span><br><span class="line">  # Icon Mappings.</span><br><span class="line">  # KeyMapsToSocalItemKey: NameOfTheIconFromFontAwesome</span><br><span class="line">  GitHub: github</span><br><span class="line">  新浪微博: weibo</span><br><span class="line">  FaceBook: facebook</span><br><span class="line">  GooglePlus: google-plus</span><br><span class="line">  豆瓣: globe  #douban</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>这里的配置和Menu里一样，</p>
+<ol>
+<li><code>social</code>后面跟着的是你的社交网站的主页地址</li>
+<li><code>social_icons</code>是FontAwesome网站的图标名称</li>
+</ol>
+<p>不过豆瓣icon好像是没有的，我在github上issue过，他们给我的解决方案就是去官网找到图标，放到本地资源、。、<br>所以亲们也不用去issue了。直接用别的代替吧，如果真想显示你的豆瓣的话。</p>
+</blockquote>
+<h3 id="开启打赏功能"><a href="#开启打赏功能" class="headerlink" title="开启打赏功能"></a>开启打赏功能</h3><p>很简单，打开主题配置文件_config.yml<br>添加字段：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">reward_comment: 坚持原创技术分享，您的支持将鼓励我继续创作！</span><br><span class="line">alipay: http://ww3.sinaimg.cn/small/937882b5jw1f4dalzfc5nj20p00vu0um.jpg</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><code>alipay:</code> 填写的是支付宝或者微信的收款二维码图片地址。</p>
+</blockquote>
+<h3 id="给文章添加阅读量"><a href="#给文章添加阅读量" class="headerlink" title="给文章添加阅读量"></a>给文章添加阅读量</h3><h4 id="配置LeanCloud"><a href="#配置LeanCloud" class="headerlink" title="配置LeanCloud"></a>配置LeanCloud</h4><p>打开<a href="https://leancloud.cn/login.html#/signin" target="_blank" rel="noopener">LeanCloud</a>官网，注册一个账号，完成激活<br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_14.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_14.png" alt="Snip20160531_14"></a><br>点击创建新应用之后，进入新创建的应用<br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_15.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_15.png" alt="Snip20160531_15"></a><br>点击创建Class，类名叫做<code>Counter</code>。</p>
+<h4 id="修改主题配置文件-config-yml"><a href="#修改主题配置文件-config-yml" class="headerlink" title="修改主题配置文件_config.yml"></a>修改主题配置文件_config.yml</h4><p>打开主题配置文件，找到<code>leancloud_visitors</code>字段或者创建</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"># Show number of visitors to each article.</span><br><span class="line"># You can visit https://leancloud.cn get AppID and AppKey.</span><br><span class="line">leancloud_visitors:</span><br><span class="line">  enable: true</span><br><span class="line">  app_id: ytnok33cvEchgidigtb0WumC-gzGzoHsz #&lt;AppID&gt;</span><br><span class="line">  app_key: SrcG8cy1VhONurWBoEBGGHML #&lt;AppKEY&gt;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<ol>
+<li><code>app_id</code></li>
+<li><code>app_key</code><br><a href="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_18.png" target="_blank" rel="noopener"><img src="http://7xuupy.com1.z0.glb.clouddn.com/Snip20160601_18.png" alt="Snip20160531_18"></a></li>
+</ol>
+<p>将对应key的value复制填写即可。</p>
+</blockquote>
+<h4 id="添加lean-analytics-swing"><a href="#添加lean-analytics-swing" class="headerlink" title="添加lean-analytics.swing"></a>添加lean-analytics.swing</h4><p>在主题目录下的\layout_scripts路径下，新建名为：<code>lean-analytics.swing</code>的文件，<br>这里贴上<code>lean-analytics.swing</code>代码</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><span class="line">&#123;% if theme.leancloud_visitors.enable %&#125;</span><br><span class="line"></span><br><span class="line">  &#123;# custom analytics part create by xiamo #&#125;</span><br><span class="line">  &lt;script src=&quot;https://cdn1.lncld.net/static/js/av-core-mini-0.6.1.js&quot;&gt;&lt;/script&gt;</span><br><span class="line">  &lt;script&gt;AV.initialize(&quot;&#123;&#123;theme.leancloud_visitors.app_id&#125;&#125;&quot;, &quot;&#123;&#123;theme.leancloud_visitors.app_key&#125;&#125;&quot;);&lt;/script&gt;</span><br><span class="line">  &lt;script&gt;</span><br><span class="line">    function showTime(Counter) &#123;</span><br><span class="line">      var query = new AV.Query(Counter);</span><br><span class="line">      var entries = [];</span><br><span class="line">      var $visitors = $(&quot;.leancloud_visitors&quot;);</span><br><span class="line"></span><br><span class="line">      $visitors.each(function () &#123;</span><br><span class="line">        entries.push( $(this).attr(&quot;id&quot;).trim() );</span><br><span class="line">      &#125;);</span><br><span class="line"></span><br><span class="line">      query.containedIn(&apos;url&apos;, entries);</span><br><span class="line">      query.find()</span><br><span class="line">        .done(function (results) &#123;</span><br><span class="line">          var COUNT_CONTAINER_REF = &apos;.leancloud-visitors-count&apos;;</span><br><span class="line"></span><br><span class="line">          if (results.length === 0) &#123;</span><br><span class="line">            $visitors.find(COUNT_CONTAINER_REF).text(0);</span><br><span class="line">            return;</span><br><span class="line">          &#125;</span><br><span class="line"></span><br><span class="line">          for (var i = 0; i &lt; results.length; i++) &#123;</span><br><span class="line">            var item = results[i];</span><br><span class="line">            var url = item.get(&apos;url&apos;);</span><br><span class="line">            var time = item.get(&apos;time&apos;);</span><br><span class="line">            var element = document.getElementById(url);</span><br><span class="line"></span><br><span class="line">            $(element).find(COUNT_CONTAINER_REF).text(time);</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;)</span><br><span class="line">        .fail(function (object, error) &#123;</span><br><span class="line">          console.log(&quot;Error: &quot; + error.code + &quot; &quot; + error.message);</span><br><span class="line">        &#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    function addCount(Counter) &#123;</span><br><span class="line">      var $visitors = $(&quot;.leancloud_visitors&quot;);</span><br><span class="line">      var url = $visitors.attr(&apos;id&apos;).trim();</span><br><span class="line">      var title = $visitors.attr(&apos;data-flag-title&apos;).trim();</span><br><span class="line">      var query = new AV.Query(Counter);</span><br><span class="line"></span><br><span class="line">      query.equalTo(&quot;url&quot;, url);</span><br><span class="line">      query.find(&#123;</span><br><span class="line">        success: function(results) &#123;</span><br><span class="line">          if (results.length &gt; 0) &#123;</span><br><span class="line">            var counter = results[0];</span><br><span class="line">            counter.fetchWhenSave(true);</span><br><span class="line">            counter.increment(&quot;time&quot;);</span><br><span class="line">            counter.save(null, &#123;</span><br><span class="line">              success: function(counter) &#123;</span><br><span class="line">                var $element = $(document.getElementById(url));</span><br><span class="line">                $element.find(&apos;.leancloud-visitors-count&apos;).text(counter.get(&apos;time&apos;));</span><br><span class="line">              &#125;,</span><br><span class="line">              error: function(counter, error) &#123;</span><br><span class="line">                console.log(&apos;Failed to save Visitor num, with error message: &apos; + error.message);</span><br><span class="line">              &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">          &#125; else &#123;</span><br><span class="line">            var newcounter = new Counter();</span><br><span class="line">            /* Set ACL */</span><br><span class="line">            var acl = new AV.ACL();</span><br><span class="line">            acl.setPublicReadAccess(true);</span><br><span class="line">            acl.setPublicWriteAccess(true);</span><br><span class="line">            newcounter.setACL(acl);</span><br><span class="line">            /* End Set ACL */</span><br><span class="line">            newcounter.set(&quot;title&quot;, title);</span><br><span class="line">            newcounter.set(&quot;url&quot;, url);</span><br><span class="line">            newcounter.set(&quot;time&quot;, 1);</span><br><span class="line">            newcounter.save(null, &#123;</span><br><span class="line">              success: function(newcounter) &#123;</span><br><span class="line">                var $element = $(document.getElementById(url));</span><br><span class="line">                $element.find(&apos;.leancloud-visitors-count&apos;).text(newcounter.get(&apos;time&apos;));</span><br><span class="line">              &#125;,</span><br><span class="line">              error: function(newcounter, error) &#123;</span><br><span class="line">                console.log(&apos;Failed to create&apos;);</span><br><span class="line">              &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">          &#125;</span><br><span class="line">        &#125;,</span><br><span class="line">        error: function(error) &#123;</span><br><span class="line">          console.log(&apos;Error:&apos; + error.code + &quot; &quot; + error.message);</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    $(function() &#123;</span><br><span class="line">      var Counter = AV.Object.extend(&quot;Counter&quot;);</span><br><span class="line">      if ($(&apos;.leancloud_visitors&apos;).length == 1) &#123;</span><br><span class="line">        addCount(Counter);</span><br><span class="line">      &#125; else if ($(&apos;.post-title-link&apos;).length &gt; 1) &#123;</span><br><span class="line">        showTime(Counter);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">  &lt;/script&gt;</span><br><span class="line"></span><br><span class="line">&#123;% endif %&#125;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>网上也有人贴出来这部分代码，但是会出现阅读量出现重复情况，这里的代码是经过测试后出现的，准确无误。</p>
+</blockquote>
+<h4 id="修改post-swing文件"><a href="#修改post-swing文件" class="headerlink" title="修改post.swing文件"></a>修改post.swing文件</h4><p>打开主题目录\layout_macro路径,找到post.swig文件，找到<code>LeanCould PageView #</code>字样,去掉 其中一个<code>&amp;nbsp; | &amp;nbsp</code>，否则部署之后会出现双<code>||</code>。</p>
+<h4 id="修改layout-swing文件"><a href="#修改layout-swing文件" class="headerlink" title="修改layout.swing文件"></a>修改layout.swing文件</h4><p>打开主题目录\layout路径，找到_layout.swing<br>搜索<code>&lt;/body&gt;</code>标签，在其上方添加代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&#123;% if theme.leancloud_visitors.enable %&#125;</span><br><span class="line">&#123;% include &apos;_scripts/lean-analytics.swig&apos; %&#125;</span><br><span class="line">&#123;% endif %&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="给页面添加High一下"><a href="#给页面添加High一下" class="headerlink" title="给页面添加High一下"></a>给页面添加High一下</h3><p>打开<code>博客根目录\themes\next\layout_partials\header.swig</code>，在<code>&lt;ul&gt; ... /ul&gt;</code>标签之间加入以下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br></pre></td><td class="code"><pre><span class="line">&lt;li&gt; &lt;a title=&quot;把这个链接拖到你的Chrome收藏夹工具栏中&quot; href=&apos;javascript:(function() &#123;</span><br><span class="line">    function c() &#123;</span><br><span class="line">        var e = document.createElement(&quot;link&quot;);</span><br><span class="line">        e.setAttribute(&quot;type&quot;, &quot;text/css&quot;);</span><br><span class="line">        e.setAttribute(&quot;rel&quot;, &quot;stylesheet&quot;);</span><br><span class="line">        e.setAttribute(&quot;href&quot;, f);</span><br><span class="line">        e.setAttribute(&quot;class&quot;, l);</span><br><span class="line">        document.body.appendChild(e)</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function h() &#123;</span><br><span class="line">        var e = document.getElementsByClassName(l);</span><br><span class="line">        for (var t = 0; t &lt; e.length; t++) &#123;</span><br><span class="line">            document.body.removeChild(e[t])</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function p() &#123;</span><br><span class="line">        var e = document.createElement(&quot;div&quot;);</span><br><span class="line">        e.setAttribute(&quot;class&quot;, a);</span><br><span class="line">        document.body.appendChild(e);</span><br><span class="line">        setTimeout(function() &#123;</span><br><span class="line">            document.body.removeChild(e)</span><br><span class="line">        &#125;, 100)</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function d(e) &#123;</span><br><span class="line">        return &#123;</span><br><span class="line">            height : e.offsetHeight,</span><br><span class="line">            width : e.offsetWidth</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function v(i) &#123;</span><br><span class="line">        var s = d(i);</span><br><span class="line">        return s.height &gt; e &amp;&amp; s.height &lt; n &amp;&amp; s.width &gt; t &amp;&amp; s.width &lt; r</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function m(e) &#123;</span><br><span class="line">        var t = e;</span><br><span class="line">        var n = 0;</span><br><span class="line">        while (!!t) &#123;</span><br><span class="line">            n += t.offsetTop;</span><br><span class="line">            t = t.offsetParent</span><br><span class="line">        &#125;</span><br><span class="line">        return n</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function g() &#123;</span><br><span class="line">        var e = document.documentElement;</span><br><span class="line">        if (!!window.innerWidth) &#123;</span><br><span class="line">            return window.innerHeight</span><br><span class="line">        &#125; else if (e &amp;&amp; !isNaN(e.clientHeight)) &#123;</span><br><span class="line">            return e.clientHeight</span><br><span class="line">        &#125;</span><br><span class="line">        return 0</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function y() &#123;</span><br><span class="line">        if (window.pageYOffset) &#123;</span><br><span class="line">            return window.pageYOffset</span><br><span class="line">        &#125;</span><br><span class="line">        return Math.max(document.documentElement.scrollTop, document.body.scrollTop)</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function E(e) &#123;</span><br><span class="line">        var t = m(e);</span><br><span class="line">        return t &gt;= w &amp;&amp; t &lt;= b + w</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function S() &#123;</span><br><span class="line">        var e = document.createElement(&quot;audio&quot;);</span><br><span class="line">        e.setAttribute(&quot;class&quot;, l);</span><br><span class="line">        e.src = i;</span><br><span class="line">        e.loop = false;</span><br><span class="line">        e.addEventListener(&quot;canplay&quot;, function() &#123;</span><br><span class="line">            setTimeout(function() &#123;</span><br><span class="line">                x(k)</span><br><span class="line">            &#125;, 500);</span><br><span class="line">            setTimeout(function() &#123;</span><br><span class="line">                N();</span><br><span class="line">                p();</span><br><span class="line">                for (var e = 0; e &lt; O.length; e++) &#123;</span><br><span class="line">                    T(O[e])</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;, 15500)</span><br><span class="line">        &#125;, true);</span><br><span class="line">        e.addEventListener(&quot;ended&quot;, function() &#123;</span><br><span class="line">            N();</span><br><span class="line">            h()</span><br><span class="line">        &#125;, true);</span><br><span class="line">        e.innerHTML = &quot; &lt;p&gt;If you are reading this, it is because your browser does not support the audio element. We recommend that you get a new browser.&lt;/p&gt; &lt;p&gt;&quot;;</span><br><span class="line">        document.body.appendChild(e);</span><br><span class="line">        e.play()</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function x(e) &#123;</span><br><span class="line">        e.className += &quot; &quot; + s + &quot; &quot; + o</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function T(e) &#123;</span><br><span class="line">        e.className += &quot; &quot; + s + &quot; &quot; + u[Math.floor(Math.random() * u.length)]</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    function N() &#123;</span><br><span class="line">        var e = document.getElementsByClassName(s);</span><br><span class="line">        var t = new RegExp(&quot;\\b&quot; + s + &quot;\\b&quot;);</span><br><span class="line">        for (var n = 0; n &lt; e.length; ) &#123;</span><br><span class="line">            e[n].className = e[n].className.replace(t, &quot;&quot;)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    var e = 30;</span><br><span class="line">    var t = 30;</span><br><span class="line">    var n = 350;</span><br><span class="line">    var r = 350;</span><br><span class="line">    var i = &quot;//7xuupy.com1.z0.glb.clouddn.com/tongxingSibel%20-%20Im%20Sorry.mp3&quot;;</span><br><span class="line">    var s = &quot;mw-harlem_shake_me&quot;;</span><br><span class="line">    var o = &quot;im_first&quot;;</span><br><span class="line">    var u = [&quot;im_drunk&quot;, &quot;im_baked&quot;, &quot;im_trippin&quot;, &quot;im_blown&quot;];</span><br><span class="line">    var a = &quot;mw-strobe_light&quot;;</span><br><span class="line">    var f = &quot;//s3.amazonaws.com/moovweb-marketing/playground/harlem-shake-style.css&quot;;</span><br><span class="line">    var l = &quot;mw_added_css&quot;;</span><br><span class="line">    var b = g();</span><br><span class="line">    var w = y();</span><br><span class="line">    var C = document.getElementsByTagName(&quot;*&quot;);</span><br><span class="line">    var k = null;</span><br><span class="line">    for (var L = 0; L &lt; C.length; L++) &#123;</span><br><span class="line">        var A = C[L];</span><br><span class="line">        if (v(A)) &#123;</span><br><span class="line">            if (E(A)) &#123;</span><br><span class="line">                k = A;</span><br><span class="line">                break</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    if (A === null) &#123;</span><br><span class="line">        console.warn(&quot;Could not find a node of the right size. Please try a different page.&quot;);</span><br><span class="line">        return</span><br><span class="line">    &#125;</span><br><span class="line">    c();</span><br><span class="line">    S();</span><br><span class="line">    var O = [];</span><br><span class="line">    for (var L = 0; L &lt; C.length; L++) &#123;</span><br><span class="line">        var A = C[L];</span><br><span class="line">        if (v(A)) &#123;</span><br><span class="line">            O.push(A)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">	&#125;)()    &apos;&gt;High一下&lt;/a&gt; &lt;/li&gt;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p><code>//7xuupy.com1.z0.glb.clouddn.com/tongxingSibel%20-%20Im%20Sorry.mp3&quot;</code>可以替换成任意你想要的音乐地址</p>
+</blockquote>
+<h3 id="设置网站的图标Favicon"><a href="#设置网站的图标Favicon" class="headerlink" title="设置网站的图标Favicon"></a>设置网站的图标Favicon</h3><p>favicon图标也就是我们打开一个网页，出现在最浅的图标样式，可以自定义，首先我们需要一个favicon.ico的图标，可以去<a href="http://www.bitbug.net/" target="_blank" rel="noopener">比特虫</a>网站制作，网上的做法是将其放在根目录的source文件夹里。然后在主题目录的layout_partials路径下，修改header.swig的meta标签，我实验了一下，并不能配置成功呢，所以代码就不贴了，这里介绍我的做法:<br>图表制作好后，上传到云存储空间，获取图片的网址，然后打开主题配置文件_config.yml，找到favicon字段，将图片网址粘贴在后面，即可。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">favicon: http://ww4.sinaimg.cn/square/937882b5jw1f4db4lroy9j20hs0npmy6.jpg #网站图标</span><br></pre></td></tr></table></figure>
+
+<p>到此，Next的主题算是简单的美化了一下，你现在可以在本地预览，也可以将其部署到github上去哦。</p>
+<h3 id="增加评论功能"><a href="#增加评论功能" class="headerlink" title="增加评论功能"></a>增加评论功能</h3><p>Hexo Next 集成 utterances 评论系统</p>
+<h4 id="GitHub-配置与脚本获取"><a href="#GitHub-配置与脚本获取" class="headerlink" title="GitHub 配置与脚本获取"></a>GitHub 配置与脚本获取</h4><ol>
+<li>创建存放 comments 的代码仓库，必须为 public，且可创建 issue。</li>
+<li><a href="https://github.com/apps/utterances" target="_blank" rel="noopener">install utterances app</a> 点击这个链接安装utterances app到刚刚创建的那个仓库。</li>
+<li>打开 <a href="https://utteranc.es/" target="_blank" rel="noopener">https://utteranc.es/</a> ，根据提示的步骤生成所需的js script。也可在下面代码的基础上更新自己的信息。</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;script src=&quot;https://utteranc.es/client.js&quot;</span><br><span class="line">        repo=&quot;maoqyhz/comments&quot; # onwer/repo</span><br><span class="line">        issue-term=&quot;pathname&quot;   # 命名issue的格式，默认pathname</span><br><span class="line">        label=&quot;Comment&quot;         # 创建issue的tag，默认Comment</span><br><span class="line">        theme=&quot;github-light&quot;    # 评论系统theme，github-light或github-dark</span><br><span class="line">        crossorigin=&quot;anonymous&quot; # 跨域，默认</span><br><span class="line">        async&gt;</span><br><span class="line">&lt;/script&gt;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Hexo-Next-主题配置"><a href="#Hexo-Next-主题配置" class="headerlink" title="Hexo Next 主题配置"></a>Hexo Next 主题配置</h4><p>首先，进入主题目录，在 <code>layout/_third-party/comments/</code> 中创建 <code>utterances.swig</code>，并添加以下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&#123;% if theme.utterances.enable %&#125;</span><br><span class="line">&lt;script src=&quot;https://utteranc.es/client.js&quot;</span><br><span class="line">        repo=&quot;&#123;&#123; theme.utterances.repo &#125;&#125;&quot;</span><br><span class="line">        issue-term=&quot;&#123;&#123; theme.utterances.issue_term &#125;&#125;&quot;</span><br><span class="line">        label=&quot;Comment&quot;</span><br><span class="line">        theme=&quot;&#123;&#123; theme.utterances.theme &#125;&#125;&quot;</span><br><span class="line">        crossorigin=&quot;anonymous&quot;</span><br><span class="line">        async&gt;</span><br><span class="line">&lt;/script&gt;</span><br><span class="line">&#123;% endif %&#125;</span><br></pre></td></tr></table></figure>
+
+<p>再在 <code>layout/_partials/comments.swig</code> 最后添加以下代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&#123;% if theme.utterances.enable %&#125;</span><br><span class="line"> &lt;div class=&quot;comments&quot; id=&quot;comments&quot;&gt;</span><br><span class="line">    &#123;% include &apos;../_third-party/comments/utterances.swig&apos; %&#125;</span><br><span class="line"> &lt;/div&gt;</span><br><span class="line">&#123;% endif %&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后，在主题配置文件 <code>theme/_config.yml</code> 中添加如下配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"># utterances </span><br><span class="line">utterances:</span><br><span class="line">  enable: true</span><br><span class="line">  repo:                  # owner/repo</span><br><span class="line">  issue_term: pathname   # pathname, url, title</span><br><span class="line">  theme: github-light    # github-light or github-dark</span><br></pre></td></tr></table></figure>
+
+<p>重新生成网页，就能看到评论系统了。</p>
+<h3 id="添加分享功能"><a href="#添加分享功能" class="headerlink" title="添加分享功能"></a>添加分享功能</h3><p>多说已经不可用</p>
+<p>参考<code>https://github.com/theme-next/hexo-next-share</code></p>
+<h2 id="问题解决"><a href="#问题解决" class="headerlink" title="问题解决"></a>问题解决</h2><h3 id="标签页和分类页无内容显示"><a href="#标签页和分类页无内容显示" class="headerlink" title="标签页和分类页无内容显示"></a>标签页和分类页无内容显示</h3><p>首先创建两个页面</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new page categories</span><br><span class="line">$ hexo new page tags</span><br></pre></td></tr></table></figure>
+
+
+
+<p>打开 <code>categories</code> 和<code>tags</code> 文件夹下的 <code>index.md</code> ，在最下面一行加一行文字就行，注意中间有空格。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">type: categories</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="生成静态页面报错"><a href="#生成静态页面报错" class="headerlink" title="生成静态页面报错"></a>生成静态页面报错</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">FATAL Something&apos;s wrong. Maybe you can find the solution here: http://hexo.io/docs/troubleshooting.html</span><br><span class="line">Template render error: (unknown path) [Line 7, Column 23]</span><br><span class="line">  Error: Unable to call `the return value of (posts[&quot;first&quot;])[&quot;updated&quot;][&quot;toISOString&quot;]`</span><br></pre></td></tr></table></figure>
+
+<p>解决方案</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">把</span><br><span class="line"></span><br><span class="line">plugins:</span><br><span class="line">- hexo-generator-feed</span><br><span class="line">改成</span><br><span class="line"></span><br><span class="line">plugins:</span><br><span class="line">  hexo-generator-feed</span><br><span class="line">就行了，把短横线去掉</span><br></pre></td></tr></table></figure>
+
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/hexo/" rel="tag"><i class="fa fa-tag"></i> hexo</a>
+              <a href="/tags/%E5%8D%9A%E5%AE%A2/" rel="tag"><i class="fa fa-tag"></i> 博客</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/07/29/GitHub-%E5%A6%82%E4%BD%95%E5%90%91%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE%E6%8F%90PR/" rel="next" title="GitHub 如何向开源项目提PR">
+                  <i class="fa fa-chevron-left"></i> GitHub 如何向开源项目提PR
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/10/05/Hexo%E9%9D%99%E6%80%81%E9%A1%B5%E9%9D%A2%E5%9B%BE%E7%89%87%E6%97%A0%E6%B3%95%E6%98%BE%E7%A4%BA%E7%9A%84%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88/" rel="prev" title="Hexo静态页面图片无法显示的解决方案">
+                  Hexo静态页面图片无法显示的解决方案 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#前言"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#环境配置"><span class="nav-number">2.</span> <span class="nav-text">环境配置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#安装Node-js"><span class="nav-number">2.1.</span> <span class="nav-text">安装Node.js</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#安装Git"><span class="nav-number">2.2.</span> <span class="nav-text">安装Git</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#安装Hexo"><span class="nav-number">2.3.</span> <span class="nav-text">安装Hexo</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Hexo主题设置"><span class="nav-number">2.4.</span> <span class="nav-text">Hexo主题设置</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#安装主题"><span class="nav-number">2.4.1.</span> <span class="nav-text">安装主题</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#启用主题"><span class="nav-number">2.4.2.</span> <span class="nav-text">启用主题</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#更新主题"><span class="nav-number">2.4.3.</span> <span class="nav-text">更新主题</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#hexo部署"><span class="nav-number">2.5.</span> <span class="nav-text">hexo部署</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#使用hexo-deploy部署"><span class="nav-number">2.5.1.</span> <span class="nav-text">使用hexo deploy部署</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用git命令行部署"><span class="nav-number">2.6.</span> <span class="nav-text">使用git命令行部署</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#clone-github-repo"><span class="nav-number">2.6.1.</span> <span class="nav-text">clone github repo</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#创建一个deploy脚本文件"><span class="nav-number">2.6.2.</span> <span class="nav-text">创建一个deploy脚本文件</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加插件"><span class="nav-number">2.7.</span> <span class="nav-text">添加插件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加404公益"><span class="nav-number">2.8.</span> <span class="nav-text">添加404公益</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加about页面"><span class="nav-number">2.9.</span> <span class="nav-text">添加about页面</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加Fork-me-on-Github"><span class="nav-number">2.10.</span> <span class="nav-text">添加Fork me on Github</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加支付宝捐赠按钮及二维码支付"><span class="nav-number">2.11.</span> <span class="nav-text">添加支付宝捐赠按钮及二维码支付</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#生成部署三部曲"><span class="nav-number">3.</span> <span class="nav-text">生成部署三部曲</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#主题优化"><span class="nav-number">4.</span> <span class="nav-text">主题优化</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Next主题的安装使用"><span class="nav-number">4.1.</span> <span class="nav-text">Next主题的安装使用</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#给站点添加rss和sitemap功能"><span class="nav-number">4.1.1.</span> <span class="nav-text">给站点添加rss和sitemap功能</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#给站点添加本地搜索功能"><span class="nav-number">4.1.2.</span> <span class="nav-text">给站点添加本地搜索功能</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#给站点添加友情链接功能"><span class="nav-number">4.1.3.</span> <span class="nav-text">给站点添加友情链接功能</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#给站点添加多说评论、热评、分享功能"><span class="nav-number">4.1.4.</span> <span class="nav-text">给站点添加多说评论、热评、分享功能</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Next主题的优化"><span class="nav-number">4.2.</span> <span class="nav-text">Next主题的优化</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#配置个人头像"><span class="nav-number">4.2.1.</span> <span class="nav-text">配置个人头像</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Next主题选择"><span class="nav-number">4.2.2.</span> <span class="nav-text">Next主题选择</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Next主题菜单配置"><span class="nav-number">4.2.3.</span> <span class="nav-text">Next主题菜单配置</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#添加关于，标签，分类，公益404页面"><span class="nav-number">4.2.3.1.</span> <span class="nav-text">添加关于，标签，分类，公益404页面</span></a><ol class="nav-child"><li class="nav-item nav-level-6"><a class="nav-link" href="#添加标签页"><span class="nav-number">4.2.3.1.1.</span> <span class="nav-text">添加标签页</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#添加分类页"><span class="nav-number">4.2.3.1.2.</span> <span class="nav-text">添加分类页</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#添加关于页"><span class="nav-number">4.2.3.1.3.</span> <span class="nav-text">添加关于页</span></a></li><li class="nav-item nav-level-6"><a class="nav-link" href="#添加公益404页面"><span class="nav-number">4.2.3.1.4.</span> <span class="nav-text">添加公益404页面</span></a></li></ol></li></ol></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Next主题侧边栏社交链接"><span class="nav-number">4.3.</span> <span class="nav-text">Next主题侧边栏社交链接</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#开启打赏功能"><span class="nav-number">4.4.</span> <span class="nav-text">开启打赏功能</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#给文章添加阅读量"><span class="nav-number">4.5.</span> <span class="nav-text">给文章添加阅读量</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#配置LeanCloud"><span class="nav-number">4.5.1.</span> <span class="nav-text">配置LeanCloud</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#修改主题配置文件-config-yml"><span class="nav-number">4.5.2.</span> <span class="nav-text">修改主题配置文件_config.yml</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#添加lean-analytics-swing"><span class="nav-number">4.5.3.</span> <span class="nav-text">添加lean-analytics.swing</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#修改post-swing文件"><span class="nav-number">4.5.4.</span> <span class="nav-text">修改post.swing文件</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#修改layout-swing文件"><span class="nav-number">4.5.5.</span> <span class="nav-text">修改layout.swing文件</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#给页面添加High一下"><span class="nav-number">4.6.</span> <span class="nav-text">给页面添加High一下</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#设置网站的图标Favicon"><span class="nav-number">4.7.</span> <span class="nav-text">设置网站的图标Favicon</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#增加评论功能"><span class="nav-number">4.8.</span> <span class="nav-text">增加评论功能</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#GitHub-配置与脚本获取"><span class="nav-number">4.8.1.</span> <span class="nav-text">GitHub 配置与脚本获取</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#Hexo-Next-主题配置"><span class="nav-number">4.8.2.</span> <span class="nav-text">Hexo Next 主题配置</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#添加分享功能"><span class="nav-number">4.9.</span> <span class="nav-text">添加分享功能</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#问题解决"><span class="nav-number">5.</span> <span class="nav-text">问题解决</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#标签页和分类页无内容显示"><span class="nav-number">5.1.</span> <span class="nav-text">标签页和分类页无内容显示</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#生成静态页面报错"><span class="nav-number">5.2.</span> <span class="nav-text">生成静态页面报错</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

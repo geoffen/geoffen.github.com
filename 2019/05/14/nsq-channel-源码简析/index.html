@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章阐述了topic模块的源码。即以topic为核心分析topic结构组件、topic实例的创建、删除以及查找这四方面的源码逻辑。同时也将这些方法放到一个完整的请求调用链中串联分析，以在整体上把握程序逻辑。本文的主题是channel（注意不要与go channel混淆）。channel可以视为发送消息的队列，它更贴近于消费者端，一旦topic实例从生产者那里收到一条消息，它会将这条消息复制并">
+<meta name="keywords" content="分布式系统,消息队列">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nsq channel 源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;05&#x2F;14&#x2F;nsq-channel-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章阐述了topic模块的源码。即以topic为核心分析topic结构组件、topic实例的创建、删除以及查找这四方面的源码逻辑。同时也将这些方法放到一个完整的请求调用链中串联分析，以在整体上把握程序逻辑。本文的主题是channel（注意不要与go channel混淆）。channel可以视为发送消息的队列，它更贴近于消费者端，一旦topic实例从生产者那里收到一条消息，它会将这条消息复制并">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.835Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/05/14/nsq-channel-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>nsq channel 源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/05/14/nsq-channel-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nsq channel 源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-05-14 19:37:53" itemprop="dateCreated datePublished" datetime="2019-05-14T19:37:53+08:00">2019-05-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" itemprop="url" rel="index">
+                    <span itemprop="name">消息队列</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>11k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>10 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章阐述了<code>topic</code>模块的源码。即以<code>topic</code>为核心分析<code>topic</code>结构组件、<code>topic</code>实例的创建、删除以及查找这四方面的源码逻辑。同时也将这些方法放到一个完整的请求调用链中串联分析，以在整体上把握程序逻辑。本文的主题是<code>channel</code>（注意不要与<code>go channel</code>混淆）。<code>channel</code>可以视为发送消息的队列，它更贴近于消费者端，一旦<code>topic</code>实例从生产者那里收到一条消息，它会将这条消息复制并发送到每一个与它关联的<code>channel</code>，然后由<code>channel</code>将此消息随机发送到一个订阅了此<code>channel</code>的客户端。<code>channel</code>实例存储消息涉及到两个消息队列：内存消息队列和持久化消息队列。另外，<code>channel</code>还维护两个和消息发送相关的优先级队列：正在发送的消息队列和被推迟发送的消息队列。同样，本文只论述<code>channel</code>本身的相关逻辑，不涉及<code>channel</code>收发消息的逻辑。</p>
+<a id="more"></a>
+
+<p>本文分析<code>nsq channel</code>模块的源码，更详细<code>nsq</code>源码注释可在<a href="https://github.com/qqzeng/nsqio/tree/master/nsq" target="_blank" rel="noopener">这里</a>找到，注释源码版本为<code>v1.1.0</code>，仅供参考。本文所涉及到源码主要为<code>/nsq/nsqd/</code>和<code>/nsq/internal/</code>下的若干子目录。</p>
+<p>同上一篇分析<code>topic</code>的源码类似，本文侧重于分析<code>channel</code>模块本身相关源码，而关于<code>channel</code>如何接收<code>topic</code>发送的消息、又如何对消息进行存储管理，最后又如何将消息推送给客户端，这部分会另外写一篇文章专门阐述。本文从五个方面来阐述<code>channel</code>：其一，简要介绍<code>channel</code>结构字段的组成；其二，由于<code>channel</code>同<code>message</code>密切相关，因此，也会分析<code>message</code>相关的字段，以及<code>chanel</code>维护的两个和消息发送相关的优先级队列。其三，阐述创建<code>channel</code>相关逻辑；其四，分析删除<code>channel</code>的过程；最后阐述<code>chanel</code>的查询过程。显然，本文分析<code>channel</code>的模式大体上同上一篇文章分析<code>topic</code>的模式相同，因此笔者会尽量精简介绍。</p>
+<h2 id="channel-实例结构"><a href="#channel-实例结构" class="headerlink" title="channel 实例结构"></a>channel 实例结构</h2><p>相比<code>topic</code>结构，<code>channel</code>结构所包含的字段稍复杂些，重要的有：<code>topicName</code>代表<code>channel</code>实例所隶属的<code>topic</code>实例的名称；两个消息队列实例：<code>backend</code>表示<code>channel</code>使用的消息持久化队列接口，<code>memoryMsgChan</code>则表示内存消息队列；<code>clients</code>表示订阅此<code>channel</code>的客户端实例集合；<code>ephemeral</code>字段表示<code>channel</code>是否是临时的，临时的<code>channel</code>（<code>#ephemeral</code>开头）同样不会被持久化(<code>PersistMetadata</code>)，且当<code>channel</code> 关联的所有客户端都被移除后，此<code>channel</code>也会被删除（同临时的<code>topic</code>含义类似）。最后还有两个和消息发送相关的优先级队列：<code>deferredPQ</code>代表被延迟发送的消息集合，它是一个最小堆优先级队列，其中优先级比较字段为消息发送时间(<code>Item.Priority</code>)。<code>inFlightPQ</code>代表正在发送的消息集合，同样是最小堆优先级队列，优先级比较字段也为消息发送时间(<code>Message.pri</code>)。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Channel <span class="keyword">struct</span> &#123;</span><br><span class="line">	<span class="comment">// 64bit atomic vars need to be first for proper alignment on 32bit platforms</span></span><br><span class="line">	requeueCount <span class="keyword">uint64</span>				<span class="comment">// 需要重新排队的消息数</span></span><br><span class="line">	messageCount <span class="keyword">uint64</span>				<span class="comment">// 接收到的消息的总数</span></span><br><span class="line">	timeoutCount <span class="keyword">uint64</span>				<span class="comment">// 正在发送的消息的数量</span></span><br><span class="line"></span><br><span class="line">	sync.RWMutex					<span class="comment">// guards</span></span><br><span class="line"></span><br><span class="line">	topicName <span class="keyword">string</span>				<span class="comment">// 其所对应的 topic 名称</span></span><br><span class="line">	name      <span class="keyword">string</span>				<span class="comment">// channel 名称</span></span><br><span class="line">	ctx       *context				<span class="comment">// nsqd 实例</span></span><br><span class="line">	backend BackendQueue			<span class="comment">// 后端消息持久化的队列</span></span><br><span class="line">	<span class="comment">// 内存消息通道。 其关联的 topic 会向此 channel 发送消息，</span></span><br><span class="line">    <span class="comment">// 且所有订阅的 client 会开启一个 go routine 订阅此 channel</span></span><br><span class="line">	memoryMsgChan <span class="keyword">chan</span> *Message</span><br><span class="line">	exitFlag      <span class="keyword">int32</span>				<span class="comment">// 退出标识（同 topic 的 exitFlag 作用类似）</span></span><br><span class="line">	exitMutex     sync.RWMutex</span><br><span class="line">	<span class="comment">// state tracking</span></span><br><span class="line">	clients        <span class="keyword">map</span>[<span class="keyword">int64</span>]Consumer<span class="comment">// 与此 channel关联的client集合，即订阅的Consumer 集合</span></span><br><span class="line">	paused         <span class="keyword">int32</span> <span class="comment">// 若paused属性被设置，则那些订阅了此channel的客户端不会被推送消息</span></span><br><span class="line">	ephemeral      <span class="keyword">bool</span>				<span class="comment">// 标记此 channel 是否是临时的</span></span><br><span class="line">	deleteCallback <span class="function"><span class="keyword">func</span><span class="params">(*Channel)</span>	// 删除回调函数（同 <span class="title">topic</span> 的 <span class="title">deleteCallback</span> 作用类似）</span></span><br><span class="line"><span class="function">	<span class="title">deleter</span>        <span class="title">sync</span>.<span class="title">Once</span></span></span><br><span class="line"><span class="function">	// <span class="title">Stats</span> <span class="title">tracking</span></span></span><br><span class="line"><span class="function">	<span class="title">e2eProcessingLatencyStream</span> *<span class="title">quantile</span>.<span class="title">Quantile</span></span></span><br><span class="line"><span class="function">	// 延迟投递消息集合，消息体会放入 <span class="title">deferredPQ</span>，并且由后台的<span class="title">queueScanLoop</span>协程来扫描消息</span></span><br><span class="line"><span class="function">	// 将过期的消息照常使用 <span class="title">c</span>.<span class="title">put</span><span class="params">(msg)</span> 发送出去。</span></span><br><span class="line"><span class="function">	<span class="title">deferredMessages</span> <span class="title">map</span>[<span class="title">MessageID</span>]*<span class="title">pqueue</span>.<span class="title">Item</span></span></span><br><span class="line"><span class="function">	<span class="title">deferredPQ</span>       <span class="title">pqueue</span>.<span class="title">PriorityQueue</span>		// 被延迟投递消息集合对应的 <span class="title">PriorityQueue</span></span></span><br><span class="line"><span class="function">	<span class="title">deferredMutex</span>    <span class="title">sync</span>.<span class="title">Mutex</span>					// <span class="title">guards</span> <span class="title">deferredMessages</span></span></span><br><span class="line"><span class="function">	// 正在发送中的消息记录集合，直到收到客户端的 <span class="title">FIN</span> 才删除，否则一旦超过 <span class="title">timeout</span>，则重传消息。</span></span><br><span class="line"><span class="function">	// （因此<span class="title">client</span>需要对消息做去重处理 <span class="title">de</span>-<span class="title">duplicate</span>）</span></span><br><span class="line"><span class="function">	<span class="title">inFlightMessages</span> <span class="title">map</span>[<span class="title">MessageID</span>]*<span class="title">Message</span></span></span><br><span class="line"><span class="function">	<span class="title">inFlightPQ</span>       <span class="title">inFlightPqueue</span>				// 正在发送中的消息记录集合 对应的 <span class="title">inFlightPqueue</span></span></span><br><span class="line"><span class="function">	<span class="title">inFlightMutex</span>    <span class="title">sync</span>.<span class="title">Mutex</span>					// <span class="title">guards</span> <span class="title">inFlightMessages</span></span></span><br><span class="line"><span class="function">&#125; // /<span class="title">nsq</span>/<span class="title">nsqd</span>/<span class="title">channel</span>.<span class="title">go</span></span></span><br></pre></td></tr></table></figure>
+
+<h2 id="Message-实例结构"><a href="#Message-实例结构" class="headerlink" title="Message 实例结构"></a>Message 实例结构</h2><p><code>Message</code>代表生产者生产或消费者消费的一条消息。它是<code>nsq</code>消息队列系统中最基本的元素。<code>Message</code>结构包含的重要字段有：<code>Attempts</code>表示消息已经重复发送的次数（一旦消息投递次数过多，客户端可针对性地做处理）；<code>deliveryTS</code>表示<code>channel</code>向<code>client</code>发送消息时刻的时间戳；<code>clientID</code>表示消息被投递的目的客户端标识；<code>pri</code>表示消息优先级（即为消息被处理的<code>deadline</code>）；<code>deferred</code>为消息被延迟的时间（若消息确实被延迟了）。另外，网络传输的消息包格式构成为：<code>Timestamp</code>(<code>8byte</code>) + <code>Attempts</code>(<code>2byte</code>) + <code>MessageID</code>(<code>16byte</code>) + <code>MessageBody</code>(<code>N-byte</code>)。具体可参考相关源码，<code>Message</code>相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 代表逻辑消息实体结构</span></span><br><span class="line"><span class="keyword">type</span> Message <span class="keyword">struct</span> &#123;</span><br><span class="line">	ID        MessageID				<span class="comment">// 消息 ID</span></span><br><span class="line">	Body      []<span class="keyword">byte</span>				<span class="comment">// 消息体</span></span><br><span class="line">	Timestamp <span class="keyword">int64</span>					<span class="comment">// 当前时间戳</span></span><br><span class="line">	Attempts  <span class="keyword">uint16</span>				<span class="comment">// 消息重复投递次数</span></span><br><span class="line">	<span class="comment">// for in-flight handling</span></span><br><span class="line">	deliveryTS time.Time			<span class="comment">// 投递消息的时间戳</span></span><br><span class="line">	clientID   <span class="keyword">int64</span>				<span class="comment">// 接收此消息的 client ID</span></span><br><span class="line">	pri        <span class="keyword">int64</span>				<span class="comment">// 消息的优先级（即消息被处理的 deadline 时间戳）</span></span><br><span class="line">	index      <span class="keyword">int</span>					<span class="comment">// 当前消息在 priority queue 中的索引</span></span><br><span class="line">	deferred   time.Duration		<span class="comment">// 若消息被延迟，则为延迟时间</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/message.go</span></span><br></pre></td></tr></table></figure>
+
+<p>另外简要贴出两个消息发送优先级队列<code>inFlightPQ</code>和<code>deferredPQ</code>核心组成代码：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> inFlightPqueue []*Message</span><br><span class="line"><span class="comment">// 使用一个 heap 堆来存储所有的 message，</span></span><br><span class="line"><span class="comment">// 根据 Message.pri（即消息处理时间的 deadline 时间戳） 来组织成一个小顶堆</span></span><br><span class="line"><span class="comment">// 非线程安全，需要 caller 来保证线程安全</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newInFlightPqueue</span><span class="params">(capacity <span class="keyword">int</span>)</span> <span class="title">inFlightPqueue</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="built_in">make</span>(inFlightPqueue, <span class="number">0</span>, capacity)</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/in_flight_pqueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 若堆顶元素的 pri 大于此时的 timestamp，则返回　nil, 及二者的差值</span></span><br><span class="line"><span class="comment">// 此种情况表示还未到处理超时时间，即 nsqd 还不需要将它重新加入发送队列。</span></span><br><span class="line"><span class="comment">// 否则返回堆顶元素, 0，表示堆顶元素已经被客户端处理超时了，需要重新加入发送队列</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pq *inFlightPqueue)</span> <span class="title">PeekAndShift</span><span class="params">(max <span class="keyword">int64</span>)</span> <span class="params">(*Message, <span class="keyword">int64</span>)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(*pq) == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, <span class="number">0</span></span><br><span class="line">	&#125;</span><br><span class="line">	x := (*pq)[<span class="number">0</span>]</span><br><span class="line">	<span class="keyword">if</span> x.pri &gt; max &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, x.pri - max</span><br><span class="line">	&#125;</span><br><span class="line">	pq.Pop()</span><br><span class="line">	<span class="keyword">return</span> x, <span class="number">0</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/in_flight_pqueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 最小堆优先级队列，其操作接口同 in_flight_queue （nsqd/in_flight_queue.go）类似</span></span><br><span class="line"><span class="comment">// 不同的是它借用了标准库 container/heap/heap.go</span></span><br><span class="line"><span class="keyword">type</span> PriorityQueue []*Item</span><br><span class="line"><span class="keyword">type</span> Item <span class="keyword">struct</span> &#123;</span><br><span class="line">	Value    <span class="keyword">interface</span>&#123;&#125;</span><br><span class="line">	Priority <span class="keyword">int64</span></span><br><span class="line">	Index    <span class="keyword">int</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">(capacity <span class="keyword">int</span>)</span> <span class="title">PriorityQueue</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> <span class="built_in">make</span>(PriorityQueue, <span class="number">0</span>, capacity)</span><br><span class="line">&#125; <span class="comment">// /nsq/internal/pqueue/pqueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pq *PriorityQueue)</span> <span class="title">PeekAndShift</span><span class="params">(max <span class="keyword">int64</span>)</span> <span class="params">(*Item, <span class="keyword">int64</span>)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> pq.Len() == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, <span class="number">0</span></span><br><span class="line">	&#125;</span><br><span class="line">	item := (*pq)[<span class="number">0</span>]</span><br><span class="line">	<span class="keyword">if</span> item.Priority &gt; max &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, item.Priority - max</span><br><span class="line">	&#125;</span><br><span class="line">	heap.Remove(pq, <span class="number">0</span>) <span class="comment">// Remove 方法中重新调整了堆的结构</span></span><br><span class="line">	<span class="keyword">return</span> item, <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="创建-topic-实例"><a href="#创建-topic-实例" class="headerlink" title="创建 topic 实例"></a>创建 topic 实例</h2><p><code>channel</code>的构造方法同<code>topic</code>的构造方法所涉及的逻辑非常相似，只不过<code>channel</code>还初始化了前面阐述的两个用于存储发送消息的优先级队列<code>inFlightPQ</code>和<code>deferredPQ</code>。因此就不再阐述，读者若需参考，可以看<a href="https://qqzeng.top/2019/05/14/nsq-topic-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/#%E5%88%9B%E5%BB%BA-topic-%E5%AE%9E%E4%BE%8B" target="_blank" rel="noopener">这里</a>。注意，它同样会通过<code>nsqd.Notify</code>通知<code>nsqlookupd</code>有新的<code>channel</code>创建，因此需要重新调用<code>PersistMetadata</code>以持久化元数据。（方法调用链为：<code>NewChannel-&gt;nsqd.Notify-&gt;nsqd.lookupLoop-&gt;nsqd.PersistMetadata</code>）相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// channel 构造函数</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewChannel</span><span class="params">(topicName <span class="keyword">string</span>, channelName <span class="keyword">string</span>, ctx *context,</span></span></span><br><span class="line"><span class="function"><span class="params">	deleteCallback <span class="keyword">func</span>(*Channel)</span>) *<span class="title">Channel</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 初始化 channel 部分参数</span></span><br><span class="line">	c := &amp;Channel&#123;</span><br><span class="line">		topicName:      topicName,</span><br><span class="line">		name:           channelName,</span><br><span class="line">		memoryMsgChan:  <span class="built_in">make</span>(<span class="keyword">chan</span> *Message, ctx.nsqd.getOpts().MemQueueSize),</span><br><span class="line">		clients:        <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">int64</span>]Consumer),</span><br><span class="line">		deleteCallback: deleteCallback,</span><br><span class="line">		ctx:            ctx,</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(ctx.nsqd.getOpts().E2EProcessingLatencyPercentiles) &gt; <span class="number">0</span> &#123;</span><br><span class="line">		c.e2eProcessingLatencyStream = quantile.New(</span><br><span class="line">			ctx.nsqd.getOpts().E2EProcessingLatencyWindowTime,</span><br><span class="line">			ctx.nsqd.getOpts().E2EProcessingLatencyPercentiles,</span><br><span class="line">		)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 初始化 channel 维护的两个消息队列</span></span><br><span class="line">	c.initPQ()</span><br><span class="line">	<span class="comment">// 3. 同　topic　类似，那些 ephemeral 类型的 channel 不会关联到一个 BackendQueue，</span></span><br><span class="line">    <span class="comment">// 而只是被赋予了一个 dummy BackendQueue</span></span><br><span class="line">	<span class="keyword">if</span> strings.HasSuffix(channelName, <span class="string">"#ephemeral"</span>) &#123;</span><br><span class="line">		c.ephemeral = <span class="literal">true</span></span><br><span class="line">		c.backend = newDummyBackendQueue()</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		dqLogf := <span class="function"><span class="keyword">func</span><span class="params">(level diskqueue.LogLevel, f <span class="keyword">string</span>, args ...<span class="keyword">interface</span>&#123;&#125;)</span></span> &#123;</span><br><span class="line">			opts := ctx.nsqd.getOpts()</span><br><span class="line">			lg.Logf(opts.Logger, opts.LogLevel, lg.LogLevel(level), f, args...)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// backend names, for uniqueness, automatically include the topic...</span></span><br><span class="line">		<span class="comment">// 4. 实例化一个后端持久化存储，同样是通过 go-diskqueue  来创建的，</span></span><br><span class="line">        <span class="comment">// 其初始化参数同 topic 中实例化 backendQueue 参数类似</span></span><br><span class="line">		backendName := getBackendName(topicName, channelName)</span><br><span class="line">		c.backend = diskqueue.New(</span><br><span class="line">			backendName,</span><br><span class="line">			ctx.nsqd.getOpts().DataPath,</span><br><span class="line">			ctx.nsqd.getOpts().MaxBytesPerFile,</span><br><span class="line">			<span class="keyword">int32</span>(minValidMsgLength),</span><br><span class="line">			<span class="keyword">int32</span>(ctx.nsqd.getOpts().MaxMsgSize)+minValidMsgLength,</span><br><span class="line">			ctx.nsqd.getOpts().SyncEvery,</span><br><span class="line">			ctx.nsqd.getOpts().SyncTimeout,</span><br><span class="line">			dqLogf,</span><br><span class="line">		)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 5. 通知 lookupd 添加注册信息</span></span><br><span class="line">	c.ctx.nsqd.Notify(c)</span><br><span class="line">	<span class="keyword">return</span> c</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/channel.go</span></span><br></pre></td></tr></table></figure>
+
+<p>类似地，前文提过<code>channel</code>不会被预先创建，一般是因为某个消费者在订阅<code>channel</code>时才被创建的。同样，我们追踪方法调用，发现只有<code>topic.getOrCreateChannel</code>方法调用了<code>NewChannel</code>构造方法，而它又只会被<code>topic.GetChannel</code>方法调用。因此，程序中只存在三条调用链：其一，<code>nsqd.Start-&gt;nsqd.LoadMetadata-&gt;topic.GetChannel-&gt;topic.getOrCreateChannel-&gt;NewChannel</code>；其二，<code>httpServer.doCreateChannel-&gt;topic.GetChannel</code>；以及<code>protocolV2.SUB-&gt;topic.GetChannel</code>。</p>
+<h2 id="删除或关闭-channel-实例"><a href="#删除或关闭-channel-实例" class="headerlink" title="删除或关闭 channel 实例"></a>删除或关闭 channel 实例</h2><p>删除(<code>Delete</code>)或者关闭(<code>Close</code>)<code>channel</code>实例的方法逻辑同<code>topic</code>也非常类似。相似部分不多阐述，读者若需要参考，可以看<a href="https://qqzeng.top/2019/05/14/nsq-topic-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/#%E5%88%A0%E9%99%A4%E6%88%96%E5%85%B3%E9%97%AD-topic-%E5%AE%9E%E4%BE%8B" target="_blank" rel="noopener">这里</a>。这里重点阐述两个不同点：其一，无论是关闭还是删除<code>channel</code>都会显式地将订阅了此<code>channel</code>的客户端强制关闭（当然是关闭客户端在服务端的实体）；其二，关闭和删除<code>channel</code>都会显式刷新<code>channel</code>，即将<code>channel</code>所维护的三个消息队列：内存消息队列<code>memoryMsgChan</code>、正在发送的优先级消息队列<code>inFlightPQ</code>以及被推迟发送的优先级消息队列<code>deferredPQ</code>，将它们的消息显式写入到持久化存储消息队列。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 删除此 channel，清空所有消息，然后关闭</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Channel)</span> <span class="title">Delete</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> c.exit(<span class="literal">true</span>)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 只是将三个消息队列中的消息刷盘，然后关闭</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Channel)</span> <span class="title">Close</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> c.exit(<span class="literal">false</span>)</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/channel.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Channel)</span> <span class="title">exit</span><span class="params">(deleted <span class="keyword">bool</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	c.exitMutex.Lock()</span><br><span class="line">	<span class="keyword">defer</span> c.exitMutex.Unlock()</span><br><span class="line">	<span class="comment">// 1. 保证还未被设置 exitFlag，即还在运行中，同时设置 exitFlag</span></span><br><span class="line">	<span class="keyword">if</span> !atomic.CompareAndSwapInt32(&amp;c.exitFlag, <span class="number">0</span>, <span class="number">1</span>) &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">"exiting"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 若需要删除数据，则通知 nsqlookupd，有 channel 被删除</span></span><br><span class="line">	<span class="keyword">if</span> deleted &#123;</span><br><span class="line">		c.ctx.nsqd.logf(LOG_INFO, <span class="string">"CHANNEL(%s): deleting"</span>, c.name)</span><br><span class="line">		c.ctx.nsqd.Notify(c)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		c.ctx.nsqd.logf(LOG_INFO, <span class="string">"CHANNEL(%s): closing"</span>, c.name)</span><br><span class="line">	&#125;</span><br><span class="line">	c.RLock()</span><br><span class="line">	<span class="comment">// 3. 强制关闭所有订阅了此 channel 的客户端</span></span><br><span class="line">	<span class="keyword">for</span> _, client := <span class="keyword">range</span> c.clients &#123;</span><br><span class="line">		client.Close()</span><br><span class="line">	&#125;</span><br><span class="line">	c.RUnlock()</span><br><span class="line">	<span class="comment">// 4. 清空此 channel 所维护的内存消息队列和持久化存储消息队列中的消息</span></span><br><span class="line">	<span class="keyword">if</span> deleted &#123;</span><br><span class="line">		<span class="comment">// empty the queue (deletes the backend files, too)</span></span><br><span class="line">		c.Empty()</span><br><span class="line">		<span class="comment">// 5. 删除持久化存储消息队列中的消息</span></span><br><span class="line">		<span class="keyword">return</span> c.backend.Delete()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 6. 强制将内存消息队列、以及两个发送消息优先级队列中的消息写到持久化存储中</span></span><br><span class="line">	c.flush()</span><br><span class="line">	<span class="comment">// 7. 关闭持久化存储消息队列</span></span><br><span class="line">	<span class="keyword">return</span> c.backend.Close()</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/channel.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 清空 channel 的消息</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Channel)</span> <span class="title">Empty</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	c.Lock()</span><br><span class="line">	<span class="keyword">defer</span> c.Unlock()</span><br><span class="line">	<span class="comment">// 1. 重新初始化（清空） in-flight queue 及 deferred queue</span></span><br><span class="line">	c.initPQ()</span><br><span class="line">	<span class="comment">// 2. 清空由 channel 为客户端维护的一些信息，比如 当前正在发送的消息的数量 InFlightCount</span></span><br><span class="line">	<span class="comment">// 同时更新了 ReadyStateChan</span></span><br><span class="line">	<span class="keyword">for</span> _, client := <span class="keyword">range</span> c.clients &#123;</span><br><span class="line">		client.Empty()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 将 memoryMsgChan 中的消息清空</span></span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> &lt;-c.memoryMsgChan:</span><br><span class="line">		<span class="keyword">default</span>:</span><br><span class="line">			<span class="keyword">goto</span> finish</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 最后将后端持久化存储中的消息清空</span></span><br><span class="line">finish:</span><br><span class="line">	<span class="keyword">return</span> c.backend.Empty()</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/channel.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 将未消费的消息都写到持久化存储中，</span></span><br><span class="line"><span class="comment">// 主要包括三个消息集合：memoryMsgChan、inFlightMessages和deferredMessages</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(c *Channel)</span> <span class="title">flush</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> msgBuf bytes.Buffer</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 1. 将内存消息队列中的积压的消息刷盘</span></span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> msg := &lt;-c.memoryMsgChan:</span><br><span class="line">			err := writeMessageToBackend(&amp;msgBuf, msg, c.backend)</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">default</span>:</span><br><span class="line">			<span class="keyword">goto</span> finish</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 将还未发送出去的消息 inFlightMessages 也写到持久化存储</span></span><br><span class="line">finish:</span><br><span class="line">	c.inFlightMutex.Lock()</span><br><span class="line">	<span class="keyword">for</span> _, msg := <span class="keyword">range</span> c.inFlightMessages &#123;</span><br><span class="line">		err := writeMessageToBackend(&amp;msgBuf, msg, c.backend)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	c.inFlightMutex.Unlock()</span><br><span class="line">	<span class="comment">// 3. 将被推迟发送的消息集合中的 deferredMessages 消息也到持久化存储</span></span><br><span class="line">	c.deferredMutex.Lock()</span><br><span class="line">	<span class="keyword">for</span> _, item := <span class="keyword">range</span> c.deferredMessages &#123;</span><br><span class="line">		msg := item.Value.(*Message)</span><br><span class="line">		err := writeMessageToBackend(&amp;msgBuf, msg, c.backend)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	c.deferredMutex.Unlock()</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/channel.go</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="查询-channel-实例"><a href="#查询-channel-实例" class="headerlink" title="查询 channel 实例"></a>查询 channel 实例</h2><p>同样是即依据名称查询（获取）<code>channel</code>实例，它被定义为<code>topic</code>实例的方法。查询逻辑的关键是，若此<code>channl</code>不在<code>topic</code>的<code>channel</code>集合中，则需要创建一个新的<code>channel</code>实例。并为其注册<code>channel</code>实例的删除回调函数。接下来，还要更新<code>topic.memoryMsgChan</code>和<code>topoc.backendChan</code>结构（因为<code>channel</code>集合更新了）。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 根据 channel 名称返回 channel 实例，且有可能是新建的。线程安全方法。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Topic)</span> <span class="title">GetChannel</span><span class="params">(channelName <span class="keyword">string</span>)</span> *<span class="title">Channel</span></span> &#123;</span><br><span class="line">	t.Lock()</span><br><span class="line">	channel, isNew := t.getOrCreateChannel(channelName)</span><br><span class="line">	t.Unlock()</span><br><span class="line">	<span class="keyword">if</span> isNew &#123;</span><br><span class="line">		<span class="comment">// update messagePump state</span></span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="comment">// 若此 channel 为新创建的，则 push 消息到 channelUpdateChan中，</span></span><br><span class="line">            <span class="comment">// 使 memoryMsgChan 及 backend 刷新状态</span></span><br><span class="line">		<span class="keyword">case</span> t.channelUpdateChan &lt;- <span class="number">1</span>:</span><br><span class="line">		<span class="keyword">case</span> &lt;-t.exitChan:</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> channel</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/topic.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 根据 channel 名称获取指定的 channel，若不存在，则创建一个新的 channel 实例。非线程安全</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Topic)</span> <span class="title">getOrCreateChannel</span><span class="params">(channelName <span class="keyword">string</span>)</span> <span class="params">(*Channel, <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">	channel, ok := t.channelMap[channelName]</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="comment">// 注册 channel 被删除时的回调函数</span></span><br><span class="line">		deleteCallback := <span class="function"><span class="keyword">func</span><span class="params">(c *Channel)</span></span> &#123;</span><br><span class="line">			t.DeleteExistingChannel(c.name)</span><br><span class="line">		&#125;</span><br><span class="line">		channel = NewChannel(t.name, channelName, t.ctx, deleteCallback)</span><br><span class="line">		t.channelMap[channelName] = channel</span><br><span class="line">		t.ctx.nsqd.logf(LOG_INFO, <span class="string">"TOPIC(%s): new channel(%s)"</span>, t.name, channel.name)</span><br><span class="line">		<span class="keyword">return</span> channel, <span class="literal">true</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> channel, <span class="literal">false</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqd/topic.go</span></span><br></pre></td></tr></table></figure>
+
+<p>简单小结，本文内容同上一篇文章分析<code>topic</code>源码非常相似，因此阐述得比较简单，只是贴了注释的源码，并重点阐述二者不同。文章围绕<code>channel</code>展开，首先简要介绍<code>channel</code>结构字段的组成；然后，分析<code>message</code>相关的字段，以及<code>chanel</code>维护的两个和消息发送相关的优先级队列：<code>inFlightPQ</code>，存放正在发送的消息的优先级队列，以及<code>deferredPQ</code>，存放被推迟发送的消息的优先级队列。接下来，分析了<code>channel</code>实例化的逻辑以及<code>channel</code>删除逻辑；最后阐述<code>channel</code>的查询过程，查询过程需要注意的是通知<code>topic</code>的消息处理主循环<code>messagePump</code>更新两个消息队列实例。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://github.com/nsqio/nsq" target="_blank" rel="noopener">https://github.com/nsqio/nsq</a><br>[2]. <a href="https://nsq.io/overview/quick_start.html" target="_blank" rel="noopener">https://nsq.io/overview/quick_start.html</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag"><i class="fa fa-tag"></i> 消息队列</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/05/14/nsq-topic-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="nsq topic 源码简析">
+                  <i class="fa fa-chevron-left"></i> nsq topic 源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/05/15/nsq-%E6%B6%88%E6%81%AF%E5%8F%91%E9%80%81%E8%AE%A2%E9%98%85%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="nsq 消息发送订阅源码简析">
+                  nsq 消息发送订阅源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#channel-实例结构"><span class="nav-number">1.</span> <span class="nav-text">channel 实例结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Message-实例结构"><span class="nav-number">2.</span> <span class="nav-text">Message 实例结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#创建-topic-实例"><span class="nav-number">3.</span> <span class="nav-text">创建 topic 实例</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#删除或关闭-channel-实例"><span class="nav-number">4.</span> <span class="nav-text">删除或关闭 channel 实例</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#查询-channel-实例"><span class="nav-number">5.</span> <span class="nav-text">查询 channel 实例</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

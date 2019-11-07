@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章阐述了etcd-raft snopshot相关逻辑，并从整体上把握etcd-raft snapshot的设计规范。本文的主题是集群配置变更的理论及实际的相关流程，即etcd-raft如何处理集群配置变更，且在配置变更前后必须保证集群任何时刻只存在一个leader。在raft论文中提出每次只能处理一个节点的变更请求，若一次性处理多个节点变更请求（如添加多个节点），可能会造成某一时刻集群中存">
+<meta name="keywords" content="分布式系统,分布式协调服务">
+<meta property="og:type" content="article">
+<meta property="og:title" content="etcd-raft 集群配置变更源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;15&#x2F;etcd-raft-%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E5%8F%98%E6%9B%B4%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章阐述了etcd-raft snopshot相关逻辑，并从整体上把握etcd-raft snapshot的设计规范。本文的主题是集群配置变更的理论及实际的相关流程，即etcd-raft如何处理集群配置变更，且在配置变更前后必须保证集群任何时刻只存在一个leader。在raft论文中提出每次只能处理一个节点的变更请求，若一次性处理多个节点变更请求（如添加多个节点），可能会造成某一时刻集群中存">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;6.824&#x2F;blob&#x2F;master&#x2F;src&#x2F;raft&#x2F;ConfChange.png?raw=true">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.806Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;6.824&#x2F;blob&#x2F;master&#x2F;src&#x2F;raft&#x2F;ConfChange.png?raw=true">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/15/etcd-raft-%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E5%8F%98%E6%9B%B4%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>etcd-raft 集群配置变更源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/15/etcd-raft-%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E5%8F%98%E6%9B%B4%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          etcd-raft 集群配置变更源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-15 11:05:23" itemprop="dateCreated datePublished" datetime="2019-01-15T11:05:23+08:00">2019-01-15</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>11k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>10 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章阐述了<code>etcd-raft snopshot</code>相关逻辑，并从整体上把握<code>etcd-raft snapshot</code>的设计规范。本文的主题是集群配置变更的理论及实际的相关流程，即<code>etcd-raft</code>如何处理集群配置变更，且在配置变更前后必须保证集群任何时刻只存在一个<code>leader</code>。在<code>raft</code>论文中提出每次只能处理一个节点的变更请求，若一次性处理多个节点变更请求（如添加多个节点），可能会造成某一时刻集群中存在两个<code>leader</code>，但这是<code>raft</code>协议规范所不允许的。而<code>etcd-raft</code>的实现同样只允许每次处理一个配置变更请求。大概地，<code>etcd-raft</code>首先将配置变更请求同普通请求日志进行类似处理，即复制到<code>quorum</code>节点，然后提交配置变更请求。一旦<code>quorum</code>节点完配置变更日志的追加操作后，便触发<code>leader</code>节点所维护的集群拓扑信息变更（此时原集群拓扑所包含的节点才知道新的集群拓扑结构），而其它节点在收到<code>leader</code>的消息后，也会更新其维护的集群拓扑。</p>
+<a id="more"></a>
+
+<h2 id="集群配置信息变更"><a href="#集群配置信息变更" class="headerlink" title="集群配置信息变更"></a>集群配置信息变更</h2><p>在结合代码阐述集群配置信息变更的流程之前，先简单了解论文中所阐述的集群配置变更理论。为什么一次集群配置信息变更（此处以增加新节点示例）只能增加一个节点？这包含两个部分：其一解释若一次增加两个节点会使得集群在某一时刻存在两个<code>leader</code>的情况。其二，阐述若一次只允许增加一个节点，则不会出现某一时刻存在两个两个<code>leader</code>的情况。</p>
+<p><img src="https://github.com/qqzeng/6.824/blob/master/src/raft/ConfChange.png?raw=true" alt="raft集群配置信息变更"></p>
+<p>如图（论文原图）所示，集群配置变更前集群中节点数量为 3（包括<code>s1、s2</code>及<code>s3</code>），且假设最最初的<code>leader</code>为<code>s3</code>。假设集群配置变更时允许 2 个节点同时加入到集群中，那么原来的 3 个节点在知道新的集群拓扑结构前（即集群配置变更的请求日志被提交之前），它们认为集群中只包含 3 个节点。而当新加入的节点（<code>s4及s5</code>）提出加入请求时，<code>leader</code>节点开始对节点加入请求日志进行同步复制，假设在<code>s1</code>及<code>s2</code>提交日志之前，<code>s3、s4</code>于它们之前收到日志并成功回复，那么<code>leader</code>此时收到了    <code>quorum</code>个回复（<code>s1、s4</code>及<code>s5</code>），因此可以提交节点请求加入的日志，换言之，此时节点<code>s1、s4</code>及<code>s5</code>认为集群中存在 5 个节点，而<code>s2</code>和<code>s3</code>仍然认为集群中只包含 3 个节点（因为它们还未提交配置变更请求）。此时假设某种网络原因，<code>s1</code>与<code>s3</code>（<code>leader</code>节点）失联，则<code>s1</code>重新发起选举，并成功收到<code>s2</code>的回复（<code>s2</code>可以给<code>s1</code>投票的），因此<code>s1</code>成功选举为<code>leader</code>（因为它它认为自己收到了<code>quorum=3/2+1</code>=2节点的投票）。而<code>s3</code>此时也同样发起选举，它可以获得<code>s3、s4</code>及<code>s5</code>的选票，因此它也能成功当选为<code>leader</code>（它认为自己收到了<code>quorum=5/2+1=3</code>节点的投票）。此时，集群中存在两个<code>leader</code>，是不安全且不允许的（显然，两个<code>leader</code>会导致对于同一索引处的日志不同，违反一致性）。</p>
+<p>那为什么每次只入一个节点就能保证安全性呢（即任何时刻都只能有一个<code>leader</code>存在）？同样，假设我们最初的集群中包含三个节点（<code>s1、s2</code>及<code>s3</code>），且最初的<code>leader</code>为<code>s1</code>，但此时只有一个节点加入（假设为<code>s4</code>）。那么我们从三个方面来讨论为什么能保证任意时刻只存在一个<code>leader</code>：</p>
+<ul>
+<li><p>配置变更请求日志提交前。即此时原集群的节点（<code>s1、s2</code>及<code>s3</code>）都只知道原始集群拓扑结构信息，不知道新加入的节点信息（其<code>quorum=3/2+1=2</code>）。但新加入的节点认为集群中存在 4 个节点（因此其<code>quorum=4/2+1=3</code>）。因此，在<code>s1、s2</code>或<code>s3</code>当中任意一个或多个发起选举时，它们最多只能产生 1 个<code>leader</code>（与原始集群的选举一致，因为它们的集群拓扑视角均未变化）。而<code>s4</code>发起选举时，它不能得到<code>s1、s2</code>或<code>s3</code>任何一张选票（因为很明显它的日志比它们的要旧）。</p>
+</li>
+<li><p>配置变更请求日志提交中。即此时配置变更请求的日志已经被<code>leader</code>提交了，但并不是所有的节点都提交了。比如，<code>s1</code>及<code>s2</code>成功提交了日志，则此时若<code>s4</code>发起选举，它不能获取<code>quorum=3/1+1=3</code>张选票，因为它的日志要比<code>s1</code>和<code>s2</code>的要更旧，即只能获取<code>s3</code>的选票（不能成功当选 ），<code>若s3</code>发起选举的结果也类似（注意，其此刻不知道<code>s4</code>的存在，因此其<code>quorum=2</code>）。总而言之，已提交了日志的节点能够获取<code>quorum</code>张选票，而未提交日志的节点因为日志不够新因此不能获得<code>quorum</code>张选票。</p>
+</li>
+<li><p>配置变更请求日志提交后。这种情况比较简单，当配置变更请求已经提交了，集群中任意一个节点当选的条件必须是获得<code>quorum</code>张选票，且任意两个<code>quorum</code>存在交集，但一个节点只能投出一张选票（在一个<code>term</code>内），因此不可能存在两个节点同时当选为<code>leader</code>。</p>
+</li>
+</ul>
+<p>至此，关于论文中的理论已经阐述完毕。而<code>etcd-raft</code>也只允许一次只能存在一个配置变更的请求。下面来简单了解<code>etcd-raft</code>是如何处理配置变更请求。</p>
+<h2 id="关键流程"><a href="#关键流程" class="headerlink" title="关键流程"></a>关键流程</h2><p>我们同样从<code>raftexample</code>着手，当客户端发起配置变更请求（这里以加入一个新节点作为示例）时，<code>etcd-raft</code>是如何处理的。上文提过，这主要包含两个过程：其一，配置变更请求日志的同步过程（同普通的日志请求复制流程类似）。其二，在日志提交之后，节点正式更新集群拓扑信息，直至此时，原集群中的节点才知道新节点的存在。主要涉及的代码的目录为：<code>/etcd/contribe/raftexample</code>及<code>/etcd/raft</code>。</p>
+<p>在阐述配置变更相关流程逻辑前，我们简要帖出核心数据结构，比较简单：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ConfChange <span class="keyword">struct</span> &#123;</span><br><span class="line">    <span class="comment">// ID 为节点变更的消息id</span></span><br><span class="line">	ID               <span class="keyword">uint64</span>         <span class="string">`protobuf:"varint,1,opt,name=ID" json:"ID"`</span></span><br><span class="line">    <span class="comment">// 配置信息变更的类型，目前包含四种</span></span><br><span class="line">	Type             ConfChangeType <span class="string">`protobuf:"varint,2,opt,name=Type,enum=raftpb.ConfChangeType" json:"Type"`</span></span><br><span class="line">    <span class="comment">// 配置信息变更所涉及到的节点的 ID</span></span><br><span class="line">	NodeID           <span class="keyword">uint64</span>         <span class="string">`protobuf:"varint,3,opt,name=NodeID" json:"NodeID"`</span></span><br><span class="line">	Context          []<span class="keyword">byte</span>         <span class="string">`protobuf:"bytes,4,opt,name=Context" json:"Context,omitempty"`</span></span><br><span class="line">&#125; <span class="comment">// /etc/raft/raftpb/raft.pb.go</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> ConfChangeType <span class="keyword">int32</span></span><br><span class="line"><span class="keyword">const</span> (</span><br><span class="line">	ConfChangeAddNode        ConfChangeType = <span class="number">0</span></span><br><span class="line">	ConfChangeRemoveNode     ConfChangeType = <span class="number">1</span></span><br><span class="line">	ConfChangeUpdateNode     ConfChangeType = <span class="number">2</span></span><br><span class="line">	ConfChangeAddLearnerNode ConfChangeType = <span class="number">3</span></span><br><span class="line">) <span class="comment">// /etc/raft/raftpb/raft.pb.go</span></span><br></pre></td></tr></table></figure>
+
+<p>我们知道，关于<code>raftexample</code>示例，它可以通过两种方式加入集群，其一是集群节点信息初始化，即在集群启动时便知道存在哪些节点，这不属于我们本文讨论的范围。其二是集群正常运行过程中，一个节点要加入集群，它可以通过向客户端发出一个 HTTP POST 请求以加入集群：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">curl -L http://127.0.0.1:12380/4 -XPOST -d http://127.0.0.1:42379 </span><br><span class="line">raftexample --id 4 --cluster http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379,http://127.0.0.1:42379 --port 42380 --join</span><br></pre></td></tr></table></figure>
+
+<p>在应用的 HTTP 处理器模块接收到请求后，会构建一个配置变更对象，通过<code>confChangeC</code>管道将其传递给<code>raftNode</code>模块，由<code>raftNode</code>进一步调用<code>node</code>实例的<code>ProposeConfChange()</code>函数。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *httpKVAPI)</span> <span class="title">ServeHTTP</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">	key := r.RequestURI</span><br><span class="line">	<span class="keyword">switch</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> r.Method == <span class="string">"PUT"</span>:</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> r.Method == <span class="string">"GET"</span>:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> r.Method == <span class="string">"POST"</span>:</span><br><span class="line">		url, err := ioutil.ReadAll(r.Body)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 解析参数</span></span><br><span class="line">		nodeId, err := strconv.ParseUint(key[<span class="number">1</span>:], <span class="number">0</span>, <span class="number">64</span>)</span><br><span class="line">		<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Printf(<span class="string">"Failed to convert ID for conf change (%v)\n"</span>, err)</span><br><span class="line">			http.Error(w, <span class="string">"Failed on POST"</span>, http.StatusBadRequest)</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 构建 ConfChang 对象</span></span><br><span class="line">		cc := raftpb.ConfChange&#123;</span><br><span class="line">			Type:    raftpb.ConfChangeAddNode,</span><br><span class="line">			NodeID:  nodeId,</span><br><span class="line">			Context: url,</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 将对象放入管道，通知 raftNode</span></span><br><span class="line">		h.confChangeC &lt;- cc</span><br><span class="line">		w.WriteHeader(http.StatusNoContent)</span><br><span class="line">	<span class="keyword">case</span> r.Method == <span class="string">"DELETE"</span>:</span><br><span class="line">		nodeId, err := strconv.ParseUint(key[<span class="number">1</span>:], <span class="number">0</span>, <span class="number">64</span>)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		cc := raftpb.ConfChange&#123;</span><br><span class="line">			Type:   raftpb.ConfChangeRemoveNode,</span><br><span class="line">			NodeID: nodeId,</span><br><span class="line">		&#125;</span><br><span class="line">		h.confChangeC &lt;- cc</span><br><span class="line">		<span class="comment">// As above, optimistic that raft will apply the conf change</span></span><br><span class="line">		w.WriteHeader(http.StatusNoContent)</span><br><span class="line">	 <span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/contribe/raftexample/httpapi.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">serveChannels</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		confChangeCount := <span class="keyword">uint64</span>(<span class="number">0</span>)</span><br><span class="line">		<span class="keyword">for</span> rc.proposeC != <span class="literal">nil</span> &amp;&amp; rc.confChangeC != <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="keyword">select</span> &#123;</span><br><span class="line">			<span class="keyword">case</span> prop, ok := &lt;-rc.proposeC:</span><br><span class="line">				<span class="comment">// ...</span></span><br><span class="line">			<span class="comment">// 收到客户端的配置变更请求</span></span><br><span class="line">			<span class="keyword">case</span> cc, ok := &lt;-rc.confChangeC:</span><br><span class="line">				<span class="keyword">if</span> !ok &#123;</span><br><span class="line">					rc.confChangeC = <span class="literal">nil</span></span><br><span class="line">				&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">					confChangeCount++</span><br><span class="line">					cc.ID = confChangeCount</span><br><span class="line">					<span class="comment">// 调用底层协议核心来处理配置变更请求（实际上即追加配置变更日志）</span></span><br><span class="line">					rc.node.ProposeConfChange(context.TODO(), cc)</span><br><span class="line">				&#125;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// client closed channel; shutdown raft if not already</span></span><br><span class="line">		<span class="built_in">close</span>(rc.stopc)</span><br><span class="line">	&#125;()</span><br><span class="line">&#125; <span class="comment">// /etcd/contribe/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>在底层协议收到此调用请求后，会构建一个<code>MsgProp</code>类型的日志消息（这同普通的日志请求的类型是一致的），但消息中的<code>Entry</code>类型为<code>EntryConfChange</code>。通过一系列的函数调用，会将此请求消息放入<code>proc</code>管道，而在<code>node</code>的<code>run()</code>函数中会将消息从管理中取出，然后调用底层协议的核心处理实例<code>raft</code>的<code>Step()</code>函数，进而在最后调用其<code>stepLeader()</code>函数。部分代码如下（完整的函数调用栈为：<code>ProposeConfChange() -&gt; Step() -&gt; step() -&gt; stepWithWaitOption() -&gt;  r.Step() -&gt; r.stepLeader()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">ProposeConfChange</span><span class="params">(ctx context.Context, cc pb.ConfChange)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	data, err := cc.Marshal()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> n.Step(ctx, pb.Message&#123;Type: pb.MsgProp, Entries: []pb.Entry&#123;&#123;Type: pb.EntryConfChange, Data: data&#125;&#125;&#125;)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/node.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepLeader</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">	<span class="keyword">case</span> pb.MsgBeat:</span><br><span class="line">		r.bcastHeartbeat()</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgCheckQuorum:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgProp: <span class="comment">// 配置变更请求消息也走这里，因此其处理流程同普通的日志请求是类似的</span></span><br><span class="line">		<span class="keyword">if</span> <span class="built_in">len</span>(m.Entries) == <span class="number">0</span> &#123;</span><br><span class="line">			r.logger.Panicf(<span class="string">"%x stepped empty MsgProp"</span>, r.id)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> _, ok := r.prs[r.id]; !ok &#123;</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> r.leadTransferee != None &#123;</span><br><span class="line">			r.logger.Debugf(<span class="string">"%x [term %d] transfer leadership to %x is in progress; dropping proposal"</span>, r.id, r.Term, r.leadTransferee)</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125;</span><br><span class="line"></span><br><span class="line">		<span class="keyword">for</span> i, e := <span class="keyword">range</span> m.Entries &#123;</span><br><span class="line">			<span class="keyword">if</span> e.Type == pb.EntryConfChange &#123; <span class="comment">// 若为配置变更请求消息，先判断其 pendingConfIndex（它限制了一次只能进行一个节点的变更）</span></span><br><span class="line">			<span class="comment">// 并且保证其不能超过 appliedIndex，因为只有一个变更请求被 pending，因此其肯定还未提交，因此正常情况下必须小于 appliedIndex</span></span><br><span class="line">				<span class="keyword">if</span> r.pendingConfIndex &gt; r.raftLog.applied &#123;</span><br><span class="line">					r.logger.Infof(<span class="string">"propose conf %s ignored since pending unapplied configuration [index %d, applied %d]"</span>,</span><br><span class="line">						e.String(), r.pendingConfIndex, r.raftLog.applied)</span><br><span class="line">					m.Entries[i] = pb.Entry&#123;Type: pb.EntryNormal&#125;</span><br><span class="line">				&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">					<span class="comment">// 否则，若符合条件，则更新 pendingConfIndex 为对应的索引</span></span><br><span class="line">					r.pendingConfIndex = r.raftLog.lastIndex() + <span class="keyword">uint64</span>(i) + <span class="number">1</span></span><br><span class="line">				&#125;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 追加配置变更消息到节点的 unstable</span></span><br><span class="line">		<span class="keyword">if</span> !r.appendEntry(m.Entries...) &#123;</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 广播配置变更消息到 follower 节点</span></span><br><span class="line">		r.bcastAppend()</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>关于<code>bcastAppend()</code>之后的逻辑，这里不再重复阐述，其同正常的日志消息的逻辑是一致的。因此，当上层应用调用网络传输组件将配置变更消息转发到集群其它节点时，其它节点同样会完成配置变更日志追加操作（同普通的日志请求消息追加的流程一致），而且<code>leader</code>节点处理响应同样与同步普通日志的响应的逻辑一致，这里也不再重复阐述。</p>
+<p>最后，我们来了解当配置变更请求已经被同步到<code>quorum</code>节点后，准备提交的相关逻辑。这包括两个部分：其一是上层应用程序准备应用配置变更请求日志到状态机，然后会触发底层协议正式更新集群拓扑结构信息。</p>
+<p>步骤一的相关代码如下（完整调用栈为：<code>serverChannels() -&gt; publishEntries()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// whether all entries could be published.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">publishEntries</span><span class="params">(ents []raftpb.Entry)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> i := <span class="keyword">range</span> ents &#123;</span><br><span class="line">		<span class="keyword">switch</span> ents[i].Type &#123;</span><br><span class="line">         <span class="comment">// 准备应用普通的日志</span></span><br><span class="line">		<span class="keyword">case</span> raftpb.EntryNormal:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 若为配置变更请求日志</span></span><br><span class="line">		<span class="keyword">case</span> raftpb.EntryConfChange:</span><br><span class="line">			<span class="keyword">var</span> cc raftpb.ConfChange</span><br><span class="line">			<span class="comment">// 1. 反序列化</span></span><br><span class="line">			cc.Unmarshal(ents[i].Data)</span><br><span class="line">			<span class="comment">// 2. 调用 node 的 ApplyConfChange 正式更新对应节点所维护的集群拓扑结构信息</span></span><br><span class="line">			<span class="comment">// 即更新 progress 结构信息，这可能包括 learners 信息</span></span><br><span class="line">			<span class="comment">// 并且会返回集群的配置信息，即各节点的具体角色</span></span><br><span class="line">			rc.confState = *rc.node.ApplyConfChange(cc)</span><br><span class="line">			<span class="keyword">switch</span> cc.Type &#123;</span><br><span class="line">			<span class="comment">// 3. 调用网络传输组件变更对应的代表节点网络传输实例的信息</span></span><br><span class="line">			<span class="keyword">case</span> raftpb.ConfChangeAddNode:</span><br><span class="line">				<span class="keyword">if</span> <span class="built_in">len</span>(cc.Context) &gt; <span class="number">0</span> &#123;</span><br><span class="line">					rc.transport.AddPeer(types.ID(cc.NodeID), []<span class="keyword">string</span>&#123;<span class="keyword">string</span>(cc.Context)&#125;)</span><br><span class="line">				&#125;</span><br><span class="line">			<span class="keyword">case</span> raftpb.ConfChangeRemoveNode:</span><br><span class="line">				<span class="keyword">if</span> cc.NodeID == <span class="keyword">uint64</span>(rc.id) &#123;</span><br><span class="line">					log.Println(<span class="string">"I've been removed from the cluster! Shutting down."</span>)</span><br><span class="line">					<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">				&#125;</span><br><span class="line">				rc.transport.RemovePeer(types.ID(cc.NodeID))</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 4. 更新当前已应用的日志索引</span></span><br><span class="line">		rc.appliedIndex = ents[i].Index</span><br><span class="line">		<span class="comment">// special nil commit to signal replay has finished</span></span><br><span class="line">		<span class="keyword">if</span> ents[i].Index == rc.lastIndex &#123;</span><br><span class="line">			<span class="keyword">select</span> &#123;</span><br><span class="line">			<span class="keyword">case</span> rc.commitC &lt;- <span class="literal">nil</span>:</span><br><span class="line">			<span class="keyword">case</span> &lt;-rc.stopc:</span><br><span class="line">				<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// /etcd/contrib/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>而底层协议会执行具体的更新集群拓扑（包括更换已有节点的角色）的操作。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">ApplyConfChange</span><span class="params">(cc pb.ConfChange)</span> *<span class="title">pb</span>.<span class="title">ConfState</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> cs pb.ConfState</span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="comment">// 将配置变更请求实例放入 confc 管道，n.run() 函数会循环从 confc 管道中取</span></span><br><span class="line">	<span class="keyword">case</span> n.confc &lt;- cc:</span><br><span class="line">	<span class="keyword">case</span> &lt;-n.done:</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="comment">// 从 confstatec 管道中取出集群配置信息实例，返回给上层应用 raftNode</span></span><br><span class="line">	<span class="keyword">case</span> cs = &lt;-n.confstatec:</span><br><span class="line">	<span class="keyword">case</span> &lt;-n.done:</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> &amp;cs</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/node.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">addNode</span><span class="params">(id <span class="keyword">uint64</span>)</span></span> &#123;</span><br><span class="line">	r.addNodeOrLearnerNode(id, <span class="literal">false</span>)</span><br><span class="line">&#125; <span class="comment">// etcd/raft/raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">addLearner</span><span class="params">(id <span class="keyword">uint64</span>)</span></span> &#123;</span><br><span class="line">	r.addNodeOrLearnerNode(id, <span class="literal">true</span>)</span><br><span class="line">&#125; <span class="comment">// etcd/raft/raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">addNodeOrLearnerNode</span><span class="params">(id <span class="keyword">uint64</span>, isLearner <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 获取此新加入节点的 progress 实例</span></span><br><span class="line">	pr := r.getProgress(id)</span><br><span class="line">	<span class="comment">// 2. 若为空，则表示为新加入的节点，设置其 progress 对象信息</span></span><br><span class="line">	<span class="keyword">if</span> pr == <span class="literal">nil</span> &#123;</span><br><span class="line">		r.setProgress(id, <span class="number">0</span>, r.raftLog.lastIndex()+<span class="number">1</span>, isLearner)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123; <span class="comment">// 3. 否则节点已存在，可能是更新节点的具体的角色</span></span><br><span class="line">		<span class="keyword">if</span> isLearner &amp;&amp; !pr.IsLearner &#123;</span><br><span class="line">			<span class="comment">// can only change Learner to Voter</span></span><br><span class="line">			r.logger.Infof(<span class="string">"%x ignored addLearner: do not support changing %x from raft peer to learner."</span>, r.id, id)</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> isLearner == pr.IsLearner &#123;</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// change Learner to Voter, use origin Learner progress</span></span><br><span class="line">		<span class="comment">// 3.1 考虑从 Learner 切换到 Voter 的角色（Voter 角色的节点保存在 prs 数组）</span></span><br><span class="line">		<span class="built_in">delete</span>(r.learnerPrs, id)</span><br><span class="line">		pr.IsLearner = <span class="literal">false</span></span><br><span class="line">		r.prs[id] = pr</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 如果当前节点即为新加入的节点，则设置是否是 Learner</span></span><br><span class="line">	<span class="keyword">if</span> r.id == id &#123;</span><br><span class="line">		r.isLearner = isLearner</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// When a node is first added, we should mark it as recently active.</span></span><br><span class="line">	<span class="comment">// Otherwise, CheckQuorum may cause us to step down if it is invoked</span></span><br><span class="line">	<span class="comment">// before the added node has a chance to communicate with us.</span></span><br><span class="line">	<span class="comment">// 5. 当节点第一次被加入时，需要标记节点最近为 活跃，否则在节点正式与 leader 通信前，可能会导致 leader 节点下台</span></span><br><span class="line">	pr = r.getProgress(id)</span><br><span class="line">	pr.RecentActive = <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 从集群中移除指定节点</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">removeNode</span><span class="params">(id <span class="keyword">uint64</span>)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 从当前节点维护的其它节点的 progress 对象数组中移除欲删除节点的信息</span></span><br><span class="line">	r.delProgress(id)</span><br><span class="line">	<span class="comment">// do not try to commit or abort transferring if there is no nodes in the cluster.</span></span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(r.prs) == <span class="number">0</span> &amp;&amp; <span class="built_in">len</span>(r.learnerPrs) == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 节点删除操作，更新了 quorum 的大小，因此需要检查是否有 pending 的日志项已经达到提交的条件了</span></span><br><span class="line">	<span class="keyword">if</span> r.maybeCommit() &#123;</span><br><span class="line">		<span class="comment">// 2.1 若确实提交了日志项，则将此消息进行广播</span></span><br><span class="line">		r.bcastAppend()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 如果当前被移除的节点是即将当选为 Leader 的节点则中断此 Leader 交接过程</span></span><br><span class="line">	<span class="keyword">if</span> r.state == StateLeader &amp;&amp; r.leadTransferee == id &#123;</span><br><span class="line">		r.abortLeaderTransfer()</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，集群配置信息的变更的相关流程源码已经简单分析完毕。</p>
+<p>简单小结，本文主要从两个方面阐述集群配置变更：首先结合论文从理论角度阐述为什么一次集群配置变更只能涉及到单个节点，从正反两个方面进行简单讨论证明。其次，结合<code>etcd-raft</code>中集群配置信息变更的代码具体叙述其中的流程，流程的第一阶段大部分已略过，这同普通日志的提交、追加、同步及响应过程类似，流程的第二阶段为节点执行集群拓扑配置信息的更新过程，直至此时，原集群中的节点，才能感知到新加入节点的存在，因此会更新其<code>quorum</code>。</p>
+<p>参考文献</p>
+<p>[1]. Ongaro D, Ousterhout J K. In search of an understandable consensus algorithm[C]//USENIX Annual Technical Conference. 2014: 305-319.<br>[2]. <a href="https://github.com/etcd-io/etcd" target="_blank" rel="noopener">https://github.com/etcd-io/etcd</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" rel="tag"><i class="fa fa-tag"></i> 分布式协调服务</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/14/etcd-raft-snapshot%E5%AE%9E%E7%8E%B0%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="etcd-raft snapshot实现源码简析">
+                  <i class="fa fa-chevron-left"></i> etcd-raft snapshot实现源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/15/etcd-raft-ReadIndex-%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%BB%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd-raft ReadIndex 线性一致性读源码简析">
+                  etcd-raft ReadIndex 线性一致性读源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#集群配置信息变更"><span class="nav-number">1.</span> <span class="nav-text">集群配置信息变更</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键流程"><span class="nav-number">2.</span> <span class="nav-text">关键流程</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

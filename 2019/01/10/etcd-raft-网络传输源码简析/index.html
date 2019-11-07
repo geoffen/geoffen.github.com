@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章简单分析了etcd raftexample的源码。我们知道，etcd raft只实现了raft协议核心部分，而将诸如日志、快照及消息的网络传输交给应用来管理。本文会简单分析raft集群用来实现消息在节点之间传输部分的相关逻辑。因为etcd raft会在节点之间传递各种消息指令，包括日志复制、快照拷贝等，这都需要通过应用来将对应的消息转发到集群中其它节点。简单而言，raft实现的节点之间的">
+<meta name="keywords" content="分布式系统,网络传输">
+<meta property="og:type" content="article">
+<meta property="og:title" content="etcd-raft 网络传输源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;10&#x2F;etcd-raft-%E7%BD%91%E7%BB%9C%E4%BC%A0%E8%BE%93%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章简单分析了etcd raftexample的源码。我们知道，etcd raft只实现了raft协议核心部分，而将诸如日志、快照及消息的网络传输交给应用来管理。本文会简单分析raft集群用来实现消息在节点之间传输部分的相关逻辑。因为etcd raft会在节点之间传递各种消息指令，包括日志复制、快照拷贝等，这都需要通过应用来将对应的消息转发到集群中其它节点。简单而言，raft实现的节点之间的">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.812Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/10/etcd-raft-%E7%BD%91%E7%BB%9C%E4%BC%A0%E8%BE%93%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>etcd-raft 网络传输源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/10/etcd-raft-%E7%BD%91%E7%BB%9C%E4%BC%A0%E8%BE%93%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          etcd-raft 网络传输源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-10 17:33:09" itemprop="dateCreated datePublished" datetime="2019-01-10T17:33:09+08:00">2019-01-10</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>10k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>9 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章简单分析了<code>etcd raftexample</code>的源码。我们知道，<code>etcd raft</code>只实现了<code>raft</code>协议核心部分，而将诸如日志、快照及消息的网络传输交给应用来管理。本文会简单分析<code>raft</code>集群用来实现消息在节点之间传输部分的相关逻辑。因为<code>etcd raft</code>会在节点之间传递各种消息指令，包括日志复制、快照拷贝等，这都需要通过应用来将对应的消息转发到集群中其它节点。简单而言，<code>raft</code>实现的节点之间的网络传输将消息的读写进行分离，即每两个节点之间存在两条消息通道，分别用作消息的接收与发送，另外针对不同类型的消息的收发，其也提供了不同的组件。本文会对大致的消息传输的流程进行介绍。</p>
+<a id="more"></a>
+
+<h2 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h2><p>同上一篇博文类似，希望读者能够主动查看源码（主要涉及目录<code>/etcd/etcdserver/api/rafthttp</code>），文章只作参考。我们先来观察一下与网络传输相关的重要的数据结构，一般而言，只要理解了核心的数据结构的功能，基本就能推断相关的功能与大致的流程。网络传输最核心的结构为<code>Transporter</code>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Transporter <span class="keyword">interface</span> &#123;</span><br><span class="line">	<span class="comment">// Start starts the given Transporter.</span></span><br><span class="line">	<span class="comment">// Start MUST be called before calling other functions in the interface.</span></span><br><span class="line">    <span class="comment">// 在处理具体的消息收发之前，需要启动网络传输组件。它在应用初始化（如初始化 raftNode）时启动</span></span><br><span class="line">    <span class="comment">// 网络传输组件</span></span><br><span class="line">	Start() error</span><br><span class="line">	<span class="comment">// Handler returns the HTTP handler of the transporter.</span></span><br><span class="line">	<span class="comment">// A transporter HTTP handler handles the HTTP requests</span></span><br><span class="line">	<span class="comment">// from remote peers.</span></span><br><span class="line">	<span class="comment">// The handler MUST be used to handle RaftPrefix(/raft)</span></span><br><span class="line">	<span class="comment">// endpoint.</span></span><br><span class="line">    <span class="comment">// 消息传输组件的消息处理器，它对不同消息配置不同的消息处理器（如pipelineHandler、streamHandler）。</span></span><br><span class="line">	Handler() http.Handler</span><br><span class="line">	<span class="comment">// Send sends out the given messages to the remote peers.</span></span><br><span class="line">	<span class="comment">// Each message has a To field, which is an id that maps</span></span><br><span class="line">	<span class="comment">// to an existing peer in the transport.</span></span><br><span class="line">	<span class="comment">// If the id cannot be found in the transport, the message</span></span><br><span class="line">	<span class="comment">// will be ignored.</span></span><br><span class="line">    <span class="comment">// 消息发送接口，即将消息发送到指定 id 的节点</span></span><br><span class="line">	Send(m []raftpb.Message)</span><br><span class="line">	<span class="comment">// SendSnapshot sends out the given snapshot message to a remote peer.</span></span><br><span class="line">	<span class="comment">// The behavior of SendSnapshot is similar to Send.</span></span><br><span class="line">    <span class="comment">// 快照数据发送接口</span></span><br><span class="line">	SendSnapshot(m snap.Message)</span><br><span class="line">    <span class="comment">// 后面都是关于节点的管理的方法，不作重点阐述</span></span><br><span class="line">	<span class="comment">// AddRemote adds a remote with given peer urls into the transport.</span></span><br><span class="line">	<span class="comment">// A remote helps newly joined member to catch up the progress of cluster,</span></span><br><span class="line">	<span class="comment">// and will not be used after that.</span></span><br><span class="line">	<span class="comment">// It is the caller's responsibility to ensure the urls are all valid,</span></span><br><span class="line">	<span class="comment">// or it panics.</span></span><br><span class="line">	AddRemote(id types.ID, urls []<span class="keyword">string</span>)</span><br><span class="line">	<span class="comment">// AddPeer adds a peer with given peer urls into the transport.</span></span><br><span class="line">	<span class="comment">// It is the caller's responsibility to ensure the urls are all valid,</span></span><br><span class="line">	<span class="comment">// or it panics.</span></span><br><span class="line">	<span class="comment">// Peer urls are used to connect to the remote peer.</span></span><br><span class="line">	AddPeer(id types.ID, urls []<span class="keyword">string</span>)</span><br><span class="line">	<span class="comment">// RemovePeer removes the peer with given id.</span></span><br><span class="line">	RemovePeer(id types.ID)</span><br><span class="line">	<span class="comment">// RemoveAllPeers removes all the existing peers in the transport.</span></span><br><span class="line">	RemoveAllPeers()</span><br><span class="line">	<span class="comment">// UpdatePeer updates the peer urls of the peer with the given id.</span></span><br><span class="line">	<span class="comment">// It is the caller's responsibility to ensure the urls are all valid,</span></span><br><span class="line">	<span class="comment">// or it panics.</span></span><br><span class="line">	UpdatePeer(id types.ID, urls []<span class="keyword">string</span>)</span><br><span class="line">	<span class="comment">// ActiveSince returns the time that the connection with the peer</span></span><br><span class="line">	<span class="comment">// of the given id becomes active.</span></span><br><span class="line">	<span class="comment">// If the connection is active since peer was added, it returns the adding time.</span></span><br><span class="line">	<span class="comment">// If the connection is currently inactive, it returns zero time.</span></span><br><span class="line">	ActiveSince(id types.ID) time.Time</span><br><span class="line">	<span class="comment">// ActivePeers returns the number of active peers.</span></span><br><span class="line">	ActivePeers() <span class="keyword">int</span></span><br><span class="line">	<span class="comment">// Stop closes the connections and stops the transporter.</span></span><br><span class="line">	Stop()</span><br><span class="line">&#125; <span class="comment">// transport.go</span></span><br></pre></td></tr></table></figure>
+
+<p>需要补充一点的是，在上面的函数声明中，我们可以推测，节点采用<code>peer</code>的实例来进行消息的收发，由<code>transport</code>只是对外提供统一的接口，并提供逻辑框架。那<code>remote</code>又作何用？查看源码注释可以知道，<code>remote</code>是帮助新加入到集群的节点”追赶”当前集群正常节点的组件，除那之后，它没有其它作用。而相比之下，<code>peer</code>则代表<code>raft</code>节点与其它节点通信的实体。后面会详细阐述<code>peer</code>组件。下面来了解下<code>Trasnporter</code>的具体实现<code>Transport</code>结构：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Transport 实现了 Transporter 接口，用户使用其提供的接口实现完成消息收发</span></span><br><span class="line"><span class="keyword">type</span> Transport <span class="keyword">struct</span> &#123;</span><br><span class="line">	Logger *zap.Logger</span><br><span class="line"></span><br><span class="line">	DialTimeout time.Duration <span class="comment">// maximum duration before timing out dial of the request</span></span><br><span class="line">	<span class="comment">// DialRetryFrequency defines the frequency of streamReader dial retrial attempts;</span></span><br><span class="line">	<span class="comment">// a distinct rate limiter is created per every peer (default value: 10 events/sec)</span></span><br><span class="line">	DialRetryFrequency rate.Limit</span><br><span class="line"></span><br><span class="line">	TLSInfo transport.TLSInfo <span class="comment">// TLS information used when creating connection</span></span><br><span class="line"></span><br><span class="line">	ID          types.ID   <span class="comment">// local member ID</span></span><br><span class="line">	URLs        types.URLs <span class="comment">// local peer URLs</span></span><br><span class="line">	ClusterID   types.ID   <span class="comment">// raft cluster ID for request validation</span></span><br><span class="line">	Raft        Raft       <span class="comment">// raft state machine, to which the Transport forwards received messages and reports status</span></span><br><span class="line">	Snapshotter *snap.Snapshotter</span><br><span class="line">	ServerStats *stats.ServerStats <span class="comment">// used to record general transportation statistics</span></span><br><span class="line">	<span class="comment">// used to record transportation statistics with followers when</span></span><br><span class="line">	<span class="comment">// performing as leader in raft protocol</span></span><br><span class="line">	LeaderStats *stats.LeaderStats  <span class="comment">// leader 节点用于记录传输消息到 follower 的相关数据统计</span></span><br><span class="line">	ErrorC <span class="keyword">chan</span> error</span><br><span class="line"></span><br><span class="line">	streamRt   http.RoundTripper <span class="comment">// roundTripper used by streams</span></span><br><span class="line">	pipelineRt http.RoundTripper <span class="comment">// roundTripper used by pipelines</span></span><br><span class="line"></span><br><span class="line">	mu      sync.RWMutex         <span class="comment">// protect the remote and peer map</span></span><br><span class="line">	remotes <span class="keyword">map</span>[types.ID]*remote <span class="comment">// remotes map that helps newly joined member to catch up</span></span><br><span class="line">	peers   <span class="keyword">map</span>[types.ID]Peer    <span class="comment">// peers map</span></span><br><span class="line"></span><br><span class="line">	pipelineProber probing.Prober</span><br><span class="line">	streamProber   probing.Prober</span><br><span class="line">&#125; <span class="comment">// transport.go</span></span><br></pre></td></tr></table></figure>
+
+<p>可以发现，<code>Transport</code>里面包含了一个对<code>Raft</code>状态机接口，容易想到，因为，当网络传输组件接收到涎宾，需要对消息进行处理，具体即需要交给<code>Raft</code>来处理，因此它提供这样一个接口。应用可以实现此接口以实现对接收到的消息进行处理。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Raft <span class="keyword">interface</span> &#123;</span><br><span class="line">    <span class="comment">// 消息处理接口，raftNode 实现了此函数，并调用底层的 raft 协议库 node 的 Step 函数来处理消息</span></span><br><span class="line">	Process(ctx context.Context, m raftpb.Message) error </span><br><span class="line">	IsIDRemoved(id <span class="keyword">uint64</span>) <span class="keyword">bool</span></span><br><span class="line">	ReportUnreachable(id <span class="keyword">uint64</span>)</span><br><span class="line">	ReportSnapshot(id <span class="keyword">uint64</span>, status raft.SnapshotStatus)</span><br><span class="line">&#125; <span class="comment">// transport.go</span></span><br></pre></td></tr></table></figure>
+
+<p>下面重点来查看一下<code>peer</code>数据结构（暂且忽略<code>remote</code>）。<code>Peer</code>接口定义如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Peer <span class="keyword">interface</span> &#123;</span><br><span class="line">	<span class="comment">// send sends the message to the remote peer. The function is non-blocking</span></span><br><span class="line">	<span class="comment">// and has no promise that the message will be received by the remote.</span></span><br><span class="line">	<span class="comment">// When it fails to send message out, it will report the status to underlying</span></span><br><span class="line">	<span class="comment">// raft.</span></span><br><span class="line">    <span class="comment">// 发送消息的接口，注意此接口是 non-blocking 的，但它不承诺可靠消息传输，但会报告出错信息</span></span><br><span class="line">	send(m raftpb.Message)</span><br><span class="line"></span><br><span class="line">	<span class="comment">// sendSnap sends the merged snapshot message to the remote peer. Its behavior</span></span><br><span class="line">	<span class="comment">// is similar to send.</span></span><br><span class="line">    <span class="comment">// 传输快照数据</span></span><br><span class="line">	sendSnap(m snap.Message)</span><br><span class="line"></span><br><span class="line">	<span class="comment">// update updates the urls of remote peer.</span></span><br><span class="line">	update(urls types.URLs)</span><br><span class="line"></span><br><span class="line">	<span class="comment">// attachOutgoingConn attaches the outgoing connection to the peer for</span></span><br><span class="line">	<span class="comment">// stream usage. After the call, the ownership of the outgoing</span></span><br><span class="line">	<span class="comment">// connection hands over to the peer. The peer will close the connection</span></span><br><span class="line">	<span class="comment">// when it is no longer used.</span></span><br><span class="line">    <span class="comment">// 一旦接收到对端的连接，会把连接 attach 到节点 encoder 的 writer 中，以协同 encoder 和对端decoder的工作了</span></span><br><span class="line">	attachOutgoingConn(conn *outgoingConn)</span><br><span class="line">	activeSince() time.Time</span><br><span class="line">	stop()</span><br><span class="line">&#125; <span class="comment">// peer.go</span></span><br></pre></td></tr></table></figure>
+
+<p>紧接着，我们了解下<code>Peer</code>接口的实现<code>peer</code>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> peer <span class="keyword">struct</span> &#123;</span><br><span class="line">	lg *zap.Logger</span><br><span class="line"></span><br><span class="line">	localID types.ID</span><br><span class="line">	<span class="comment">// id of the remote raft peer node</span></span><br><span class="line">	id types.ID</span><br><span class="line"></span><br><span class="line">	r Raft</span><br><span class="line"></span><br><span class="line">	status *peerStatus</span><br><span class="line"></span><br><span class="line">	picker *urlPicker</span><br><span class="line"></span><br><span class="line">	msgAppV2Writer *streamWriter</span><br><span class="line">	writer         *streamWriter</span><br><span class="line">	pipeline       *pipeline</span><br><span class="line">	snapSender     *snapshotSender <span class="comment">// snapshot sender to send v3 snapshot messages</span></span><br><span class="line">	msgAppV2Reader *streamReader</span><br><span class="line">	msgAppReader   *streamReader</span><br><span class="line"></span><br><span class="line">	recvc <span class="keyword">chan</span> raftpb.Message</span><br><span class="line">	propc <span class="keyword">chan</span> raftpb.Message</span><br><span class="line"></span><br><span class="line">	mu     sync.Mutex</span><br><span class="line">	paused <span class="keyword">bool</span></span><br><span class="line"></span><br><span class="line">	cancel context.CancelFunc <span class="comment">// cancel pending works in go routine created by peer.</span></span><br><span class="line">	stopc  <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">&#125; <span class="comment">// peer.go</span></span><br></pre></td></tr></table></figure>
+
+<p>首先，需要说明的是，<code>peer</code>包含两种机制来发送消息：<code>stream</code>及<code>pipeline</code>。其中<code>stream</code>被初始化为一个长轮询的连接，在消息传输过程中保持打开的状态。另外，<code>peer</code>也提供一种优化后的<code>stream</code>以用来发送<code>msgApp</code>类型的消息，这种消息由<code>leader</code>向<code>follower</code>节点发送，其占据一大部分的消息内容。而对比之下，<code>pipeline</code>则是为<code>http</code>请求提供的<code>http</code>客户端。它只在<code>stream</code>还没有被建立的时候使用。另外，从<code>peer</code>结构中发现还有一个专门用于发送<code>snap</code>的发送器。换言之，针对不同的类型的消息采用不同的传输方式应该可以提高效率。</p>
+<h2 id="关键流程"><a href="#关键流程" class="headerlink" title="关键流程"></a>关键流程</h2><p>下面从组件启动开始监听、消息发送及消息接收三个方面来阐述相关的逻辑，这三个方面可能会相互穿插，但如果读者跟着代码来解读，相信也较容易理解。</p>
+<h3 id="启动监听"><a href="#启动监听" class="headerlink" title="启动监听"></a>启动监听</h3><p>下面会从<code>raftNode</code>(<code>raft.go</code>)中初始化代码开始索引(<code>startRaft()</code>)，它使用<code>rc.transport.Start()</code>启动网络传输组件，并通过<code>t.peers[id] = startPeer(t, urls, id, fs)</code>启动各节点上的网络传输实体。在<code>startPeer</code>函数中，分别创建启动了<code>pipeline</code>以及<code>stream</code>，并提供了两个管道，一个作为消息的缓冲区，但因为消息会被阻塞处理（调用了<code>Process()</code>），可能花费较长时间，因此额外提供了一个<code>pending</code>的管理用于接收消息。</p>
+<p>另外，我们接紧着先来查看一下，<code>stream</code>监听消息的逻辑（<code>pipeline</code>监听的逻辑更为简单，但流程类似，初始化，然后设置监听）。注意到在<code>startPeer</code>函数中有两行代码（针对不同的版本同时启动了相关的逻辑处理），启用了<code>stream</code>监听(<code>p.msgAppV2Reader.start()</code>)，在<code>start()</code>方法中，开启了一个 <code>go routine</code>，它这个协程中(<code>run()</code>方法)，它会先与对端建立连接，通过<code>dial()</code>来实现，然后调用<code>decodeLoope()</code>函数来循环读取远程的节点发来的消息，并调用<code>decode()</code>函数进行消息解码处理。</p>
+<h3 id="消息发送"><a href="#消息发送" class="headerlink" title="消息发送"></a>消息发送</h3><p>下面梳理一下消息的发送的流程，即在<code>raft.serveChannels()</code>函数中，当<code>raft</code>应用层收到底层<code>raft</code>的消息指令时，需要把消息指令转发给其它<code>peer</code>（<code>rc.transport.Send(rd.Messages)</code>）。在<code>Send()</code>方法中，其大致逻辑为取出对端地址，然后对消息进行发送。在<code>peer.send()</code>函数中，它将消息发送到指定的<code>writerc</code>中，<code>writerc</code>是<code>pipeline</code>的一个结构<code>p.pipeline.msgc</code>，它在<code>pipeline.start()</code>中被初始化，并且在<code>handler()</code>方法中持续监听此通道的消息，一旦管道中有消息，则取出消息，并使用<code>post()</code>函数发送。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *peer)</span> <span class="title">send</span><span class="params">(m raftpb.Message)</span></span> &#123;</span><br><span class="line">	p.mu.Lock()</span><br><span class="line">	paused := p.paused</span><br><span class="line">	p.mu.Unlock()</span><br><span class="line"></span><br><span class="line">	<span class="keyword">if</span> paused &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 1. 根据消息的类型选择具体的传输方式</span></span><br><span class="line">	writec, name := p.pick(m)</span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="comment">// 2. 将消息放到管道中</span></span><br><span class="line">	<span class="keyword">case</span> writec &lt;- m:</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		p.r.ReportUnreachable(m.To)</span><br><span class="line">		<span class="keyword">if</span> isMsgSnap(m) &#123;</span><br><span class="line">			p.r.ReportSnapshot(m.To, raft.SnapshotFailure)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// peer.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// pick picks a chan for sending the given message. The picked chan and the picked chan</span></span><br><span class="line"><span class="comment">// string name are returned.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *peer)</span> <span class="title">pick</span><span class="params">(m raftpb.Message)</span> <span class="params">(writec <span class="keyword">chan</span>&lt;- raftpb.Message, picked <span class="keyword">string</span>)</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> ok <span class="keyword">bool</span></span><br><span class="line">	<span class="comment">// Considering MsgSnap may have a big size, e.g., 1G, and will block</span></span><br><span class="line">	<span class="comment">// stream for a long time, only use one of the N pipelines to send MsgSnap.</span></span><br><span class="line">	<span class="keyword">if</span> isMsgSnap(m) &#123;</span><br><span class="line">		<span class="keyword">return</span> p.pipeline.msgc, pipelineMsg</span><br><span class="line">	&#125; <span class="keyword">else</span> <span class="keyword">if</span> writec, ok = p.msgAppV2Writer.writec(); ok &amp;&amp; isMsgApp(m) &#123;</span><br><span class="line">		<span class="keyword">return</span> writec, streamAppV2</span><br><span class="line">	&#125; <span class="keyword">else</span> <span class="keyword">if</span> writec, ok = p.writer.writec(); ok &#123;</span><br><span class="line">		<span class="keyword">return</span> writec, streamMsg</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> p.pipeline.msgc, pipelineMsg</span><br><span class="line">&#125; <span class="comment">// peer.go</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *pipeline)</span> <span class="title">start</span><span class="params">()</span></span> &#123;</span><br><span class="line">    p.stopc = <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    p.msgc = <span class="built_in">make</span>(<span class="keyword">chan</span> raftpb.Message, pipelineBufSize)</span><br><span class="line">    p.wg.Add(connPerPipeline)</span><br><span class="line">    <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; connPerPipeline; i++ &#123;</span><br><span class="line">        <span class="keyword">go</span> p.handle()</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// pipeline.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *pipeline)</span> <span class="title">handle</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">defer</span> p.wg.Done()</span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> m := &lt;-p.msgc:</span><br><span class="line">            start := time.Now()</span><br><span class="line">            err := p.post(pbutil.MustMarshal(&amp;m)) <span class="comment">// 发送消息</span></span><br><span class="line">            end := time.Now()</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="comment">// ...</span></span><br><span class="line">            &#125;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="comment">// pipeline.go</span></span><br></pre></td></tr></table></figure>
+
+<p>因此，整个消息发送的流程还是比较简单且清晰的。</p>
+<h3 id="消息接收"><a href="#消息接收" class="headerlink" title="消息接收"></a>消息接收</h3><p>还记得在<code>raftNode</code>初始化的过程中，有一行这样的代码<code>go rc.serveRaft()</code>，没错，它是用于启动节点网络传输监听。它将监听的处理程序设置为<code>transport.Handler()</code>，相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">serveRaft</span><span class="params">()</span></span> &#123;</span><br><span class="line">	url, err := url.Parse(rc.peers[rc.id<span class="number">-1</span>])</span><br><span class="line">	ln, err := newStoppableListener(url.Host, rc.httpstopc)</span><br><span class="line">	err = (&amp;http.Server&#123;Handler: rc.transport.Handler()&#125;).Serve(ln) <span class="comment">// 开启监听，设置处理器</span></span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> &lt;-rc.httpstopc:</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		log.Fatalf(<span class="string">"raftexample: Failed to serve rafthttp (%v)"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="built_in">close</span>(rc.httpdonec)</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 为不同的消息类型设置了不同类型的处理器程序</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *Transport)</span> <span class="title">Handler</span><span class="params">()</span> <span class="title">http</span>.<span class="title">Handler</span></span> &#123;</span><br><span class="line">	pipelineHandler := newPipelineHandler(t, t.Raft, t.ClusterID)</span><br><span class="line">	streamHandler := newStreamHandler(t, t, t.Raft, t.ID, t.ClusterID)</span><br><span class="line">	snapHandler := newSnapshotHandler(t, t.Raft, t.Snapshotter, t.ClusterID)</span><br><span class="line">	mux := http.NewServeMux()</span><br><span class="line">	mux.Handle(RaftPrefix, pipelineHandler)</span><br><span class="line">	mux.Handle(RaftStreamPrefix+<span class="string">"/"</span>, streamHandler)</span><br><span class="line">	mux.Handle(RaftSnapshotPrefix, snapHandler)</span><br><span class="line">	mux.Handle(ProbingPrefix, probing.NewHandler())</span><br><span class="line">	<span class="keyword">return</span> mux</span><br><span class="line">&#125; <span class="comment">// transport.go</span></span><br></pre></td></tr></table></figure>
+
+<p>我们具体到其中一个处理器进行查看，比如<code>pipelineHandler</code>，其相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(h *pipelineHandler)</span> <span class="title">ServeHTTP</span><span class="params">(w http.ResponseWriter, r *http.Request)</span></span> &#123;</span><br><span class="line">    <span class="comment">// 1. 请求数据检查</span></span><br><span class="line">	<span class="keyword">if</span> r.Method != <span class="string">"POST"</span> &#123;</span><br><span class="line">		w.Header().Set(<span class="string">"Allow"</span>, <span class="string">"POST"</span>)</span><br><span class="line">		http.Error(w, <span class="string">"Method Not Allowed"</span>, http.StatusMethodNotAllowed)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	w.Header().Set(<span class="string">"X-Etcd-Cluster-ID"</span>, h.cid.String())</span><br><span class="line">	limitedr := pioutil.NewLimitedBufferReader(r.Body, connReadLimitByte)</span><br><span class="line">	b, err := ioutil.ReadAll(limitedr)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">    <span class="comment">// 2. 消息解码</span></span><br><span class="line">	<span class="keyword">var</span> m raftpb.Message</span><br><span class="line">	<span class="keyword">if</span> err := m.Unmarshal(b); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	receivedBytes.WithLabelValues(types.ID(m.From).String()).Add(<span class="keyword">float64</span>(<span class="built_in">len</span>(b)))</span><br><span class="line">	<span class="comment">// 3. 调用 Raft 的 Process 函数进行消息处理</span></span><br><span class="line">	<span class="keyword">if</span> err := h.r.Process(context.TODO(), m); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">switch</span> v := err.(<span class="keyword">type</span>) &#123;</span><br><span class="line">		<span class="keyword">case</span> writerToResponse:</span><br><span class="line">			v.WriteTo(w)</span><br><span class="line">		<span class="keyword">default</span>:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// http.go</span></span><br></pre></td></tr></table></figure>
+
+<p>同样，整个消息的接收的流程也较为简单，针对不同类型的消息采用不同的接收及发送处理器，并将接收到的消息直接交给由应用定义的消息处理接口。至此，整个关于<code>etcd-raft</code>的网络传输相关逻辑的大致流程已经梳理完毕，介绍得比较浅显，只大概梳理了整个流程，如果读者想要深入了解，可以具体到每一个环节的代码深入分析。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://zhuanlan.zhihu.com/p/29207055" target="_blank" rel="noopener">etcd-raft网络传输组件实现分析</a><br>[2]. <a href="https://github.com/etcd-io/etcd/blob/master/etcdserver/api/rafthttp" target="_blank" rel="noopener">https://github.com/etcd-io/etcd/blob/master/etcdserver/api/rafthttp</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C%E4%BC%A0%E8%BE%93/" rel="tag"><i class="fa fa-tag"></i> 网络传输</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/09/etcd-raftexample-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="etcd raftexample 源码简析">
+                  <i class="fa fa-chevron-left"></i> etcd raftexample 源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/11/etcd-raft-WAL%E6%97%A5%E5%BF%97%E7%AE%A1%E7%90%86%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd-raft WAL日志管理源码简析">
+                  etcd-raft WAL日志管理源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#数据结构"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键流程"><span class="nav-number">2.</span> <span class="nav-text">关键流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#启动监听"><span class="nav-number">2.1.</span> <span class="nav-text">启动监听</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#消息发送"><span class="nav-number">2.2.</span> <span class="nav-text">消息发送</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#消息接收"><span class="nav-number">2.3.</span> <span class="nav-text">消息接收</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

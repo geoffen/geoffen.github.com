@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="资源共享非常普遍，在单机系统中，进程间对共享资源的互斥访问可以通过互斥锁、信号量以及进程间通信等机制来实现。而在分布式系统中，也不可避免多个节点共享某一资源或同时执行某一函数，比如全局配置文件，因此分布式互斥算法必须保证任何时刻只允许一个进程访问资源或执行临界区(critical section)代码，即互斥算法的安全性，有些场景也有公平性要求。另外，好的互斥算法应该能尽可能降低消息带宽(mess">
+<meta name="keywords" content="分布式系统,互斥算法,资源共享,lamport clock,逻辑时钟">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式互斥算法解析与实现">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;11&#x2F;09&#x2F;%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AE%9E%E7%8E%B0&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="资源共享非常普遍，在单机系统中，进程间对共享资源的互斥访问可以通过互斥锁、信号量以及进程间通信等机制来实现。而在分布式系统中，也不可避免多个节点共享某一资源或同时执行某一函数，比如全局配置文件，因此分布式互斥算法必须保证任何时刻只允许一个进程访问资源或执行临界区(critical section)代码，即互斥算法的安全性，有些场景也有公平性要求。另外，好的互斥算法应该能尽可能降低消息带宽(mess">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:39:12.407Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/11/09/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AE%9E%E7%8E%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>分布式互斥算法解析与实现 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/11/09/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AE%9E%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式互斥算法解析与实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-09 16:16:42" itemprop="dateCreated datePublished" datetime="2018-11-09T16:16:42+08:00">2018-11-09</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:39:12" itemprop="dateModified" datetime="2019-10-24T13:39:12+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>4.6k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>资源共享非常普遍，在单机系统中，进程间对共享资源的互斥访问可以通过互斥锁、信号量以及进程间通信等机制来实现。而在分布式系统中，也不可避免多个节点共享某一资源或同时执行某一函数，比如全局配置文件，因此分布式互斥算法必须保证任何时刻只允许一个进程访问资源或执行临界区(<code>critical section</code>)代码，即互斥算法的安全性，有些场景也有公平性要求。另外，好的互斥算法应该能尽可能降低消息带宽(<code>message overhead</code>)，减少进程（节点）等待时间，即时延(<code>latency</code>)，无系统瓶颈(<code>bottleneck</code>)，也能容忍消息乱序。</p>
+<a id="more"></a>
+
+<p>分布式互斥算法分为集中式算法(<code>centralized algorithm</code>)和分布式算法(<code>distributed algorithm</code>)，而分布式算法又包括了基于令牌的算法(<code>token based algorithm</code>)以及基于请求的算法(<code>permission based algorithm</code>)。无论基于何种原理实现，一般而言，理想的分布式互斥算法需要保证以下目标：</p>
+<ul>
+<li><strong>安全性</strong>，即任何时刻只能有一个进程访问共享资源，即持有互斥锁。</li>
+<li><strong>公平性</strong>，有些场景需要尽量保证访问共享资源的公平性，这表明：系统不能出现死锁，任何进程持有锁的时间是有限的，任何等待的进程最终都能获取锁，以及等待获取锁的进程的等待时间是有限的。</li>
+<li><strong>低带宽</strong>，即尽量减少消息传输的数目。</li>
+<li><strong>低延迟</strong>，即进程进入临界区之前的等待的时间。</li>
+<li>动态性，即允许进程在任何时刻加入到访问共享资源的进程集合中，或者从其中退出。</li>
+<li>容忍进程失败，即允许访问共享资源的进程集合中的进程因失败而退出，而保证整个系统不受影响。</li>
+<li>容忍消息丢失，即在消息不能按时到达、乱序甚至丢失的情况下，整个系统依然正常工作。</li>
+</ul>
+<p>在本文我们讨论前四个要求，假设<strong>进程数目是确定的，没有进程会失败，消息也不会丢失</strong>。下面我们通过简要阐述算法原理以及实现关键点来依次介绍<code>Centralized Mutual Server</code>算法、<code>Ricart Agrawala</code>算法、<code>Lamport Distributed Mutual Exclusion</code>算法以及<code>Token Ring</code>算法。</p>
+<h2 id="Centralized-Mutual-Server"><a href="#Centralized-Mutual-Server" class="headerlink" title="Centralized Mutual Server"></a>Centralized Mutual Server</h2><p>顾名思义，<code>Centralized Muutal Server</code>为集中式的互斥算法。整个系统内部包括两种消息：请求(<code>reqeust</code>)消息、授权(<code>grant</code>)消息以及释放(<code>release</code>)消息。核心数据结构为一个请求消息队列。算法核心为：它选取一个进程(<code>centralized server</code>)作为协调者，负责对名进程的请求进行即时或推迟(<code>defer</code>)授权。它内部维护一个互斥锁锁请求队列，当收到请求消息时，如果队列为空，则直接授权，否则将其加入到队列中。当收到释放消息时，如果列队不为空，则从队列中取出一个请求并授权响应。算法公平性依赖于队列实现，如使用<code>FIFO</code>则能够保证各个进程的锁请求消息能够被公平地授权。消息带宽为3(<code>1 request, 1 grant, 1 release</code>)，即在某一进程从准备进入临界区到退出临界区所传输消息的数量。很明显，集中式互斥算法的缺点是协调者的瓶颈。</p>
+<p>集中式互斥算法最容易实现。在网络通信层，可以采用基于<code>TCP</code>的<code>client-server</code>通信模型。关于协调者的实现，你可能需要关注当前是否已经授权了锁请求。同时，如果有必要，注意单进程内部锁的使用。</p>
+<h2 id="Ricart-Agrawala"><a href="#Ricart-Agrawala" class="headerlink" title="Ricart Agrawala"></a>Ricart Agrawala</h2><p><code>Ricart &amp; Agrawala</code>算法是在1981年被提出的一个基于请求的分布式互斥算法。它基于<code>lamport clock</code>，即依赖于全局有序的逻辑时钟。整个系统内部包括两种消息：请求(<code>reqeust,i,ts</code>)消息与回复(<code>reply,j</code>)消息。核心数据结构包括缓存其它进程回复消息的队列(<code>replyQueue</code>)以及缓存推迟回复进程请求消息队列(<code>deferQueue</code>)。算法核心为：当进程<code>i</code>准备进入临界区时，必须发送一个带（逻辑）时间戳的请求消息给其它所有进程，当其收到了其它所有进程的对此请求的回复（响应）时，则进入临界区。但如果某一进程<code>j</code>在收到进程<code>i</code>的请求之前，发出了一个更早的请求消息，则它会将此进程(<code>i</code>)的请求消息放入到延迟队列(<code>deferQueue</code>)，并且先执行完临界区的代码，当准备退出临界区时，才发送请求响应给进程(<code>i</code>)。算法的公平性容易保证。而消息带宽为<code>{request: n-1, reply: n-1} =&gt; 2(n-1)</code>，其中<code>n</code>为进程数。</p>
+<p><code>Ricart Agrawala</code>算法的相比集中式算法在实现上更为复杂。同样在通信层，则不能构建<code>one server, muliti-client</code>模型，而采用<code>peer to peer</code>模型，因为所有进程都是对等的，即同时充当<code>server</code>与<code>client</code>，而且作为一种简化实现，所有进程在启动后，应该互相建立连接。除此之外，你需要实现（模拟）<a href="https://qqzeng.top/2018/11/05/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%97%B6%E9%97%B4%E3%80%81%E6%97%B6%E9%92%9F%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A1%BA%E5%BA%8F/" target="_blank" rel="noopener">lamport clock 算法</a>，否则互斥算法的正确性不能得到保证，注意对于某些消息（如<code>reply</code>）的发送事件，虽然可以更新消息时间戳，但其实不影响算法正确性。</p>
+<h2 id="Lamport-Distributed-Mutual-Exclusion"><a href="#Lamport-Distributed-Mutual-Exclusion" class="headerlink" title="Lamport Distributed Mutual Exclusion"></a>Lamport Distributed Mutual Exclusion</h2><p><code>Lmpoart Distributed Mutual Exclusion</code>算法于1978年由 Lamport 在关于<code>lamport clock</code>理论论文中提出，其作为<code>lamport clock</code>的实际应用，因此，显然其依赖于<code>lamport clock</code>。事实上，此算法不仅可以作为分布式互斥算法，其内部的请求优先级队列也能作为分布式节点副本一致性的实现参考模型。但原论文提出的互斥算法基于消息按顺序到达的假设，解释如下：</p>
+<blockquote>
+<p>比如，进程i在时间片1发送锁请求a，但因为网络原因被极端延时了。而且在其它进程收到进程i发送的请求消息a之前，进程j在时间片5发送了请求b，而请求b恰好被顺利传输，很快被其他进程接收，并且其他进程（包括进程i）立刻发送了对请求消息b的回复消息，同时回复消息也立刻被进程j接收，但此时进程j仍未收到进程i的请求消息a，所以进程j以为自己成功获取到锁（收到了其它所有进程对请求消息b的回复）。而事实上，进程i的请求消息a要比进程j的请求消息b更早发送，因此应该是进程i先获取锁。其根本原因在于，进程i在收到其他节点请求消息（进程j的请求消息b）时，没有进行额外检查，理论上它需要判定自己是否在更早前发出过请求消息，而不只是直接对请求消息回复，即使最后其在请求消息队列里移除的消息是它自己的请求消息（因为自己是请求消息是最早的）。但这造成了整个系统的不正确性。</p>
+</blockquote>
+<p>因此，改变<code>Lmpoart Distributed Mutual Exclusion</code>算法在接收请求消息后发送回复消息的条件，消除了消息按序到达的假设，但同时也使得变更后的算法更为复杂。</p>
+<p>系统内部包括三种消息：请求(<code>reqeust,i,ts</code>)消息、回复(<code>reply,j</code>)消息以及释放(<code>release</code>)消息。核心数据结构包括缓存其它进程回复消息的队列(<code>replyQueue</code>)、缓存推迟回复进程请求消息队列(<code>deferQueue</code>)以及一个以时间戳为依据的请求消息优先级队列(<code>requestPriorityQueue</code>)。算法变更的核心为：进程<code>i</code>在收到进程<code>j</code>的请求消息<code>(request, j, t)</code>时，（条件1）先判断自己是否发送过更早的请求消息，（条件2）并且未收到进程<code>j</code>针对此请求消息的回复消息。如果二者之中任一个未被满足，则对进程<code>i</code>的请求消息发送回复，否则将其加入到<code>deferQueue</code>。原因如下：条件1是明显的；关于条件2，如果进程<code>j</code>已经收到了进程<code>i</code>的消息回复，说明进程<code>i</code>先前发出的请求消息肯定已经被进程<code>j</code>接收（换言之，进程<code>i</code>若发送过请求消息，则此请求消息必定已经缓存到了进程<code>j</code>的<code>requestPriorityQueue</code>），因此消除了消息延迟（乱序）的影响。另一方面，当进程<code>i</code>收到请求回复消息时，它会先将其加入到<code>replyQueue</code>，并判断发送此回复消息的进程是否被加入到了其<code>deferQueue</code>中，如果已经加入到了，则将其移除，然后对此进程发送回复消息（因为进程<code>i</code>确认它已经收到被移除进程的回复消息）。其它的算法逻辑同论文中描述一致。事实上，消除消息按序到达的关键为<code>deferQueue</code>。算法的公平性容易保证。而消息带宽为<code>{request: n-1, reply: n-1, release: n-1} =&gt; 3(n-1)</code>，其中<code>n</code>为进程数。</p>
+<p><code>Lmpoart Distributed Mutual Exclusion</code>算法的相比<code>Ricart Agrawala</code>算法在实现上更为复杂。通信层采用<code>peer to peer</code>模型。</p>
+<h2 id="Token-Ring"><a href="#Token-Ring" class="headerlink" title="Token Ring"></a>Token Ring</h2><p><code>Token Ring</code>是基于令牌的互斥算法。是一种简单的互斥算法模型，局限性也较大。系统内部只有一种消息：传递 token 的(<code>OK</code>)消息。算法核心为：将所有进程在逻辑上组成一个环，并将 token 在环上依次传递，获取到 token 的进程则具备进行临界区的条件，未收到 token 的进程则必须等待。在进程启动时，必须先将 token 传递给某一进程，若此接收进程需要锁，则进入临界区，执行完临界区代码后，再将 token 传递给相邻的下一个进程。否则直接将 token 传递给相邻下一个进程。算法的公平性同样易保证。消息带宽为<code>n-1</code>，其中<code>n</code>为进程数。</p>
+<p><code>Token Ring</code>算法较易实现，同样采用<code>peer to peer</code>通信模型。注意进程启动时，初始的 token 持有者。</p>
+<h2 id="关于测试"><a href="#关于测试" class="headerlink" title="关于测试"></a>关于测试</h2><p>在实现上述四种算法时(<code>go</code>语言)，采用<code>TCP</code>协议（可靠的）。测试的流程包含两个独立的阶段：<br><strong>Phase a</strong>. 每个进程独立的重复以下操作若干次。</p>
+<ol>
+<li>执行本地操作。采用 sleep [100, 300]ms 来模拟。</li>
+<li>开始进入临界区(<code>critical section</code>)。执行获取互斥锁逻辑。</li>
+<li>执行临界区代码。对一个共享变量进行累加，在 [100, 200]ms超时时间内，每隔100ms，对共享变量随机增加 [1,10]。将累加过程写入文件，同时将累加的中间值记录到全局数组。</li>
+<li>退出临界区。执行释放互斥锁逻辑。</li>
+</ol>
+<p><strong>Phase b</strong>. 每个进程独立的重复以下操作若干次。</p>
+<ol>
+<li>进程号为偶数的进程 sleep [100, 300]ms，然后重复 Phase a 操作流程。进程号奇数的进程直接重复 Phase b 流程。</li>
+</ol>
+<p>对上述四个分布式互斥算法的测试结果的验证侧重于两个方面：</p>
+<ul>
+<li><strong>算法正确性</strong>。通过检查 Phase a&amp;b 中全局数组的记录情况来确保共享资源的互斥访问。另外，核查 Phase a&amp;b 中进程访问共享资源的访问日志文件。</li>
+<li><strong>带宽与延时</strong>。统计每个进程的消息读写数目，及获取互斥锁的延时，并计算平均延时。</li>
+</ul>
+<p><a href="https://github.com/qqzeng/distributed-mutual-exclusion" target="_blank" rel="noopener">参考代码在这里</a>。</p>
+<p>参考文献：</p>
+<p>[1] Ricart G, Agrawala A K. An Algorithm for Mutual Exclusion in Computer Networks[R]. MARYLAND UNIV COLLEGE PARK DEPT OF COMPUTER SCIENCE, 1980.<br>[2] Lamport L. Time, clocks, and the ordering of events in a distributed system[J]. Communications of the ACM, 1978, 21(7): 558-565.<br>[3].<a href="https://www.cs.cmu.edu/~dga/15-440/S14/" target="_blank" rel="noopener">CMU Distributed System Lecture.</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95/" rel="tag"><i class="fa fa-tag"></i> 互斥算法</a>
+              <a href="/tags/%E8%B5%84%E6%BA%90%E5%85%B1%E4%BA%AB/" rel="tag"><i class="fa fa-tag"></i> 资源共享</a>
+              <a href="/tags/lamport-clock/" rel="tag"><i class="fa fa-tag"></i> lamport clock</a>
+              <a href="/tags/%E9%80%BB%E8%BE%91%E6%97%B6%E9%92%9F/" rel="tag"><i class="fa fa-tag"></i> 逻辑时钟</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/11/05/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%97%B6%E9%97%B4%E3%80%81%E6%97%B6%E9%92%9F%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A1%BA%E5%BA%8F/" rel="next" title="分布式系统时间、时钟与事件顺序">
+                  <i class="fa fa-chevron-left"></i> 分布式系统时间、时钟与事件顺序
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/11/11/%E7%90%86%E8%A7%A3-The-Google-File-System/" rel="prev" title="理解 The Google File System">
+                  理解 The Google File System <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Centralized-Mutual-Server"><span class="nav-number">1.</span> <span class="nav-text">Centralized Mutual Server</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Ricart-Agrawala"><span class="nav-number">2.</span> <span class="nav-text">Ricart Agrawala</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Lamport-Distributed-Mutual-Exclusion"><span class="nav-number">3.</span> <span class="nav-text">Lamport Distributed Mutual Exclusion</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Token-Ring"><span class="nav-number">4.</span> <span class="nav-text">Token Ring</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关于测试"><span class="nav-number">5.</span> <span class="nav-text">关于测试</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

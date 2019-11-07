@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="分布式文件系统是构建整个分布式系统的基石，为分布式计算提供底层数据存储。谷歌早在 2013 年就发表了论文 The Google File System，它在谷歌内部是配合其分布式计算框架MapReduce使用，共同为谷歌搜索等业务提供技术栈支撑。虽然数据量激增以及技术革新使得GFS不断演进，但理解其最初的设计理念、运行原理以及关键实现技术同样让人受益匪浅，并指导着我们实际的学习和工程实践。这篇博">
+<meta name="keywords" content="分布式系统,分布式文件系统,GFS">
+<meta property="og:type" content="article">
+<meta property="og:title" content="理解 The Google File System">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;11&#x2F;11&#x2F;%E7%90%86%E8%A7%A3-The-Google-File-System&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="分布式文件系统是构建整个分布式系统的基石，为分布式计算提供底层数据存储。谷歌早在 2013 年就发表了论文 The Google File System，它在谷歌内部是配合其分布式计算框架MapReduce使用，共同为谷歌搜索等业务提供技术栈支撑。虽然数据量激增以及技术革新使得GFS不断演进，但理解其最初的设计理念、运行原理以及关键实现技术同样让人受益匪浅，并指导着我们实际的学习和工程实践。这篇博">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:40:16.447Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/11/11/%E7%90%86%E8%A7%A3-The-Google-File-System/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>理解 The Google File System | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/11/11/%E7%90%86%E8%A7%A3-The-Google-File-System/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          理解 The Google File System
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-11 18:36:36" itemprop="dateCreated datePublished" datetime="2018-11-11T18:36:36+08:00">2018-11-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:40:16" itemprop="dateModified" datetime="2019-10-24T13:40:16+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>6.5k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>6 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>分布式文件系统是构建整个分布式系统的基石，为分布式计算提供底层数据存储。谷歌早在 2013 年就发表了论文 <code>The Google File System</code>，它在谷歌内部是配合其分布式计算框架<code>MapReduce</code>使用，共同为谷歌搜索等业务提供技术栈支撑。虽然数据量激增以及技术革新使得<code>GFS</code>不断演进，但理解其最初的设计理念、运行原理以及关键实现技术同样让人受益匪浅，并指导着我们实际的学习和工程实践。这篇博文阐述个人对原论文的一些理解与心得，并不是对原论文的完整翻译，因此你需要提前阅读论文。</p>
+<a id="more"></a>
+
+<h2 id="设计动机与目标"><a href="#设计动机与目标" class="headerlink" title="设计动机与目标"></a>设计动机与目标</h2><p>设计一个通用的分布式文件系统是不现实的，它不仅在实现上异常困难（因为不得不考虑所有应用场景），而且实际使用也难以满足要求（往往存在显而易见的性能或容错瓶颈）。<a href="https://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf" target="_blank" rel="noopener">GFS</a> 设计初衷是利用数以千计的廉价机器为<code>MapReduce</code>提供底层<strong>可靠且高性能</strong>的分布式数据存储，以应对海量离线数据存储与处理的应用场景，比如存储应用程序持续产生的日志流以提供离线日志分析。由此，其设计目标为容错可靠(<code>fault tolerance</code>)、高性能读写(<code>high-performance read&amp;write</code>)以及节约网络带宽(<code>save bandwidth</code>)。</p>
+<p>一致性(<code>consistency</code>)是分布式系统不可回避的问题。对于分布式文件系统而言，为了提供容错，必须维持数据副本(<code>replica</code>），那如何保证各副本间一致显得至关重要，特别是在应用并发访问场合。一致性是个极其宽泛的术语，你可以实现数据的强一致性(<code>strong consistency</code>)以保证用户始终读到的是最新的数据，这对于用户（客户端）而言是个极佳选择，但它提高了系统的实现难度，因为你必须设计复杂的一致性协议（如<code>Paxos</code>或<code>Raft</code>）来实现强一致性，它也会损害系统性能，典型的它需要机器之间通信以对副本状态达成一致。而弱一致性(<code>weak consistency</code>)则几乎相反。因此，必须根据特定的应用场景，在保证系统逻辑正确的提前下，放宽一致性要求，设计具备良好性能且能提供<strong>足够的一致性</strong>(<code>sufficient consistency</code>)的系统。对于<code>GFS</code>而言，它针对<code>MapReduce</code>应用程序进行了特定优化，比如，对<strong>大文件高性能读取</strong>、允许出现<strong>文件空洞</strong>(<code>hole</code>)、数据<strong>记录重复</strong>(<code>record duplicate</code>)以及偶尔<strong>读取不一致</strong>(<code>inconsistent reads</code>)。具体在数据读写方面，其侧重于大规模一次性写入和追加写入，而并非覆盖写和随机写；读取同样倾向于顺序读取，并不关心随机读取。</p>
+<h2 id="Trade-off-理念哲学"><a href="#Trade-off-理念哲学" class="headerlink" title="Trade-off 理念哲学"></a>Trade-off 理念哲学</h2><p><code>GFS</code>在设计上存在大量的<code>trade-off</code>。正如前文所述，你不能企图设计出一个完美的系统，而只能针对具体应用场景作出各方面的权衡考量，以达到工程最佳实践目的。</p>
+<p><code>chunk</code>大小设计。<code>GFS</code>针对大文件存储（数百上千兆）设计，因此若存储大量小文件则不能体现其性能。其默认块大小为 64MB。选择大文件作为存储目标原因如下：首先它减少了<code>client</code>与<code>master</code>的交互次数（即使<code>client</code>并不需要整个数据块，但实际上往往存在“就近原则”）；另外，这也直接减少了网络带宽；最后，它减少了存储在<code>master</code>内存中的元数据(<code>metadata</code>)的大小。但凡事总利弊相随。较大的块大小设定使得小文件也不得不占用整个块，浪费空间。</p>
+<p>集群元数据‘存储。在<code>master</code>的内存中存放着三种类型的元数据：文件和<code>chunk</code>的名称空间(<code>namespace</code>)、文件到<code>chunk</code>的映射信息以及<code>chunk</code>副本的位置信息。且前两种元数据会定期通过<code>operation log</code>持久化到磁盘以及副本冗余。为什么将这些元信息存储到内存？一方面，缓存在内存无疑会提高性能，另外它也不会造成内存吃紧，因为每个64MB 的<code>chunk</code>只会占用到 64B 的内存空间（粗略估算普通 2G 内存的机器可以容纳 2PB 数据），而且为机器增加内存的代价也很小。那为什么<code>chunk</code>位置信息没有持久化？首先<code>master</code>在启动的时候可以通过<code>heartbeat</code>从各<code>chunk server</code>获取。另一方面，<code>chunk</code>的位置信息有时会变动频繁，比如进行<code>chunk garbage collection</code>、<code>chunk re-replication</code>以及<code>chunk migration</code>，因此，若<code>master</code>也定期持久化<code>chunk</code>位置信息，则<code>master</code>可能会成为集群性能<code>bottleneck</code>。从另一个角度来看，<code>chunck</code>是由<code>chunk server</code>保存，而且随时可能发生<code>disk failure</code>而导致<code>chunk</code>暂时不可被访问，因此其位置信息也应该由<code>chunk server</code>负责提供。</p>
+<p><code>chunk</code>副本（默认3个）存放策略。<code>chunk</code>副本选择目标机器的原则包括两个方面：一是最大化数据可靠性(<code>reliability</code>)及可用性(<code>availability</code>)，这就要求不能把所有的副本存放在一台机器上，如果此机器的发生<code>disk failure</code>，则数据的所有副本全部不可用。放在同一个机架也类似，因为机架之间的交换机或其它网络设计也可能出现故障。另外一个原则是，最大化网络带宽，如果两个副本的位置相隔太远，跨机架甚至跨数据中心，那么副本的写复制代价是巨大的。因此一般的存放位置包括本机器、同一机架不同机器以及不同机架机器。</p>
+<p>垃圾回收。当一个文件被删除，<code>GFS</code>不会真正回收对应的<code>chunk</code>，而只是在<code>log operation</code>记录删除日志后，将对应的文件名设置为隐藏。在一定期限内（默认3天），用户可以执行撤销删除操作。否则，<code>master</code>会通过其后台进程定期扫描其文件系统，回收那些隐藏的文件，并且对应的元数据信息也会从内存中擦除。另外，<code>master</code>的后台进程同时还会扫描孤儿块(<code>orphaned chunk</code>)，即那些不能链接到任何文件的<code>chunk</code>，并将这些<code>chunk</code>的元信息删除，这样在后续的<code>heartbeat</code>中让<code>chunk server</code>将对应的<code>chunk</code>删除。这种垃圾回收机制的优点如下：其一，很明显允许用户作出撤销删除操作。其二，统一管理的垃圾回收机制对于故障频繁的分布式系统而言是便捷且可靠的（系统中很容易出现孤儿块）；最后，也有利于提升系统性能。垃圾回收发生在后台进程定期扫描活动中，此时<code>masetr</code>相对空闲，它不会一次性将大量文件从系统移除，从而导致 IO 瓶颈，换言之，其<code>chunk</code>回收成本被<strong>均摊</strong>(<code>amortized</code>）。但其同样有缺点：如果系统中一段时间内频繁出现文件删除与创建操作时，可能使得系统的存储空间紧张（原论文中也提供了解决方案）。</p>
+<h2 id="一致性模型-和-原子-Record-Append"><a href="#一致性模型-和-原子-Record-Append" class="headerlink" title="一致性模型 和 原子 Record Append"></a>一致性模型 和 原子 Record Append</h2><p>前文提到<code>GFS</code>并没有采用复杂的一致性协议来保证副本数据的一致性，而是通过定义了三种不同的文件状态，并保证在这三种文件状态下，能够使得客户端看到一致的副本。三种状态描述如下：<code>GFS</code>将文件处于<code>consistent</code>状态定义为：当<code>chunk</code>被并发执行了操作后，不同的客户端看到的并发执行后的副本内容是一致的。而<code>defined</code>状态被定义为：在文件处于<code>consistent</code>状态的基础上，还要保证所有客户端能够看到在此期间对文件执行的所有并发操作，换言之，当文件操作并发执行时，如果它们是全局有序执行的（执行过程中没有被打断），则由此产生的文件状态为<code>defined</code>（当然也是<code>consistent</code>）。换言之，如果某一操作在执行过程中被打断，但所有的并发操作仍然成功执行，只是对文件并发操作的结果不能反映出任一并发操作，因为此时文件的内容包含的是各个并发操作的结果的混合交叉，但无论如何，所有客户端看到的副本的内容还是一致的，在这种情况下就被称为<code>consistent</code>。自然而然，如果并发操作文件失败，此时各客户端看到的文件内容不一致，则称文件处于<code>undefined</code>状态，当然也处于<code>inconsistent</code>状态。</p>
+<p>我们先区分几种不同的文件写类型：<code>write</code>指的是由应用程序在写入文件时指定写入的<code>offset</code>；而<code>append</code>同样也是由应用程序来指定写入文件时的<code>offeset</code>，只是此时的<code>offset</code>默认为文件末尾；而<code>record append</code>则指的是应用程序在写入文件时，只提供文件内容，而写入的<code>offset</code>则由<code>GFS</code>来指定，并在写成功后，返回给应用程序，而<code>record append</code>操作正是<code>GFS</code>提供一致性模型的关键，因为它能够保证所有的<code>record append</code>都是原子的(<code>atomic</code>)，并且是<code>at least once atomically</code>。这一点并非我们想像的简单，其所谓的<code>at least once atomic</code>，并不表示采用了<code>atomic record append</code>后，即使在客户端并发操作的情况，也能保证所有的副本完全相同(<code>bytewise idetical</code>)，它只保证数据是以原子的形式写入的，即一次完整的从<code>start chunk offset</code>到<code>end chunk offset</code>的写入，中间不会被其它操作打断。且所有副本被数据写入的<code>chunk offset</code>是相同的。但存在这种情况，<code>GFS</code>对某一副本的执行结果可能会出现<code>record duplicate</code>或者<code>inset padding</code>，这两种情况的写入所占居的文件区域被称为是<code>inconsistent</code>。而最后为了保证应用程序能够从所有副本看到一致的状态，需要由应用程序协同处理。</p>
+<p>如果文件的并发操作成功，那么根据其定义的一致性模型，文件结果状态为<code>defined</code>。这通过两点来保证：其一，对文件的副本应用相同的客户端操作顺序。其二，使用<code>chunk version number</code>来检测过期(<code>stale</code>)副本。</p>
+<p><code>record append</code>操作流程如下：客户端首先去请求<code>master</code>以获取<code>chunk</code>位置信息，之后当客户端完成将数据 push 到所有<code>replica</code>的最后一个<code>chunk</code>后，它会发送请求给<code>primiary chuck server</code>准备执行<code>record append</code>。<code>primary</code>首先为每一个客户端操作分配<code>sequence number</code>，然后立即检查此次的<code>record append</code>操作是否会使得<code>chunk</code>大小超过<code>chunk</code>预设定的值（64MB），若超过了则必须先执行<code>insert padding</code>，并将此操作命令同步给所有副本<code>chunk server</code>，然后回复客户端重新请求一个<code>chunk</code>并重试<code>record append</code>。如果未超过<code>chunk</code>阈值，<code>primary</code>会选择一个<code>offset</code>，然后先在本地执行<code>record append</code>操作，然后同样将命令发送给所有副本<code>chunk server</code>，最后回复写入成功给客户端。如果副本<code>chunk server</code>在执行<code>record append</code>的过程中宕机了，则<code>primary</code>会回复客户端此次操作失败，要求进行重试。客户端会请求<code>master</code>，然后重复上述流程。此时，毫无疑问会造成副本节点在相同的<code>chunk offset</code>存储不同的数据，因为有些副本<code>chunk server</code>可能上一次已经执行成功写入了所有数据(<code>duplicate record</code>)，或者写了部分数据(<code>record segment</code>)，因此，必须先进行<code>inset padding</code>，使得各副本能够有一个相同且可用的<code>offset</code>，然后才执行<code>record append</code>。<code>GFS</code>将这种包含<code>paddings &amp; record segments</code>的操作结果交由应用程序来处理。</p>
+<p>应用程序的<code>writer</code>会为每个合法的<code>record</code>在其起始位置附加此<code>record</code>的<code>checksum</code>或者一个<code>predictable magic number</code>以检验其合法性，因此能检测出<code>paddings &amp; record segments</code>。如果应用程序不支持<code>record duplicate</code>（比如非幂等<code>idempotent</code>操作），则它会为每一个<code>record</code>赋予一个<code>unique ID</code>，一旦发现两个<code>record</code>具有相同的<code>ID</code>它便认为出现了<code>duplicate record</code>。由<code>GFS</code>为应用程序提供处理这些异常情况的库。</p>
+<p>除此之外，<code>GFS</code>对<code>namespace</code>的操作也是原子的（具体通过文件与目录锁实现）。</p>
+<p>我们再来理解为什么<code>GFS</code>的<code>record append</code>提供的是<code>at least once atomically</code>语义。这种一致性语义模型较为简单（简单意味着正确性易保证，且有利于工程实践落地，还能在一定程度上提升系统性能），因为如果客户端写入<code>record</code>失败，它只需要重试此过程直至收到操作成功的回复，而<code>server</code>也只需要正常对等待每一个请求，不用额外记录请求执行状态（但不表示不用执行额外的检查）。除此之外，若采用<code>Exactly-once</code>语义模型，那将使整个实现变得复杂：<code>primary</code>需要对请求执行的状态进行保存以实现<code>duplicate detection</code>，关键是这些状态信息必须进行冗余备份，以防<code>primary</code>宕机。事实上，<code>Exactly-once</code>的语义模型几乎不可能得到保证。另外，如果采用<code>at most once</code>语义模型，则因为<code>primary</code>可能收到相同的请求，因此它必须执行请求<code>duplicate detection</code>，而且还需缓存请求执行结果（而且需要处理缓存失效问题），一旦检测到重复的请求，对客户端直接回复上一次的请求执行结果。最后，数据库会采用<code>Zero or once</code>的事务语义(<code>transactional semantics</code>)模型，但严格的事务语义模型在分布式场景会严重影响系统性能。</p>
+<h2 id="延迟-Copy-On-Write"><a href="#延迟-Copy-On-Write" class="headerlink" title="延迟 Copy On Write"></a>延迟 Copy On Write</h2><p>快照(<code>snapshot</code>)是存储系统常见的功能。对于分布式系统而言，一个关键挑战是如何尽可能地降低<code>snapshot</code>对成百上千的客户端并发访的性能影响。<code>GFS</code>同样采用的是<code>copy on write</code>技术。事实上，它延迟了<code>snapshot</code>的真正执行时间点，因为在分布式系统中，副本是必须的，大多数情况下，快照涉及的副本可能不会被修改，这样可以不用对那些副本进行 copy，以最大程度提升系统性能。换言之，只有收到客户端对快照的副本执行<code>mutations</code>才对副本进行 copy，然后，将客户端的<code>mutations</code>应用到新的副本。具体的操作流程如下：当<code>master</code>收到客户端的<code>snapshot</code>指令时，首先会从<code>primary</code>节点<code>revoke</code>相应<code>chunk</code>的<code>lease</code>（或者等待<code>lease expire</code>），以确保客户端后续对涉及<code>snapshot</code>的<code>chunk</code>的<code>mutations</code>必须先与<code>master</code>进行交互，并对这些操作执行<code>log operation</code>，然后会对涉及到的<code>chunk</code>的<code>metadata</code>执行<code>duplicate</code>操作，并且会对<code>chunk</code>的<code>reference count</code>进行累加（换言之，那些<code>chunk reference count</code>大于1的<code>chunk</code>即表示执行了<code>snapshot</code>）。如此一来，当客户端发现对已经快照的<code>chunk</code>的操作请求时，<code>master</code>发现请求的<code>chunk</code>的<code>reference count</code>大于1。因此，它会先<code>defer</code>客户端的操作请求，然后选择对应<code>chunk</code>的<code>handler</code>并将其发送给对应的<code>chunk server</code>，让<code>chunk server</code>真正执行<code>copy</code>操作，最后将<code>chunk handler</code>等信息返回给客户端。这种<code>delay snapshot</code>措施能够改善系统的性能。</p>
+<p>最后，值得注意的是，虽然客户端并不缓存实际的数据文件（为什么？），但它缓存了<code>chunk</code>位置信息，因此若对应的<code>chunk server</code>因宕机而<code>miss</code>了部分<code>chunk mutations</code>，那客户端是有可能从这些<code>stale</code>的<code>replica</code>中读取到<code>premature</code>数据，这种读取数据不一致的时间取决于<code>chunk locations</code>的过期时间以及对应的文件下一次被<code>open</code>的时间（因为一旦触发这两个操作之一，客户端的<code>cache</code>信息会被<code>purge</code>）。</p>
+<p>参考文献：</p>
+<p>[1] Ghemawat S, Gobioff H, Leung S T. The Google file system[M]. ACM, 2003.<br>[2].<a href="https://pdos.csail.mit.edu/6.824/" target="_blank" rel="noopener">MIT 6.824 Lecture</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式文件系统</a>
+              <a href="/tags/GFS/" rel="tag"><i class="fa fa-tag"></i> GFS</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/11/09/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AE%9E%E7%8E%B0/" rel="next" title="分布式互斥算法解析与实现">
+                  <i class="fa fa-chevron-left"></i> 分布式互斥算法解析与实现
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/11/13/2018-11-13-%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E4%B9%8B%E6%BC%94%E5%8F%98%E4%B8%8E%E8%BF%9B%E5%8C%96/" rel="prev" title="服务架构之演变与进化">
+                  服务架构之演变与进化 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#设计动机与目标"><span class="nav-number">1.</span> <span class="nav-text">设计动机与目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Trade-off-理念哲学"><span class="nav-number">2.</span> <span class="nav-text">Trade-off 理念哲学</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#一致性模型-和-原子-Record-Append"><span class="nav-number">3.</span> <span class="nav-text">一致性模型 和 原子 Record Append</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#延迟-Copy-On-Write"><span class="nav-number">4.</span> <span class="nav-text">延迟 Copy On Write</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

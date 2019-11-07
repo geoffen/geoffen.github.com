@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="Kubernetes 中比较流行的日志收集解决方案是 Elasticsearch、Fluentd 和 Kibana（EFK）技术栈，也是官方现在比较推荐的一种方案。Elasticsearch 是一个实时的、分布式的可扩展的搜索引擎，允许进行全文、结构化搜索，它通常用于索引和搜索大量日志数据，也可用于搜索许多不同类型的文档。">
+<meta name="keywords" content="k8s,EFK">
+<meta property="og:type" content="article">
+<meta property="og:title" content="在 Kubernetes 上搭建 EFK 日志收集系统">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="Kubernetes 中比较流行的日志收集解决方案是 Elasticsearch、Fluentd 和 Kibana（EFK）技术栈，也是官方现在比较推荐的一种方案。Elasticsearch 是一个实时的、分布式的可扩展的搜索引擎，允许进行全文、结构化搜索，它通常用于索引和搜索大量日志数据，也可用于搜索许多不同类型的文档。">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;20180511161547422">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;yBp0Hl.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;lfDrcH.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;kSLsgE.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;bc7n1S.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;wHFvnu.jpg">
+<meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;HsYSF3.jpg">
+<meta property="og:updated_time" content="2019-11-06T11:15:21.322Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;20180511161547422">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>在 Kubernetes 上搭建 EFK 日志收集系统 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          在 Kubernetes 上搭建 EFK 日志收集系统
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2019-11-06 18:54:02 / 修改时间：19:15:21" itemprop="dateCreated datePublished" datetime="2019-11-06T18:54:02+08:00">2019-11-06</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%8C%81%E7%BB%AD%E9%9B%86%E6%88%90/" itemprop="url" rel="index">
+                    <span itemprop="name">持续集成</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>30k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>27 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Kubernetes 中比较流行的日志收集解决方案是 <code>Elasticsearch</code>、<code>Fluentd</code> 和 <code>Kibana</code>（EFK）技术栈，也是官方现在比较推荐的一种方案。</p><p><code>Elasticsearch</code> 是一个实时的、分布式的可扩展的搜索引擎，允许进行全文、结构化搜索，它通常用于索引和搜索大量日志数据，也可用于搜索许多不同类型的文档。</p><a id="more"></a>
+
+<p>Elasticsearch 通常与 <code>Kibana</code> 一起部署，Kibana 是 Elasticsearch 的一个功能强大的数据可视化 Dashboard，Kibana 允许你通过 web 界面来浏览 Elasticsearch 日志数据。</p>
+<p><code>Fluentd</code>是一个流行的开源数据收集器，我们将在 Kubernetes 集群节点上安装 Fluentd，通过获取容器日志文件、过滤和转换日志数据，然后将数据传递到 Elasticsearch 集群，在该集群中对其进行索引和存储。</p>
+<p>我们先来配置启动一个可扩展的 Elasticsearch 集群，然后在 Kubernetes 集群中创建一个 Kibana 应用，最后通过 DaemonSet 来运行 Fluentd，以便它在每个 Kubernetes 工作节点上都可以运行一个 Pod。</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/20180511161547422" alt="img"></p>
+<h2 id="部署nfs-client"><a href="#部署nfs-client" class="headerlink" title="部署nfs-client"></a>部署nfs-client</h2><h3 id="创建-Provisioner"><a href="#创建-Provisioner" class="headerlink" title="创建 Provisioner"></a>创建 Provisioner</h3><p>要使用 StorageClass，我们就得安装对应的自动配置程序，比如我们这里存储后端使用的是 nfs，那么我们就需要使用到一个 nfs-client 的自动配置程序，我们也叫它 Provisioner，这个程序使用我们已经配置好的 nfs 服务器，来自动创建持久卷，也就是自动帮我们创建 PV。</p>
+<ul>
+<li>自动创建的 PV 以<code>${namespace}-${pvcName}-${pvName}</code>这样的命名格式创建在 NFS 服务器上的共享数据目录中</li>
+<li>而当这个 PV 被回收后会以<code>archieved-${namespace}-${pvcName}-${pvName}</code>这样的命名格式存在 NFS 服务器上。</li>
+</ul>
+<p>当然在部署<code>nfs-client</code>之前，我们需要先成功安装上 nfs 服务器，前面的课程中我们已经过了，服务地址是<strong>10.151.30.57</strong>，共享数据目录是<strong>/data/k8s/</strong>，然后接下来我们部署 nfs-client 即可，我们也可以直接参考<a href="https://github.com/kubernetes-incubator/external-storage/tree/master/nfs-client" target="_blank" rel="noopener">nfs-client 的文档</a>，进行安装即可。</p>
+<p><strong>第一步</strong>：配置 Deployment，将里面的对应的参数替换成我们自己的 nfs 配置（nfs-client.yaml）</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">Deployment</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">extensions/v1beta1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  replicas:</span> <span class="number">1</span></span><br><span class="line"><span class="attr">  strategy:</span></span><br><span class="line"><span class="attr">    type:</span> <span class="string">Recreate</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      serviceAccountName:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"><span class="attr">      containers:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"><span class="attr">          image:</span> <span class="string">quay.io/external_storage/nfs-client-provisioner:latest</span></span><br><span class="line"><span class="attr">          volumeMounts:</span></span><br><span class="line"><span class="attr">            - name:</span> <span class="string">nfs-client-root</span></span><br><span class="line"><span class="attr">              mountPath:</span> <span class="string">/persistentvolumes</span></span><br><span class="line"><span class="attr">          env:</span></span><br><span class="line"><span class="attr">            - name:</span> <span class="string">PROVISIONER_NAME</span></span><br><span class="line"><span class="attr">              value:</span> <span class="string">fuseim.pri/ifs</span></span><br><span class="line"><span class="attr">            - name:</span> <span class="string">NFS_SERVER</span></span><br><span class="line"><span class="attr">              value:</span> <span class="number">10.151</span><span class="number">.30</span><span class="number">.57</span></span><br><span class="line"><span class="attr">            - name:</span> <span class="string">NFS_PATH</span></span><br><span class="line"><span class="attr">              value:</span> <span class="string">/data/k8s</span></span><br><span class="line"><span class="attr">      volumes:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">nfs-client-root</span></span><br><span class="line"><span class="attr">          nfs:</span></span><br><span class="line"><span class="attr">            server:</span> <span class="number">10.151</span><span class="number">.30</span><span class="number">.57</span></span><br><span class="line"><span class="attr">            path:</span> <span class="string">/data/k8s</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>第二步</strong>：将环境变量 NFS_SERVER 和 NFS_PATH 替换，当然也包括下面的 nfs 配置，我们可以看到我们这里使用了一个名为 nfs-client-provisioner 的<code>serviceAccount</code>，所以我们也需要创建一个 sa，然后绑定上对应的权限：（nfs-client-sa.yaml）</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ServiceAccount</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRole</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">nfs-client-provisioner-runner</span></span><br><span class="line"><span class="attr">rules:</span></span><br><span class="line"><span class="attr">  - apiGroups:</span> <span class="string">[""]</span></span><br><span class="line"><span class="attr">    resources:</span> <span class="string">["persistentvolumes"]</span></span><br><span class="line"><span class="attr">    verbs:</span> <span class="string">["get",</span> <span class="string">"list"</span><span class="string">,</span> <span class="string">"watch"</span><span class="string">,</span> <span class="string">"create"</span><span class="string">,</span> <span class="string">"delete"</span><span class="string">]</span></span><br><span class="line"><span class="attr">  - apiGroups:</span> <span class="string">[""]</span></span><br><span class="line"><span class="attr">    resources:</span> <span class="string">["persistentvolumeclaims"]</span></span><br><span class="line"><span class="attr">    verbs:</span> <span class="string">["get",</span> <span class="string">"list"</span><span class="string">,</span> <span class="string">"watch"</span><span class="string">,</span> <span class="string">"update"</span><span class="string">]</span></span><br><span class="line"><span class="attr">  - apiGroups:</span> <span class="string">["storage.k8s.io"]</span></span><br><span class="line"><span class="attr">    resources:</span> <span class="string">["storageclasses"]</span></span><br><span class="line"><span class="attr">    verbs:</span> <span class="string">["get",</span> <span class="string">"list"</span><span class="string">,</span> <span class="string">"watch"</span><span class="string">]</span></span><br><span class="line"><span class="attr">  - apiGroups:</span> <span class="string">[""]</span></span><br><span class="line"><span class="attr">    resources:</span> <span class="string">["events"]</span></span><br><span class="line"><span class="attr">    verbs:</span> <span class="string">["list",</span> <span class="string">"watch"</span><span class="string">,</span> <span class="string">"create"</span><span class="string">,</span> <span class="string">"update"</span><span class="string">,</span> <span class="string">"patch"</span><span class="string">]</span></span><br><span class="line"><span class="attr">  - apiGroups:</span> <span class="string">[""]</span></span><br><span class="line"><span class="attr">    resources:</span> <span class="string">["endpoints"]</span></span><br><span class="line"><span class="attr">    verbs:</span> <span class="string">["create",</span> <span class="string">"delete"</span><span class="string">,</span> <span class="string">"get"</span><span class="string">,</span> <span class="string">"list"</span><span class="string">,</span> <span class="string">"watch"</span><span class="string">,</span> <span class="string">"patch"</span><span class="string">,</span> <span class="string">"update"</span><span class="string">]</span></span><br><span class="line"></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRoleBinding</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">run-nfs-client-provisioner</span></span><br><span class="line"><span class="attr">subjects:</span></span><br><span class="line"><span class="attr">  - kind:</span> <span class="string">ServiceAccount</span></span><br><span class="line"><span class="attr">    name:</span> <span class="string">nfs-client-provisioner</span></span><br><span class="line"><span class="attr">    namespace:</span> <span class="string">default</span></span><br><span class="line"><span class="attr">roleRef:</span></span><br><span class="line"><span class="attr">  kind:</span> <span class="string">ClusterRole</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">nfs-client-provisioner-runner</span></span><br><span class="line"><span class="attr">  apiGroup:</span> <span class="string">rbac.authorization.k8s.io</span></span><br></pre></td></tr></table></figure>
+
+<p>我们这里新建的一个名为 nfs-client-provisioner 的<code>ServiceAccount</code>，然后绑定了一个名为 nfs-client-provisioner-runner 的<code>ClusterRole</code>，而该<code>ClusterRole</code>声明了一些权限，其中就包括对<code>persistentvolumes</code>的增、删、改、查等权限，所以我们可以利用该<code>ServiceAccount</code>来自动创建 PV。</p>
+<p><strong>第三步</strong>：nfs-client 的 Deployment 声明完成后，我们就可以来创建一个<code>StorageClass</code>对象了：（nfs-client-class.yaml）</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">storage.k8s.io/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">StorageClass</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">course-nfs-storage</span></span><br><span class="line"><span class="attr">provisioner:</span> <span class="string">fuseim.pri/ifs</span> <span class="comment"># or choose another name, must match deployment's env PROVISIONER_NAME'</span></span><br></pre></td></tr></table></figure>
+
+<p>我们声明了一个名为 course-nfs-storage 的<code>StorageClass</code>对象，注意下面的<code>provisioner</code>对应的值一定要和上面的<code>Deployment</code>下面的 PROVISIONER_NAME 这个环境变量的值一样。</p>
+<p>现在我们来创建这些资源对象吧：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f nfs-client.yaml</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f nfs-client-sa.yaml</span></span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f nfs-client-class.yaml</span></span><br></pre></td></tr></table></figure>
+
+<p>创建完成后查看下资源状态：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ kubectl get pods</span><br><span class="line">NAME                                             READY     STATUS             RESTARTS   AGE</span><br><span class="line">...</span><br><span class="line">nfs-client-provisioner-7648b664bc-7f9pk          1/1       Running            0          7h</span><br><span class="line">...</span><br><span class="line">$ kubectl get storageclass</span><br><span class="line">NAME                 PROVISIONER      AGE</span><br><span class="line">course-nfs-storage   fuseim.pri/ifs   11s</span><br></pre></td></tr></table></figure>
+
+<h3 id="新建-PVC"><a href="#新建-PVC" class="headerlink" title="新建 PVC"></a>新建 PVC</h3><p>上面把<code>StorageClass</code>资源对象创建成功了，接下来我们来通过一个示例测试下动态 PV，首先创建一个 PVC 对象：(test-pvc.yaml)</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">PersistentVolumeClaim</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">test-pvc</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  accessModes:</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">ReadWriteMany</span></span><br><span class="line"><span class="attr">  resources:</span></span><br><span class="line"><span class="attr">    requests:</span></span><br><span class="line"><span class="attr">      storage:</span> <span class="number">1</span><span class="string">Mi</span></span><br></pre></td></tr></table></figure>
+
+<p>我们这里声明了一个<code>PVC</code>对象，采用 <code>ReadWriteMany</code> 的访问模式，请求 1Mi 的空间，但是我们可以看到上面的 PVC 文件我们没有标识出任何和 StorageClass 相关联的信息，那么如果我们现在直接创建这个 PVC 对象能够自动绑定上合适的 PV 对象吗？显然是不能的(前提是没有合适的 PV)，我们这里有两种方法可以来利用上面我们创建的 StorageClass 对象来自动帮我们创建一个合适的 PV:</p>
+<ul>
+<li>第一种方法：在这个<code>PVC</code>对象中添加一个声明<code>StorageClass</code>对象的标识，这里我们可以利用一个<code>annotations</code>属性来标识，如下</li>
+</ul>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">PersistentVolumeClaim</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">test-pvc</span></span><br><span class="line"><span class="attr">  annotations:</span></span><br><span class="line">    <span class="string">volume.beta.kubernetes.io/storage-class:</span> <span class="string">"course-nfs-storage"</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  accessModes:</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">ReadWriteMany</span></span><br><span class="line"><span class="attr">  resources:</span></span><br><span class="line"><span class="attr">    requests:</span></span><br><span class="line"><span class="attr">      storage:</span> <span class="number">1</span><span class="string">Mi</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>第二种方法：我们可以设置这个 course-nfs-storage 的 StorageClass 为 Kubernetes 的默认存储后端，我们可以用<code>kubectl patch</code>命令来更新：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">$</span> <span class="string">kubectl</span> <span class="string">patch</span> <span class="string">storageclass</span> <span class="string">course-nfs-storage</span> <span class="bullet">-p</span> <span class="string">'&#123;"metadata": &#123;"annotations":&#123;"storageclass.kubernetes.io/is-default-class":"true"&#125;&#125;&#125;'</span></span><br></pre></td></tr></table></figure>
+
+<p>上面这两种方法都是可以的，当然为了不影响系统的默认行为，我们这里还是采用第一种方法，直接创建即可：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">$</span> <span class="string">kubectl</span> <span class="string">create</span> <span class="bullet">-f</span> <span class="string">test-pvc.yaml</span></span><br><span class="line"><span class="string">persistentvolumeclaim</span> <span class="string">"test-pvc"</span> <span class="string">created</span></span><br><span class="line"><span class="string">$</span> <span class="string">kubectl</span> <span class="string">get</span> <span class="string">pvc</span></span><br><span class="line"><span class="string">NAME</span>         <span class="string">STATUS</span>    <span class="string">VOLUME</span>                                     <span class="string">CAPACITY</span>   <span class="string">ACCESS</span> <span class="string">MODES</span>   <span class="string">STORAGECLASS</span>          <span class="string">AGE</span></span><br><span class="line"><span class="string">...</span></span><br><span class="line"><span class="string">test-pvc</span>     <span class="string">Bound</span>     <span class="string">pvc-73b5ffd2-8b4b-11e8-b585-525400db4df7</span>   <span class="number">1</span><span class="string">Mi</span>        <span class="string">RWX</span>            <span class="string">course-nfs-storage</span>    <span class="number">2</span><span class="string">m</span></span><br><span class="line"><span class="string">...</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p>我们可以看到一个名为 test-pvc 的 PVC 对象创建成功了，状态已经是<code>Bound</code>了，是不是也产生了一个对应的<code>VOLUME</code> 对象，最重要的一栏是<code>STORAGECLASS</code>，现在是不是也有值了，就是我们刚刚创建的<code>StorageClass</code>对象 course-nfs-storage。</p>
+<p>然后查看下 PV 对象呢：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pv</span></span><br><span class="line">NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                STORAGECLASS          REASON    AGE</span><br><span class="line">...</span><br><span class="line">pvc-73b5ffd2-8b4b-11e8-b585-525400db4df7   1Mi        RWX            Delete           Bound       default/test-pvc     course-nfs-storage              8m</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>可以看到是不是自动生成了一个关联的 PV 对象，访问模式是<code>RWX</code>，回收策略是 <code>Delete</code>，这个 PV 对象并不是我们手动创建的吧，这是通过我们上面的 <code>StorageClass</code> 对象自动创建的。这就是 StorageClass 的创建方法。</p>
+<h3 id="测试"><a href="#测试" class="headerlink" title="测试"></a>测试</h3><p>接下来我们还是用一个简单的示例来测试下我们上面用 StorageClass 方式声明的 PVC 对象吧：(test-pod.yaml)</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">test-pod</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  containers:</span></span><br><span class="line"><span class="attr">  - name:</span> <span class="string">test-pod</span></span><br><span class="line"><span class="attr">    image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">    imagePullPolicy:</span> <span class="string">IfNotPresent</span></span><br><span class="line"><span class="attr">    command:</span></span><br><span class="line"><span class="bullet">    -</span> <span class="string">"/bin/sh"</span></span><br><span class="line"><span class="attr">    args:</span></span><br><span class="line"><span class="bullet">    -</span> <span class="string">"-c"</span></span><br><span class="line"><span class="bullet">    -</span> <span class="string">"touch /mnt/SUCCESS &amp;&amp; exit 0 || exit 1"</span></span><br><span class="line"><span class="attr">    volumeMounts:</span></span><br><span class="line"><span class="attr">    - name:</span> <span class="string">nfs-pvc</span></span><br><span class="line"><span class="attr">      mountPath:</span> <span class="string">"/mnt"</span></span><br><span class="line"><span class="attr">  restartPolicy:</span> <span class="string">"Never"</span></span><br><span class="line"><span class="attr">  volumes:</span></span><br><span class="line"><span class="attr">  - name:</span> <span class="string">nfs-pvc</span></span><br><span class="line"><span class="attr">    persistentVolumeClaim:</span></span><br><span class="line"><span class="attr">      claimName:</span> <span class="string">test-pvc</span></span><br></pre></td></tr></table></figure>
+
+<p>上面这个 Pod 非常简单，就是用一个 <strong>busybox</strong> 容器，在 /mnt 目录下面新建一个 SUCCESS 的文件，然后把 /mnt 目录挂载到上面我们新建的 test-pvc 这个资源对象上面了，要验证很简单，只需要去查看下我们 nfs 服务器上面的共享数据目录下面是否有 SUCCESS 这个文件即可：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f <span class="built_in">test</span>-pod.yaml</span></span><br><span class="line">pod "test-pod" created</span><br></pre></td></tr></table></figure>
+
+<p>然后我们可以在 nfs 服务器的共享数据目录下面查看下数据：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ls /data/k8s/</span></span><br><span class="line">default-test-pvc-pvc-73b5ffd2-8b4b-11e8-b585-525400db4df7</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看到下面有名字很长的文件夹，这个文件夹的命名方式是不是和我们上面的规则：<strong>${namespace}-${pvcName}-${pvName}</strong>是一样的，再看下这个文件夹下面是否有其他文件：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ls /data/k8s/default-test-pvc-pvc-73b5ffd2-8b4b-11e8-b585-525400db4df7</span></span><br><span class="line">SUCCESS</span><br></pre></td></tr></table></figure>
+
+<p>我们看到下面有一个 SUCCESS 的文件，是不是就证明我们上面的验证是成功的啊。</p>
+<p>另外我们可以看到我们这里是手动创建的一个 PVC 对象，在实际工作中，使用 StorageClass 更多的是 StatefulSet 类型的服务，<code>StatefulSet</code>类型的服务我们也可以通过一个<code>volumeClaimTemplates</code>属性来直接使用 StorageClass，如下：(test-statefulset-nfs.yaml)</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1beta1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">StatefulSet</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">nfs-web</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  serviceName:</span> <span class="string">"nginx"</span></span><br><span class="line"><span class="attr">  replicas:</span> <span class="number">3</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">nfs-web</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      terminationGracePeriodSeconds:</span> <span class="number">10</span></span><br><span class="line"><span class="attr">      containers:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">nginx</span></span><br><span class="line"><span class="attr">        image:</span> <span class="attr">nginx:1.7.9</span></span><br><span class="line"><span class="attr">        ports:</span></span><br><span class="line"><span class="attr">        - containerPort:</span> <span class="number">80</span></span><br><span class="line"><span class="attr">          name:</span> <span class="string">web</span></span><br><span class="line"><span class="attr">        volumeMounts:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">www</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/usr/share/nginx/html</span></span><br><span class="line"><span class="attr">  volumeClaimTemplates:</span></span><br><span class="line"><span class="attr">  - metadata:</span></span><br><span class="line"><span class="attr">      name:</span> <span class="string">www</span></span><br><span class="line"><span class="attr">      annotations:</span></span><br><span class="line">        <span class="string">volume.beta.kubernetes.io/storage-class:</span> <span class="string">course-nfs-storage</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      accessModes:</span> <span class="string">[</span> <span class="string">"ReadWriteOnce"</span> <span class="string">]</span></span><br><span class="line"><span class="attr">      resources:</span></span><br><span class="line"><span class="attr">        requests:</span></span><br><span class="line"><span class="attr">          storage:</span> <span class="number">1</span><span class="string">Gi</span></span><br></pre></td></tr></table></figure>
+
+<p>实际上 volumeClaimTemplates 下面就是一个 PVC 对象的模板，就类似于我们这里 StatefulSet 下面的 template，实际上就是一个 Pod 的模板，我们不单独创建成 PVC 对象，而用这种模板就可以动态的去创建了对象了，这种方式在 StatefulSet 类型的服务下面使用得非常多。</p>
+<p>直接创建上面的对象：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f <span class="built_in">test</span>-statefulset-nfs.yaml</span></span><br><span class="line">statefulset.apps "nfs-web" created</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pods</span></span><br><span class="line">NAME                                             READY     STATUS              RESTARTS   AGE</span><br><span class="line">...</span><br><span class="line">nfs-web-0                                        1/1       Running             0          1m</span><br><span class="line">nfs-web-1                                        1/1       Running             0          1m</span><br><span class="line">nfs-web-2                                        1/1       Running             0          33s</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>创建完成后可以看到上面的3个 Pod 已经运行成功，然后查看下 PVC 对象：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pvc</span></span><br><span class="line">NAME            STATUS    VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS          AGE</span><br><span class="line">...</span><br><span class="line">www-nfs-web-0   Bound     pvc-cc36b3ce-8b50-11e8-b585-525400db4df7   1Gi        RWO            course-nfs-storage    2m</span><br><span class="line">www-nfs-web-1   Bound     pvc-d38285f9-8b50-11e8-b585-525400db4df7   1Gi        RWO            course-nfs-storage    2m</span><br><span class="line">www-nfs-web-2   Bound     pvc-e348250b-8b50-11e8-b585-525400db4df7   1Gi        RWO            course-nfs-storage    1m</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>我们可以看到是不是也生成了3个 PVC 对象，名称由模板名称 name 加上 Pod 的名称组合而成，这3个 PVC 对象也都是 绑定状态了，很显然我们查看 PV 也可以看到对应的3个 PV 对象：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pv</span></span><br><span class="line">NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM                   STORAGECLASS          REASON    AGE</span><br><span class="line">...                                                        1d</span><br><span class="line">pvc-cc36b3ce-8b50-11e8-b585-525400db4df7   1Gi        RWO            Delete           Bound       default/www-nfs-web-0   course-nfs-storage              4m</span><br><span class="line">pvc-d38285f9-8b50-11e8-b585-525400db4df7   1Gi        RWO            Delete           Bound       default/www-nfs-web-1   course-nfs-storage              4m</span><br><span class="line">pvc-e348250b-8b50-11e8-b585-525400db4df7   1Gi        RWO            Delete           Bound       default/www-nfs-web-2   course-nfs-storage              4m</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>查看 nfs 服务器上面的共享数据目录：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> ls /data/k8s/</span></span><br><span class="line">...</span><br><span class="line">default-www-nfs-web-0-pvc-cc36b3ce-8b50-11e8-b585-525400db4df7</span><br><span class="line">default-www-nfs-web-1-pvc-d38285f9-8b50-11e8-b585-525400db4df7</span><br><span class="line">default-www-nfs-web-2-pvc-e348250b-8b50-11e8-b585-525400db4df7</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>是不是也有对应的3个数据目录，这就是我们的 StorageClass 的使用方法，对于 StorageClass 多用于 StatefulSet 类型的服务，在后面的课程中我们还学不断的接触到。</p>
+<h3 id="参考"><a href="#参考" class="headerlink" title="参考"></a>参考</h3><p><a href="https://www.qikqiak.com/post/kubernetes-persistent-volume2/" target="_blank" rel="noopener">https://www.qikqiak.com/post/kubernetes-persistent-volume2/</a></p>
+<h2 id="创建-Elasticsearch-集群"><a href="#创建-Elasticsearch-集群" class="headerlink" title="创建 Elasticsearch 集群"></a>创建 Elasticsearch 集群</h2><p>在创建 Elasticsearch 集群之前，我们先创建一个命名空间，我们将在其中安装所有日志相关的资源对象。</p>
+<p>新建一个 kube-logging.yaml 文件：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Namespace</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">logging</span></span><br></pre></td></tr></table></figure>
+
+<p>然后通过 kubectl 创建该资源清单，创建一个名为 logging 的 namespace：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f kube-logging.yaml</span></span><br><span class="line">namespace/logging created</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get ns</span></span><br><span class="line">NAME           STATUS    AGE</span><br><span class="line">default        Active    244d</span><br><span class="line">istio-system   Active    100d</span><br><span class="line">kube-ops       Active    179d</span><br><span class="line">kube-public    Active    244d</span><br><span class="line">kube-system    Active    244d</span><br><span class="line">logging        Active    4h</span><br><span class="line">monitoring     Active    35d</span><br></pre></td></tr></table></figure>
+
+<p>现在创建了一个命名空间来存放我们的日志相关资源，接下来可以部署 EFK 相关组件，首先开始部署一个3节点的 Elasticsearch 集群。</p>
+<p>这里我们使用3个 Elasticsearch Pod 来避免高可用下多节点集群中出现的“脑裂”问题，当一个或多个节点无法与其他节点通信时会产生“脑裂”，可能会出现几个主节点。</p>
+<blockquote>
+<p>了解更多 Elasticsearch 集群脑裂问题，可以查看文档<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html#split-brain" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html#split-brain</a></p>
+</blockquote>
+<p>一个关键点是您应该设置参数<code>discover.zen.minimum_master_nodes=N/2+1</code>，其中<code>N</code>是 Elasticsearch 集群中符合主节点的节点数，比如我们这里3个节点，意味着<code>N</code>应该设置为2。这样，如果一个节点暂时与集群断开连接，则另外两个节点可以选择一个新的主节点，并且集群可以在最后一个节点尝试重新加入时继续运行，在扩展 Elasticsearch 集群时，一定要记住这个参数。</p>
+<p>首先创建一个名为 elasticsearch 的无头服务，新建文件 elasticsearch-svc.yaml，文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">Service</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  clusterIP:</span> <span class="string">None</span></span><br><span class="line"><span class="attr">  ports:</span></span><br><span class="line"><span class="attr">    - port:</span> <span class="number">9200</span></span><br><span class="line"><span class="attr">      name:</span> <span class="string">rest</span></span><br><span class="line"><span class="attr">    - port:</span> <span class="number">9300</span></span><br><span class="line"><span class="attr">      name:</span> <span class="string">inter-node</span></span><br></pre></td></tr></table></figure>
+
+<p>定义了一个名为 elasticsearch 的 Service，指定标签<code>app=elasticsearch</code>，当我们将 Elasticsearch StatefulSet 与此服务关联时，服务将返回带有标签<code>app=elasticsearch</code>的 Elasticsearch Pods 的 DNS A 记录，然后设置<code>clusterIP=None</code>，将该服务设置成无头服务。最后，我们分别定义端口9200、9300，分别用于与 REST API 交互，以及用于节点间通信。</p>
+<p>使用 kubectl 直接创建上面的服务资源对象：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f elasticsearch-svc.yaml</span></span><br><span class="line">service/elasticsearch created</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get services --namespace=logging</span></span><br><span class="line">Output</span><br><span class="line">NAME            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)             AGE</span><br><span class="line">elasticsearch   ClusterIP   None         &lt;none&gt;        9200/TCP,9300/TCP   26s</span><br></pre></td></tr></table></figure>
+
+<p>现在我们已经为 Pod 设置了无头服务和一个稳定的域名<code>.elasticsearch.logging.svc.cluster.local</code>，接下来我们通过 StatefulSet 来创建具体的 Elasticsearch 的 Pod 应用。</p>
+<p>Kubernetes StatefulSet 允许我们为 Pod 分配一个稳定的标识和持久化存储，Elasticsearch 需要稳定的存储来保证 Pod 在重新调度或者重启后的数据依然不变，所以需要使用 StatefulSet 来管理 Pod。</p>
+<blockquote>
+<p>要了解更多关于 StaefulSet 的信息，可以查看官网关于 StatefulSet 的相关文档：<a href="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/" target="_blank" rel="noopener">https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/</a>。</p>
+</blockquote>
+<p>新建名为 elasticsearch-statefulset.yaml 的资源清单文件，首先粘贴下面内容：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">StatefulSet</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">es-cluster</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  serviceName:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  replicas:</span> <span class="number">3</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    matchLabels:</span></span><br><span class="line"><span class="attr">      app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">elasticsearch</span></span><br></pre></td></tr></table></figure>
+
+<p>该内容中，我们定义了一个名为 es-cluster 的 StatefulSet 对象，然后定义<code>serviceName=elasticsearch</code>和前面创建的 Service 相关联，这可以确保使用以下 DNS 地址访问 StatefulSet 中的每一个 Pod：<code>es-cluster-[0,1,2].elasticsearch.logging.svc.cluster.local</code>，其中[0,1,2]对应于已分配的 Pod 序号。</p>
+<p>然后指定3个副本，将 matchLabels 设置为<code>app=elasticsearch</code>，所以 Pod 的模板部分<code>.spec.template.metadata.lables</code>也必须包含<code>app=elasticsearch</code>标签。</p>
+<p>然后定义 Pod 模板部分内容：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">...</span></span><br><span class="line"><span class="attr">  spec:</span></span><br><span class="line"><span class="attr">    containers:</span></span><br><span class="line"><span class="attr">    - name:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">      image:</span> <span class="string">docker.elastic.co/elasticsearch/elasticsearch-oss:6.4.3</span></span><br><span class="line"><span class="attr">      resources:</span></span><br><span class="line"><span class="attr">        limits:</span></span><br><span class="line"><span class="attr">          cpu:</span> <span class="number">1000</span><span class="string">m</span></span><br><span class="line"><span class="attr">        requests:</span></span><br><span class="line"><span class="attr">          cpu:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">      ports:</span></span><br><span class="line"><span class="attr">      - containerPort:</span> <span class="number">9200</span></span><br><span class="line"><span class="attr">        name:</span> <span class="string">rest</span></span><br><span class="line"><span class="attr">        protocol:</span> <span class="string">TCP</span></span><br><span class="line"><span class="attr">      - containerPort:</span> <span class="number">9300</span></span><br><span class="line"><span class="attr">        name:</span> <span class="string">inter-node</span></span><br><span class="line"><span class="attr">        protocol:</span> <span class="string">TCP</span></span><br><span class="line"><span class="attr">      volumeMounts:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">        mountPath:</span> <span class="string">/usr/share/elasticsearch/data</span></span><br><span class="line"><span class="attr">      env:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">cluster.name</span></span><br><span class="line"><span class="attr">        value:</span> <span class="string">k8s-logs</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">node.name</span></span><br><span class="line"><span class="attr">        valueFrom:</span></span><br><span class="line"><span class="attr">          fieldRef:</span></span><br><span class="line"><span class="attr">            fieldPath:</span> <span class="string">metadata.name</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">discovery.zen.ping.unicast.hosts</span></span><br><span class="line"><span class="attr">        value:</span> <span class="string">"es-cluster-0.elasticsearch,es-cluster-1.elasticsearch,es-cluster-2.elasticsearch"</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">discovery.zen.minimum_master_nodes</span></span><br><span class="line"><span class="attr">        value:</span> <span class="string">"2"</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">ES_JAVA_OPTS</span></span><br><span class="line"><span class="attr">        value:</span> <span class="string">"-Xms512m -Xmx512m"</span></span><br></pre></td></tr></table></figure>
+
+<p>该部分是定义 StatefulSet 中的 Pod，我们这里使用一个<code>-oss</code>后缀的镜像，该镜像是 Elasticsearch 的开源版本，如果你想使用包含<code>X-Pack</code>之类的版本，可以去掉该后缀。然后暴露了9200和9300两个端口，注意名称要和上面定义的 Service 保持一致。然后通过 volumeMount 声明了数据持久化目录，下面我们再来定义 VolumeClaims。最后就是我们在容器中设置的一些环境变量了：</p>
+<ul>
+<li>cluster.name：Elasticsearch 集群的名称，我们这里命名成 k8s-logs。</li>
+<li>node.name：节点的名称，通过<code>metadata.name</code>来获取。这将解析为 es-cluster-[0,1,2]，取决于节点的指定顺序。</li>
+<li>discovery.zen.ping.unicast.hosts：此字段用于设置在 Elasticsearch 集群中节点相互连接的发现方法。我们使用 unicastdiscovery 方式，它为我们的集群指定了一个静态主机列表。由于我们之前配置的无头服务，我们的 Pod 具有唯一的 DNS 域<code>es-cluster-[0,1,2].elasticsearch.logging.svc.cluster.local</code>，因此我们相应地设置此变量。由于都在同一个 namespace 下面，所以我们可以将其缩短为<code>es-cluster-[0,1,2].elasticsearch</code>。要了解有关 Elasticsearch 发现的更多信息，请参阅 Elasticsearch 官方文档：<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery.html</a>。</li>
+<li>discovery.zen.minimum_master_nodes：我们将其设置为<code>(N/2) + 1</code>，<code>N</code>是我们的群集中符合主节点的节点的数量。我们有3个 Elasticsearch 节点，因此我们将此值设置为2（向下舍入到最接近的整数）。要了解有关此参数的更多信息，请参阅官方 Elasticsearch 文档：<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html#split-brain" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html#split-brain</a>。</li>
+<li>ES_JAVA_OPTS：这里我们设置为<code>-Xms512m -Xmx512m</code>，告诉<code>JVM</code>使用<code>512 MB</code>的最小和最大堆。您应该根据群集的资源可用性和需求调整这些参数。要了解更多信息，请参阅设置堆大小的相关文档：<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html</a>。</li>
+</ul>
+<p>接下来添加关于 initContainer 的内容：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">...</span></span><br><span class="line"><span class="attr">    initContainers:</span></span><br><span class="line"><span class="attr">    - name:</span> <span class="string">fix-permissions</span></span><br><span class="line"><span class="attr">      image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">      command:</span> <span class="string">["sh",</span> <span class="string">"-c"</span><span class="string">,</span> <span class="string">"chown -R 1000:1000 /usr/share/elasticsearch/data"</span><span class="string">]</span></span><br><span class="line"><span class="attr">      securityContext:</span></span><br><span class="line"><span class="attr">        privileged:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">      volumeMounts:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">        mountPath:</span> <span class="string">/usr/share/elasticsearch/data</span></span><br><span class="line"><span class="attr">    - name:</span> <span class="string">increase-vm-max-map</span></span><br><span class="line"><span class="attr">      image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">      command:</span> <span class="string">["sysctl",</span> <span class="string">"-w"</span><span class="string">,</span> <span class="string">"vm.max_map_count=262144"</span><span class="string">]</span></span><br><span class="line"><span class="attr">      securityContext:</span></span><br><span class="line"><span class="attr">        privileged:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">    - name:</span> <span class="string">increase-fd-ulimit</span></span><br><span class="line"><span class="attr">      image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">      command:</span> <span class="string">["sh",</span> <span class="string">"-c"</span><span class="string">,</span> <span class="string">"ulimit -n 65536"</span><span class="string">]</span></span><br><span class="line"><span class="attr">      securityContext:</span></span><br><span class="line"><span class="attr">        privileged:</span> <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+
+<p>这里我们定义了几个在主应用程序之前运行的 Init 容器，这些初始容器按照定义的顺序依次执行，执行完成后才会启动主应用容器。</p>
+<p>第一个名为 fix-permissions 的容器用来运行 chown 命令，将 Elasticsearch 数据目录的用户和组更改为<code>1000:1000</code>（Elasticsearch 用户的 UID）。因为默认情况下，Kubernetes 用 root 用户挂载数据目录，这会使得 Elasticsearch 无法方法该数据目录，可以参考 Elasticsearch 生产中的一些默认注意事项相关文档说明：<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#_notes_for_production_use_and_defaults" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#_notes_for_production_use_and_defaults</a>。</p>
+<p>第二个名为 increase-vm-max-map 的容器用来增加操作系统对<code>mmap</code>计数的限制，默认情况下该值可能太低，导致内存不足的错误，要了解更多关于该设置的信息，可以查看 Elasticsearch 官方文档说明：<a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html" target="_blank" rel="noopener">https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-map-count.html</a>。</p>
+<p>最后一个初始化容器是用来执行<code>ulimit</code>命令增加打开文件描述符的最大数量的。</p>
+<blockquote>
+<p>此外 <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html#_notes_for_production_use_and_defaults" target="_blank" rel="noopener">Elastisearch Notes for Production Use</a> 文档还提到了由于性能原因最好禁用 swap，当然对于 Kubernetes 集群而言，最好也是禁用 swap 分区的。</p>
+</blockquote>
+<p>现在我们已经定义了主应用容器和它之前运行的 Init Containers 来调整一些必要的系统参数，接下来我们可以添加数据目录的持久化相关的配置，在 StatefulSet 中，使用 volumeClaimTemplates 来定义 volume 模板即可：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">...</span></span><br><span class="line"><span class="attr">  volumeClaimTemplates:</span></span><br><span class="line"><span class="attr">  - metadata:</span></span><br><span class="line"><span class="attr">      name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      accessModes:</span> <span class="string">[</span> <span class="string">"ReadWriteOnce"</span> <span class="string">]</span></span><br><span class="line"><span class="attr">      storageClassName:</span> <span class="string">es-data-db</span></span><br><span class="line"><span class="attr">      resources:</span></span><br><span class="line"><span class="attr">        requests:</span></span><br><span class="line"><span class="attr">          storage:</span> <span class="number">50</span><span class="string">Gi</span></span><br></pre></td></tr></table></figure>
+
+<p>我们这里使用 volumeClaimTemplates 来定义持久化模板，Kubernetes 会使用它为 Pod 创建 PersistentVolume，设置访问模式为<code>ReadWriteOnce</code>，这意味着它只能被 mount 到单个节点上进行读写，然后最重要的是使用了一个名为 es-data-db 的 StorageClass 对象，所以我们需要提前创建该对象，我们这里使用的 NFS 作为存储后端，所以需要安装一个对应的 provisioner 驱动，前面关于 StorageClass 的课程中已经和大家介绍过方法，新建一个 elasticsearch-storageclass.yaml 的文件，文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">storage.k8s.io/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">StorageClass</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">es-data-db</span></span><br><span class="line"><span class="attr">provisioner:</span> <span class="string">fuseim.pri/ifs</span>  <span class="comment"># 该值需要和 provisioner 配置的保持一致</span></span><br></pre></td></tr></table></figure>
+
+<p>最后，我们指定了每个 PersistentVolume 的大小为 50GB，我们可以根据自己的实际需要进行调整该值。最后，完整的 Elasticsearch StatefulSet 资源清单文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">StatefulSet</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">es-cluster</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  serviceName:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  replicas:</span> <span class="number">3</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    matchLabels:</span></span><br><span class="line"><span class="attr">      app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      containers:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">docker.elastic.co/elasticsearch/elasticsearch-oss:6.4.3</span></span><br><span class="line"><span class="attr">        resources:</span></span><br><span class="line"><span class="attr">            limits:</span></span><br><span class="line"><span class="attr">              cpu:</span> <span class="number">1000</span><span class="string">m</span></span><br><span class="line"><span class="attr">            requests:</span></span><br><span class="line"><span class="attr">              cpu:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">        ports:</span></span><br><span class="line"><span class="attr">        - containerPort:</span> <span class="number">9200</span></span><br><span class="line"><span class="attr">          name:</span> <span class="string">rest</span></span><br><span class="line"><span class="attr">          protocol:</span> <span class="string">TCP</span></span><br><span class="line"><span class="attr">        - containerPort:</span> <span class="number">9300</span></span><br><span class="line"><span class="attr">          name:</span> <span class="string">inter-node</span></span><br><span class="line"><span class="attr">          protocol:</span> <span class="string">TCP</span></span><br><span class="line"><span class="attr">        volumeMounts:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/usr/share/elasticsearch/data</span></span><br><span class="line"><span class="attr">        env:</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">cluster.name</span></span><br><span class="line"><span class="attr">            value:</span> <span class="string">k8s-logs</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">node.name</span></span><br><span class="line"><span class="attr">            valueFrom:</span></span><br><span class="line"><span class="attr">              fieldRef:</span></span><br><span class="line"><span class="attr">                fieldPath:</span> <span class="string">metadata.name</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">discovery.zen.ping.unicast.hosts</span></span><br><span class="line"><span class="attr">            value:</span> <span class="string">"es-cluster-0.elasticsearch,es-cluster-1.elasticsearch,es-cluster-2.elasticsearch"</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">discovery.zen.minimum_master_nodes</span></span><br><span class="line"><span class="attr">            value:</span> <span class="string">"2"</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">ES_JAVA_OPTS</span></span><br><span class="line"><span class="attr">            value:</span> <span class="string">"-Xms512m -Xmx512m"</span></span><br><span class="line"><span class="attr">      initContainers:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">fix-permissions</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">        command:</span> <span class="string">["sh",</span> <span class="string">"-c"</span><span class="string">,</span> <span class="string">"chown -R 1000:1000 /usr/share/elasticsearch/data"</span><span class="string">]</span></span><br><span class="line"><span class="attr">        securityContext:</span></span><br><span class="line"><span class="attr">          privileged:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">        volumeMounts:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/usr/share/elasticsearch/data</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">increase-vm-max-map</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">        command:</span> <span class="string">["sysctl",</span> <span class="string">"-w"</span><span class="string">,</span> <span class="string">"vm.max_map_count=262144"</span><span class="string">]</span></span><br><span class="line"><span class="attr">        securityContext:</span></span><br><span class="line"><span class="attr">          privileged:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">increase-fd-ulimit</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">        command:</span> <span class="string">["sh",</span> <span class="string">"-c"</span><span class="string">,</span> <span class="string">"ulimit -n 65536"</span><span class="string">]</span></span><br><span class="line"><span class="attr">        securityContext:</span></span><br><span class="line"><span class="attr">          privileged:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">  volumeClaimTemplates:</span></span><br><span class="line"><span class="attr">  - metadata:</span></span><br><span class="line"><span class="attr">      name:</span> <span class="string">data</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">elasticsearch</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      accessModes:</span> <span class="string">[</span> <span class="string">"ReadWriteOnce"</span> <span class="string">]</span></span><br><span class="line"><span class="attr">      storageClassName:</span> <span class="string">es-data-db</span></span><br><span class="line"><span class="attr">      resources:</span></span><br><span class="line"><span class="attr">        requests:</span></span><br><span class="line"><span class="attr">          storage:</span> <span class="number">100</span><span class="string">Gi</span></span><br></pre></td></tr></table></figure>
+
+<p>现在直接使用 kubectl 工具部署即可：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f elasticsearch-storageclass.yaml</span></span><br><span class="line">storageclass.storage.k8s.io "es-data-db" created</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f elasticsearch-statefulset.yaml</span></span><br><span class="line">statefulset.apps/es-cluster created</span><br></pre></td></tr></table></figure>
+
+<p>添加成功后，可以看到 logging 命名空间下面的所有的资源对象：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get sts -n logging</span></span><br><span class="line">NAME         DESIRED   CURRENT   AGE</span><br><span class="line">es-cluster   3         3         20h</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pods -n logging</span></span><br><span class="line">NAME                      READY     STATUS    RESTARTS   AGE</span><br><span class="line">es-cluster-0              1/1       Running   0          20h</span><br><span class="line">es-cluster-1              1/1       Running   0          20h</span><br><span class="line">es-cluster-2              1/1       Running   0          20h</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get svc -n logging</span></span><br><span class="line">NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE</span><br><span class="line">elasticsearch   ClusterIP   None             &lt;none&gt;        9200/TCP,9300/TCP   20h</span><br></pre></td></tr></table></figure>
+
+<p>Pods 部署完成后，我们可以通过请求一个 REST API 来检查 Elasticsearch 集群是否正常运行。使用下面的命令将本地端口9200转发到 Elasticsearch 节点（如es-cluster-0）对应的端口：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl port-forward es-cluster-0 9200:9200 --namespace=logging</span></span><br><span class="line">Forwarding from 127.0.0.1:9200 -&gt; 9200</span><br><span class="line">Forwarding from [::1]:9200 -&gt; 9200</span><br></pre></td></tr></table></figure>
+
+<p>然后，在另外的终端窗口中，执行如下请求：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> curl http://localhost:9200/_cluster/state?pretty</span></span><br></pre></td></tr></table></figure>
+
+<p>正常来说，应该会看到类似于如下的信息：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  "cluster_name" : "k8s-logs",</span><br><span class="line">  "compressed_size_in_bytes" : 348,</span><br><span class="line">  "cluster_uuid" : "QD06dK7CQgids-GQZooNVw",</span><br><span class="line">  "version" : 3,</span><br><span class="line">  "state_uuid" : "mjNIWXAzQVuxNNOQ7xR-qg",</span><br><span class="line">  "master_node" : "IdM5B7cUQWqFgIHXBp0JDg",</span><br><span class="line">  "blocks" : &#123; &#125;,</span><br><span class="line">  "nodes" : &#123;</span><br><span class="line">    "u7DoTpMmSCixOoictzHItA" : &#123;</span><br><span class="line">      "name" : "es-cluster-1",</span><br><span class="line">      "ephemeral_id" : "ZlBflnXKRMC4RvEACHIVdg",</span><br><span class="line">      "transport_address" : "10.244.4.191:9300",</span><br><span class="line">      "attributes" : &#123; &#125;</span><br><span class="line">    &#125;,</span><br><span class="line">    "IdM5B7cUQWqFgIHXBp0JDg" : &#123;</span><br><span class="line">      "name" : "es-cluster-0",</span><br><span class="line">      "ephemeral_id" : "JTk1FDdFQuWbSFAtBxdxAQ",</span><br><span class="line">      "transport_address" : "10.244.2.215:9300",</span><br><span class="line">      "attributes" : &#123; &#125;</span><br><span class="line">    &#125;,</span><br><span class="line">    "R8E7xcSUSbGbgrhAdyAKmQ" : &#123;</span><br><span class="line">      "name" : "es-cluster-2",</span><br><span class="line">      "ephemeral_id" : "9wv6ke71Qqy9vk2LgJTqaA",</span><br><span class="line">      "transport_address" : "10.244.40.4:9300",</span><br><span class="line">      "attributes" : &#123; &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;,</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>看到上面的信息就表明我们名为 k8s-logs 的 Elasticsearch 集群成功创建了3个节点：es-cluster-0，es-cluster-1，和es-cluster-2，当前主节点是 es-cluster-0。</p>
+<h2 id="创建-Kibana-服务"><a href="#创建-Kibana-服务" class="headerlink" title="创建 Kibana 服务"></a>创建 Kibana 服务</h2><p>Elasticsearch 集群启动成功了，接下来我们可以来部署 Kibana 服务，新建一个名为 kibana.yaml 的文件，对应的文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Service</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    app:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  ports:</span></span><br><span class="line"><span class="attr">  - port:</span> <span class="number">5601</span></span><br><span class="line"><span class="attr">  type:</span> <span class="string">NodePort</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    app:</span> <span class="string">kibana</span></span><br><span class="line"></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Deployment</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    app:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    matchLabels:</span></span><br><span class="line"><span class="attr">      app:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        app:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      containers:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">kibana</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">docker.elastic.co/kibana/kibana-oss:6.4.3</span></span><br><span class="line"><span class="attr">        resources:</span></span><br><span class="line"><span class="attr">          limits:</span></span><br><span class="line"><span class="attr">            cpu:</span> <span class="number">1000</span><span class="string">m</span></span><br><span class="line"><span class="attr">          requests:</span></span><br><span class="line"><span class="attr">            cpu:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">        env:</span></span><br><span class="line"><span class="attr">          - name:</span> <span class="string">ELASTICSEARCH_URL</span></span><br><span class="line"><span class="attr">            value:</span> <span class="attr">http://elasticsearch:9200</span></span><br><span class="line"><span class="attr">        ports:</span></span><br><span class="line"><span class="attr">        - containerPort:</span> <span class="number">5601</span></span><br></pre></td></tr></table></figure>
+
+<p>上面我们定义了两个资源对象，一个 Service 和 Deployment，为了测试方便，我们将 Service 设置为了 NodePort 类型，Kibana Pod 中配置都比较简单，唯一需要注意的是我们使用 ELASTICSEARCH_URL 这个环境变量来设置Elasticsearch 集群的端点和端口，直接使用 Kubernetes DNS 即可，此端点对应服务名称为 elasticsearch，由于是一个 headless service，所以该域将解析为3个 Elasticsearch Pod 的 IP 地址列表。</p>
+<p>配置完成后，直接使用 kubectl 工具创建：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f kibana.yaml</span></span><br><span class="line">service/kibana created</span><br><span class="line">deployment.apps/kibana created</span><br></pre></td></tr></table></figure>
+
+<p>创建完成后，可以查看 Kibana Pod 的运行状态：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pods --namespace=logging</span></span><br><span class="line">NAME                      READY     STATUS    RESTARTS   AGE</span><br><span class="line">es-cluster-0              1/1       Running   0          20h</span><br><span class="line">es-cluster-1              1/1       Running   0          20h</span><br><span class="line">es-cluster-2              1/1       Running   0          20h</span><br><span class="line">kibana-7558d4dc4d-5mqdz   1/1       Running   0          20h</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl get svc --namespace=logging</span></span><br><span class="line">NAME            TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE</span><br><span class="line">elasticsearch   ClusterIP   None             &lt;none&gt;        9200/TCP,9300/TCP   20h</span><br><span class="line">kibana          NodePort    10.105.208.253   &lt;none&gt;        5601:31816/TCP      20h</span><br></pre></td></tr></table></figure>
+
+<p>如果 Pod 已经是 Running 状态了，证明应用已经部署成功了，然后可以通过 NodePort 来访问 Kibana 这个服务，在浏览器中打开<code>http://&lt;任意节点IP&gt;:31816</code>即可，如果看到如下欢迎界面证明 Kibana 已经成功部署到了 Kubernetes集群之中。</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/yBp0Hl.jpg" alt="kibana welcome">kibana welcome</p>
+<h2 id="部署-Fluentd"><a href="#部署-Fluentd" class="headerlink" title="部署 Fluentd"></a>部署 Fluentd</h2><p><code>Fluentd</code> 是一个高效的日志聚合器，是用 Ruby 编写的，并且可以很好地扩展。对于大部分企业来说，Fluentd 足够高效并且消耗的资源相对较少，另外一个工具<code>Fluent-bit</code>更轻量级，占用资源更少，但是插件相对 Fluentd 来说不够丰富，所以整体来说，Fluentd 更加成熟，使用更加广泛，所以我们这里也同样使用 Fluentd 来作为日志收集工具。</p>
+<h3 id="工作原理"><a href="#工作原理" class="headerlink" title="工作原理"></a>工作原理</h3><p>Fluentd 通过一组给定的数据源抓取日志数据，处理后（转换成结构化的数据格式）将它们转发给其他服务，比如 Elasticsearch、对象存储等等。Fluentd 支持超过300个日志存储和分析服务，所以在这方面是非常灵活的。主要运行步骤如下：</p>
+<ul>
+<li>首先 Fluentd 从多个日志源获取数据</li>
+<li>结构化并且标记这些数据</li>
+<li>然后根据匹配的标签将数据发送到多个目标服务去</li>
+</ul>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/lfDrcH.jpg" alt="fluentd 架构">fluentd 架构</p>
+<h3 id="配置"><a href="#配置" class="headerlink" title="配置"></a>配置</h3><p>一般来说我们是通过一个配置文件来告诉 Fluentd 如何采集、处理数据的，下面简单和大家介绍下 Fluentd 的配置方法。</p>
+<h4 id="日志源配置"><a href="#日志源配置" class="headerlink" title="日志源配置"></a>日志源配置</h4><p>比如我们这里为了收集 Kubernetes 节点上的所有容器日志，就需要做如下的日志源配置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">&lt;source&gt;</span><br><span class="line"></span><br><span class="line">@id fluentd-containers.log</span><br><span class="line"></span><br><span class="line">@type tail</span><br><span class="line"></span><br><span class="line">path /var/log/containers/*.log</span><br><span class="line"></span><br><span class="line">pos_file /var/log/fluentd-containers.log.pos</span><br><span class="line"></span><br><span class="line">time_format %Y-%m-%dT%H:%M:%S.%NZ</span><br><span class="line"></span><br><span class="line">tag raw.kubernetes.*</span><br><span class="line"></span><br><span class="line">format json</span><br><span class="line"></span><br><span class="line">read_from_head true</span><br><span class="line"></span><br><span class="line">&lt;/source&gt;</span><br></pre></td></tr></table></figure>
+
+<p>上面配置部分参数说明如下：</p>
+<ul>
+<li>id：表示引用该日志源的唯一标识符，该标识可用于进一步过滤和路由结构化日志数据</li>
+<li>type：Fluentd 内置的指令，<code>tail</code>表示 Fluentd 从上次读取的位置通过 tail 不断获取数据，另外一个是<code>http</code>表示通过一个 GET 请求来收集数据。</li>
+<li>path：<code>tail</code>类型下的特定参数，告诉 Fluentd 采集<code>/var/log/containers</code>目录下的所有日志，这是 docker 在 Kubernetes 节点上用来存储运行容器 stdout 输出日志数据的目录。</li>
+<li>pos_file：检查点，如果 Fluentd 程序重新启动了，它将使用此文件中的位置来恢复日志数据收集。</li>
+<li>tag：用来将日志源与目标或者过滤器匹配的自定义字符串，Fluentd 匹配源/目标标签来路由日志数据。</li>
+</ul>
+<h4 id="路由配置"><a href="#路由配置" class="headerlink" title="路由配置"></a>路由配置</h4><p>上面是日志源的配置，接下来看看如何将日志数据发送到 Elasticsearch：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line">&lt;match **&gt;</span><br><span class="line"></span><br><span class="line">@id elasticsearch</span><br><span class="line"></span><br><span class="line">@type elasticsearch</span><br><span class="line"></span><br><span class="line">@log_level info</span><br><span class="line"></span><br><span class="line">include_tag_key true</span><br><span class="line"></span><br><span class="line">type_name fluentd</span><br><span class="line"></span><br><span class="line">host &quot;#&#123;ENV[&apos;OUTPUT_HOST&apos;]&#125;&quot;</span><br><span class="line"></span><br><span class="line">port &quot;#&#123;ENV[&apos;OUTPUT_PORT&apos;]&#125;&quot;</span><br><span class="line"></span><br><span class="line">logstash_format true</span><br><span class="line"></span><br><span class="line">&lt;buffer&gt;</span><br><span class="line"></span><br><span class="line">@type file</span><br><span class="line"></span><br><span class="line">path /var/log/fluentd-buffers/kubernetes.system.buffer</span><br><span class="line"></span><br><span class="line">flush_mode interval</span><br><span class="line"></span><br><span class="line">retry_type exponential_backoff</span><br><span class="line"></span><br><span class="line">flush_thread_count 2</span><br><span class="line"></span><br><span class="line">flush_interval 5s</span><br><span class="line"></span><br><span class="line">retry_forever</span><br><span class="line"></span><br><span class="line">retry_max_interval 30</span><br><span class="line"></span><br><span class="line">chunk_limit_size &quot;#&#123;ENV[&apos;OUTPUT_BUFFER_CHUNK_LIMIT&apos;]&#125;&quot;</span><br><span class="line"></span><br><span class="line">queue_limit_length &quot;#&#123;ENV[&apos;OUTPUT_BUFFER_QUEUE_LIMIT&apos;]&#125;&quot;</span><br><span class="line"></span><br><span class="line">overflow_action block</span><br><span class="line"></span><br><span class="line">&lt;/buffer&gt;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>match：标识一个目标标签，后面是一个匹配日志源的正则表达式，我们这里想要捕获所有的日志并将它们发送给 Elasticsearch，所以需要配置成<code>**</code>。</li>
+<li>id：目标的一个唯一标识符。</li>
+<li>type：支持的输出插件标识符，我们这里要输出到 Elasticsearch，所以配置成 elasticsearch，这是 Fluentd 的一个内置插件。</li>
+<li>log_level：指定要捕获的日志级别，我们这里配置成<code>info</code>，表示任何该级别或者该级别以上（INFO、WARNING、ERROR）的日志都将被路由到 Elsasticsearch。</li>
+<li>host/port：定义 Elasticsearch 的地址，也可以配置认证信息，我们的 Elasticsearch 不需要认证，所以这里直接指定 host 和 port 即可。</li>
+<li>logstash_format：Elasticsearch 服务对日志数据构建反向索引进行搜索，将 logstash_format 设置为<code>true</code>，Fluentd 将会以 logstash 格式来转发结构化的日志数据。</li>
+<li>Buffer： Fluentd 允许在目标不可用时进行缓存，比如，如果网络出现故障或者 Elasticsearch 不可用的时候。缓冲区配置也有助于降低磁盘的 IO。</li>
+</ul>
+<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p>要收集 Kubernetes 集群的日志，直接用 DasemonSet 控制器来部署 Fluentd 应用，这样，它就可以从 Kubernetes 节点上采集日志，确保在集群中的每个节点上始终运行一个 Fluentd 容器。当然可以直接使用 Helm 来进行一键安装，为了能够了解更多实现细节，我们这里还是采用手动方法来进行安装。</p>
+<p>首先，我们通过 ConfigMap 对象来指定 Fluentd 配置文件，新建 fluentd-configmap.yaml 文件，文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">kind:</span> <span class="string">ConfigMap</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-config</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line">    <span class="string">addonmanager.kubernetes.io/mode:</span> <span class="string">Reconcile</span></span><br><span class="line"><span class="attr">data:</span></span><br><span class="line">  <span class="string">system.conf:</span> <span class="string">|-</span></span><br><span class="line">    <span class="string">&lt;system&gt;</span></span><br><span class="line">      <span class="string">root_dir</span> <span class="string">/tmp/fluentd-buffers/</span></span><br><span class="line">    <span class="string">&lt;/system&gt;</span></span><br><span class="line">  <span class="string">containers.input.conf:</span> <span class="string">|-</span></span><br><span class="line">    <span class="string">&lt;source&gt;</span></span><br><span class="line">      <span class="string">@id</span> <span class="string">fluentd-containers.log</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">tail</span></span><br><span class="line">      <span class="string">path</span> <span class="string">/var/log/containers/*.log</span></span><br><span class="line">      <span class="string">pos_file</span> <span class="string">/var/log/es-containers.log.pos</span></span><br><span class="line">      <span class="string">time_format</span> <span class="string">%Y-%m-%dT%H:%M:%S.%NZ</span></span><br><span class="line">      <span class="string">localtime</span></span><br><span class="line">      <span class="string">tag</span> <span class="string">raw.kubernetes.*</span></span><br><span class="line">      <span class="string">format</span> <span class="string">json</span></span><br><span class="line">      <span class="string">read_from_head</span> <span class="literal">true</span></span><br><span class="line">    <span class="string">&lt;/source&gt;</span></span><br><span class="line">    <span class="comment"># Detect exceptions in the log output and forward them as one log entry.</span></span><br><span class="line">    <span class="string">&lt;match</span> <span class="string">raw.kubernetes.**&gt;</span></span><br><span class="line">      <span class="string">@id</span> <span class="string">raw.kubernetes</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">detect_exceptions</span></span><br><span class="line">      <span class="string">remove_tag_prefix</span> <span class="string">raw</span></span><br><span class="line">      <span class="string">message</span> <span class="string">log</span></span><br><span class="line">      <span class="string">stream</span> <span class="string">stream</span></span><br><span class="line">      <span class="string">multiline_flush_interval</span> <span class="number">5</span></span><br><span class="line">      <span class="string">max_bytes</span> <span class="number">500000</span></span><br><span class="line">      <span class="string">max_lines</span> <span class="number">1000</span></span><br><span class="line">    <span class="string">&lt;/match&gt;</span></span><br><span class="line">  <span class="string">system.input.conf:</span> <span class="string">|-</span></span><br><span class="line">    <span class="comment"># Logs from systemd-journal for interesting services.</span></span><br><span class="line">    <span class="string">&lt;source&gt;</span></span><br><span class="line">      <span class="string">@id</span> <span class="string">journald-docker</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">systemd</span></span><br><span class="line">      <span class="string">filters</span> <span class="string">[&#123;</span> <span class="string">"_SYSTEMD_UNIT"</span><span class="string">:</span> <span class="string">"docker.service"</span> <span class="string">&#125;]</span></span><br><span class="line">      <span class="string">&lt;storage&gt;</span></span><br><span class="line">        <span class="string">@type</span> <span class="string">local</span></span><br><span class="line">        <span class="string">persistent</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">&lt;/storage&gt;</span></span><br><span class="line">      <span class="string">read_from_head</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">tag</span> <span class="string">docker</span></span><br><span class="line">    <span class="string">&lt;/source&gt;</span></span><br><span class="line">    <span class="string">&lt;source&gt;</span></span><br><span class="line">      <span class="string">@id</span> <span class="string">journald-kubelet</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">systemd</span></span><br><span class="line">      <span class="string">filters</span> <span class="string">[&#123;</span> <span class="string">"_SYSTEMD_UNIT"</span><span class="string">:</span> <span class="string">"kubelet.service"</span> <span class="string">&#125;]</span></span><br><span class="line">      <span class="string">&lt;storage&gt;</span></span><br><span class="line">        <span class="string">@type</span> <span class="string">local</span></span><br><span class="line">        <span class="string">persistent</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">&lt;/storage&gt;</span></span><br><span class="line">      <span class="string">read_from_head</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">tag</span> <span class="string">kubelet</span></span><br><span class="line">    <span class="string">&lt;/source&gt;</span></span><br><span class="line">  <span class="string">forward.input.conf:</span> <span class="string">|-</span></span><br><span class="line">    <span class="comment"># Takes the messages sent over TCP</span></span><br><span class="line">    <span class="string">&lt;source&gt;</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">forward</span></span><br><span class="line">    <span class="string">&lt;/source&gt;</span></span><br><span class="line">  <span class="string">output.conf:</span> <span class="string">|-</span></span><br><span class="line">    <span class="comment"># Enriches records with Kubernetes metadata</span></span><br><span class="line">    <span class="string">&lt;filter</span> <span class="string">kubernetes.**&gt;</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">kubernetes_metadata</span></span><br><span class="line">    <span class="string">&lt;/filter&gt;</span></span><br><span class="line">    <span class="string">&lt;match</span> <span class="string">**&gt;</span></span><br><span class="line">      <span class="string">@id</span> <span class="string">elasticsearch</span></span><br><span class="line">      <span class="string">@type</span> <span class="string">elasticsearch</span></span><br><span class="line">      <span class="string">@log_level</span> <span class="string">info</span></span><br><span class="line">      <span class="string">include_tag_key</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">host</span> <span class="string">elasticsearch</span></span><br><span class="line">      <span class="string">port</span> <span class="number">9200</span></span><br><span class="line">      <span class="string">logstash_format</span> <span class="literal">true</span></span><br><span class="line">      <span class="string">request_timeout</span>    <span class="number">30</span><span class="string">s</span></span><br><span class="line">      <span class="string">&lt;buffer&gt;</span></span><br><span class="line">        <span class="string">@type</span> <span class="string">file</span></span><br><span class="line">        <span class="string">path</span> <span class="string">/var/log/fluentd-buffers/kubernetes.system.buffer</span></span><br><span class="line">        <span class="string">flush_mode</span> <span class="string">interval</span></span><br><span class="line">        <span class="string">retry_type</span> <span class="string">exponential_backoff</span></span><br><span class="line">        <span class="string">flush_thread_count</span> <span class="number">2</span></span><br><span class="line">        <span class="string">flush_interval</span> <span class="number">5</span><span class="string">s</span></span><br><span class="line">        <span class="string">retry_forever</span></span><br><span class="line">        <span class="string">retry_max_interval</span> <span class="number">30</span></span><br><span class="line">        <span class="string">chunk_limit_size</span> <span class="number">2</span><span class="string">M</span></span><br><span class="line">        <span class="string">queue_limit_length</span> <span class="number">8</span></span><br><span class="line">        <span class="string">overflow_action</span> <span class="string">block</span></span><br><span class="line">      <span class="string">&lt;/buffer&gt;</span></span><br><span class="line">    <span class="string">&lt;/match&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>上面配置文件中我们配置了 docker 容器日志目录以及 docker、kubelet 应用的日志的收集，收集到数据经过处理后发送到 elasticsearch:9200 服务。</p>
+<p>然后新建一个 fluentd-daemonset.yaml 的文件，文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ServiceAccount</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line">    <span class="string">kubernetes.io/cluster-service:</span> <span class="string">"true"</span></span><br><span class="line">    <span class="string">addonmanager.kubernetes.io/mode:</span> <span class="string">Reconcile</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRole</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line">    <span class="string">kubernetes.io/cluster-service:</span> <span class="string">"true"</span></span><br><span class="line">    <span class="string">addonmanager.kubernetes.io/mode:</span> <span class="string">Reconcile</span></span><br><span class="line"><span class="attr">rules:</span></span><br><span class="line"><span class="attr">- apiGroups:</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">""</span></span><br><span class="line"><span class="attr">  resources:</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">"namespaces"</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">"pods"</span></span><br><span class="line"><span class="attr">  verbs:</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">"get"</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">"watch"</span></span><br><span class="line"><span class="bullet">  -</span> <span class="string">"list"</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">ClusterRoleBinding</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">rbac.authorization.k8s.io/v1</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line">    <span class="string">kubernetes.io/cluster-service:</span> <span class="string">"true"</span></span><br><span class="line">    <span class="string">addonmanager.kubernetes.io/mode:</span> <span class="string">Reconcile</span></span><br><span class="line"><span class="attr">subjects:</span></span><br><span class="line"><span class="attr">- kind:</span> <span class="string">ServiceAccount</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  apiGroup:</span> <span class="string">""</span></span><br><span class="line"><span class="attr">roleRef:</span></span><br><span class="line"><span class="attr">  kind:</span> <span class="string">ClusterRole</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  apiGroup:</span> <span class="string">""</span></span><br><span class="line"><span class="meta">---</span></span><br><span class="line"><span class="attr">apiVersion:</span> <span class="string">apps/v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">DaemonSet</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">  namespace:</span> <span class="string">logging</span></span><br><span class="line"><span class="attr">  labels:</span></span><br><span class="line"><span class="attr">    k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">    version:</span> <span class="string">v2.0.4</span></span><br><span class="line">    <span class="string">kubernetes.io/cluster-service:</span> <span class="string">"true"</span></span><br><span class="line">    <span class="string">addonmanager.kubernetes.io/mode:</span> <span class="string">Reconcile</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  selector:</span></span><br><span class="line"><span class="attr">    matchLabels:</span></span><br><span class="line"><span class="attr">      k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">      version:</span> <span class="string">v2.0.4</span></span><br><span class="line"><span class="attr">  template:</span></span><br><span class="line"><span class="attr">    metadata:</span></span><br><span class="line"><span class="attr">      labels:</span></span><br><span class="line"><span class="attr">        k8s-app:</span> <span class="string">fluentd-es</span></span><br><span class="line">        <span class="string">kubernetes.io/cluster-service:</span> <span class="string">"true"</span></span><br><span class="line"><span class="attr">        version:</span> <span class="string">v2.0.4</span></span><br><span class="line">      <span class="comment"># This annotation ensures that fluentd does not get evicted if the node</span></span><br><span class="line">      <span class="comment"># supports critical pod annotation based priority scheme.</span></span><br><span class="line">      <span class="comment"># Note that this does not guarantee admission on the nodes (#40573).</span></span><br><span class="line"><span class="attr">      annotations:</span></span><br><span class="line">        <span class="string">scheduler.alpha.kubernetes.io/critical-pod:</span> <span class="string">''</span></span><br><span class="line"><span class="attr">    spec:</span></span><br><span class="line"><span class="attr">      serviceAccountName:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">      containers:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">fluentd-es</span></span><br><span class="line"><span class="attr">        image:</span> <span class="string">cnych/fluentd-elasticsearch:v2.0.4</span></span><br><span class="line"><span class="attr">        env:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">FLUENTD_ARGS</span></span><br><span class="line"><span class="attr">          value:</span> <span class="bullet">--no-supervisor</span> <span class="bullet">-q</span></span><br><span class="line"><span class="attr">        resources:</span></span><br><span class="line"><span class="attr">          limits:</span></span><br><span class="line"><span class="attr">            memory:</span> <span class="number">500</span><span class="string">Mi</span></span><br><span class="line"><span class="attr">          requests:</span></span><br><span class="line"><span class="attr">            cpu:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">            memory:</span> <span class="number">200</span><span class="string">Mi</span></span><br><span class="line"><span class="attr">        volumeMounts:</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">varlog</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/var/log</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">varlibdockercontainers</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/data/docker/containers</span></span><br><span class="line"><span class="attr">          readOnly:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">        - name:</span> <span class="string">config-volume</span></span><br><span class="line"><span class="attr">          mountPath:</span> <span class="string">/etc/fluent/config.d</span></span><br><span class="line"><span class="attr">      nodeSelector:</span></span><br><span class="line">        <span class="string">beta.kubernetes.io/fluentd-ds-ready:</span> <span class="string">"true"</span></span><br><span class="line"><span class="attr">      tolerations:</span></span><br><span class="line"><span class="attr">      - key:</span> <span class="string">node-role.kubernetes.io/master</span></span><br><span class="line"><span class="attr">        operator:</span> <span class="string">Exists</span></span><br><span class="line"><span class="attr">        effect:</span> <span class="string">NoSchedule</span></span><br><span class="line"><span class="attr">      terminationGracePeriodSeconds:</span> <span class="number">30</span></span><br><span class="line"><span class="attr">      volumes:</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">varlog</span></span><br><span class="line"><span class="attr">        hostPath:</span></span><br><span class="line"><span class="attr">          path:</span> <span class="string">/var/log</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">varlibdockercontainers</span></span><br><span class="line"><span class="attr">        hostPath:</span></span><br><span class="line"><span class="attr">          path:</span> <span class="string">/data/docker/containers</span></span><br><span class="line"><span class="attr">      - name:</span> <span class="string">config-volume</span></span><br><span class="line"><span class="attr">        configMap:</span></span><br><span class="line"><span class="attr">          name:</span> <span class="string">fluentd-config</span></span><br></pre></td></tr></table></figure>
+
+<p>我们将上面创建的 fluentd-config 这个 ConfigMap 对象通过 volumes 挂载到了 Fluentd 容器中，另外为了能够灵活控制哪些节点的日志可以被收集，所以我们这里还添加了一个 nodSelector 属性：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">nodeSelector:</span></span><br><span class="line">  <span class="string">beta.kubernetes.io/fluentd-ds-ready:</span> <span class="string">"true"</span></span><br></pre></td></tr></table></figure>
+
+<p>意思就是要想采集节点的日志，那么我们就需要给节点打上上面的标签，比如我们这里3个节点都打上了该标签：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get nodes --show-labels</span></span><br><span class="line">NAME      STATUS    ROLES     AGE       VERSION   LABELS</span><br><span class="line">master    Ready     master    245d      v1.10.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/fluentd-ds-ready=true,beta.kubernetes.io/os=linux,kubernetes.io/hostname=master,node-role.kubernetes.io/master=</span><br><span class="line">node02    Ready     &lt;none&gt;    165d      v1.10.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/fluentd-ds-ready=true,beta.kubernetes.io/os=linux,com=youdianzhishi,course=k8s,kubernetes.io/hostname=node02</span><br><span class="line">node03    Ready     &lt;none&gt;    225d      v1.10.0   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/fluentd-ds-ready=true,beta.kubernetes.io/os=linux,jnlp=haimaxy,kubernetes.io/hostname=node03</span><br></pre></td></tr></table></figure>
+
+<p>另外由于我们的集群使用的是 kubeadm 搭建的，默认情况下 master 节点有污点，所以要想也收集 master 节点的日志，则需要添加上容忍：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">tolerations:</span></span><br><span class="line"><span class="attr">- key:</span> <span class="string">node-role.kubernetes.io/master</span></span><br><span class="line"><span class="attr">  operator:</span> <span class="string">Exists</span></span><br><span class="line"><span class="attr">  effect:</span> <span class="string">NoSchedule</span></span><br></pre></td></tr></table></figure>
+
+<p>另外需要注意的地方是，我这里的测试环境更改了 docker 的根目录：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> docker info</span></span><br><span class="line">...</span><br><span class="line">Docker Root Dir: /data/docker</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+
+<p>所以上面要获取 docker 的容器目录需要更改成<code>/data/docker/containers</code>，这个地方非常重要，当然如果你没有更改 docker 根目录则使用默认的<code>/var/lib/docker/containers</code>目录即可。</p>
+<p>分别创建上面的 ConfigMap 对象和 DaemonSet：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f fluentd-configmap.yaml</span></span><br><span class="line">configmap "fluentd-config" created</span><br><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f fluentd-daemonset.yaml</span></span><br><span class="line">serviceaccount "fluentd-es" created</span><br><span class="line">clusterrole.rbac.authorization.k8s.io "fluentd-es" created</span><br><span class="line">clusterrolebinding.rbac.authorization.k8s.io "fluentd-es" created</span><br><span class="line">daemonset.apps "fluentd-es" created</span><br></pre></td></tr></table></figure>
+
+<p>创建完成后，查看对应的 Pods 列表，检查是否部署成功：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl get pods -n logging</span></span><br><span class="line">NAME                      READY     STATUS    RESTARTS   AGE</span><br><span class="line">es-cluster-0              1/1       Running   0          1d</span><br><span class="line">es-cluster-1              1/1       Running   0          1d</span><br><span class="line">es-cluster-2              1/1       Running   0          1d</span><br><span class="line">fluentd-es-2z9jg          1/1       Running   1          35s</span><br><span class="line">fluentd-es-6dfdd          1/1       Running   0          35s</span><br><span class="line">fluentd-es-bfkg7          1/1       Running   0          35s</span><br><span class="line">kibana-7558d4dc4d-5mqdz   1/1       Running   0          1d</span><br></pre></td></tr></table></figure>
+
+<p><strong>注意</strong>：如果当前node没有打上<code>fluentd-ds-ready=true</code> lable的话，对应的pod <code>fluentd</code>不会被启动。</p>
+<p>Fluentd 启动成功后，我们可以前往 Kibana 的 Dashboard 页面中，点击左侧的<code>Discover</code>，可以看到如下配置页面：</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/kSLsgE.jpg" alt="create index">create index</p>
+<p>在这里可以配置我们需要的 Elasticsearch 索引，前面 Fluentd 配置文件中我们采集的日志使用的是 logstash 格式，这里只需要在文本框中输入<code>logstash-*</code>即可匹配到 Elasticsearch 集群中的所有日志数据，然后点击下一步，进入以下页面：</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/bc7n1S.jpg" alt="index config">index config</p>
+<p>在该页面中配置使用哪个字段按时间过滤日志数据，在下拉列表中，选择<code>@timestamp</code>字段，然后点击<code>Create index pattern</code>，创建完成后，点击左侧导航菜单中的<code>Discover</code>，然后就可以看到一些直方图和最近采集到的日志数据了：</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/wHFvnu.jpg" alt="log data">log data</p>
+<h3 id="测试-1"><a href="#测试-1" class="headerlink" title="测试"></a>测试</h3><p>现在我们来将上一节课的计数器应用部署到集群中，并在 Kibana 中来查找该日志数据。</p>
+<p>新建 counter.yaml 文件，文件内容如下：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">apiVersion:</span> <span class="string">v1</span></span><br><span class="line"><span class="attr">kind:</span> <span class="string">Pod</span></span><br><span class="line"><span class="attr">metadata:</span></span><br><span class="line"><span class="attr">  name:</span> <span class="string">counter</span></span><br><span class="line"><span class="attr">spec:</span></span><br><span class="line"><span class="attr">  containers:</span></span><br><span class="line"><span class="attr">  - name:</span> <span class="string">count</span></span><br><span class="line"><span class="attr">    image:</span> <span class="string">busybox</span></span><br><span class="line"><span class="attr">    args:</span> <span class="string">[/bin/sh,</span> <span class="bullet">-c,</span></span><br><span class="line">            <span class="string">'i=0; while true; do echo "$i: $(date)"; i=$((i+1)); sleep 1; done'</span><span class="string">]</span></span><br></pre></td></tr></table></figure>
+
+<p>该 Pod 只是简单将日志信息打印到 stdout，所以正常来说 Fluentd 会收集到这个日志数据，在 Kibana 中也就可以找到对应的日志数据了，使用 kubectl 工具创建该 Pod：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">$</span><span class="bash"> kubectl create -f counter.yaml</span></span><br></pre></td></tr></table></figure>
+
+<p>Pod 创建并运行后，回到 Kibana Dashboard 页面，在上面的<code>Discover</code>页面搜索栏中输入<code>kubernetes.pod_name:counter</code>，就可以过滤 Pod 名为 counter 的日志数据：</p>
+<p><img src="/2019/11/06/%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F/HsYSF3.jpg" alt="counter log data">counter log data</p>
+<p>我们也可以通过其他元数据来过滤日志数据，比如 您可以单击任何日志条目以查看其他元数据，如容器名称，Kubernetes 节点，命名空间等。</p>
+<p>到这里，我们就在 Kubernetes 集群上成功部署了 EFK ，要了解如何使用 Kibana 进行日志数据分析，可以参考 Kibana 用户指南文档：<a href="https://www.elastic.co/guide/en/kibana/current/index.html" target="_blank" rel="noopener">https://www.elastic.co/guide/en/kibana/current/index.html</a></p>
+<p>当然对于在生产环境上使用 Elaticsearch 或者 Fluentd，还需要结合实际的环境做一系列的优化工作，本文中涉及到的资源清单文件都可以在<a href="https://github.com/cnych/kubernetes-learning/tree/master/efkdemo" target="_blank" rel="noopener">https://github.com/cnych/kubernetes-learning/tree/master/efkdemo</a>找到。</p>
+<blockquote>
+<p>参考文档: <a href="https://www.digitalocean.com/community/tutorials/how-to-set-up-an-elasticsearch-fluentd-and-kibana-efk-logging-stack-on-kubernetes" target="_blank" rel="noopener">How To Set Up an Elasticsearch, Fluentd and Kibana (EFK) Logging Stack on Kubernetes</a></p>
+<p>参考链接：<a href="https://www.jianshu.com/p/1000ae80a493" target="_blank" rel="noopener">https://www.jianshu.com/p/1000ae80a493</a></p>
+</blockquote>
+<h2 id="部署logtrail"><a href="#部署logtrail" class="headerlink" title="部署logtrail"></a>部署logtrail</h2><p>下载kibana对应版本的logtrail <a href="https://github.com/sivasamyk/logtrail" target="_blank" rel="noopener">https://github.com/sivasamyk/logtrail</a></p>
+<p>由于kibana镜像不带logtrail，安装插件后需要重启kibana，在容器下无法重启。因此需要基于kibana镜像重新生成一个带插件的新镜像。</p>
+<p>以6.7.0版本为例，Dockerfile如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"># elk https://hub.docker.com/r/sebp/elk</span><br><span class="line">#FROM sebp/elk:670</span><br><span class="line">FROM docker.elastic.co/kibana/kibana-oss:6.7.0</span><br><span class="line">#ADD 02-beats-input.conf /etc/logstash/conf.d/02-beats-input.conf</span><br><span class="line">#ADD 30-output.conf /etc/logstash/conf.d/30-output.conf</span><br><span class="line"># kibanasivasamyk/logtrail </span><br><span class="line">ADD ./logtrail-6.7.0-0.1.31.zip /opt/kibana/plugin/logtrail-6.7.0-0.1.31.zip</span><br><span class="line">#  kibana</span><br><span class="line"># WORKDIR $&#123;KIBANA_HOME&#125;</span><br><span class="line"># kibana</span><br><span class="line">RUN bin/kibana-plugin install file:///opt/kibana/plugin/logtrail-6.7.0-0.1.31.zip</span><br></pre></td></tr></table></figure>
+
+<p>执行build命令</p>
+<blockquote>
+<p>docker build  –network=host -t docker.elastic.co/kibana/kibana-oss:kibana-logtrail .</p>
+</blockquote>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/k8s/" rel="tag"><i class="fa fa-tag"></i> k8s</a>
+              <a href="/tags/EFK/" rel="tag"><i class="fa fa-tag"></i> EFK</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/11/06/docker%E5%AE%B9%E5%99%A8%E5%92%8C%E9%95%9C%E5%83%8F%E5%8C%BA%E5%88%AB/" rel="next" title="【转】docker容器和镜像区别">
+                  <i class="fa fa-chevron-left"></i> 【转】docker容器和镜像区别
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#部署nfs-client"><span class="nav-number">1.</span> <span class="nav-text">部署nfs-client</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#创建-Provisioner"><span class="nav-number">1.1.</span> <span class="nav-text">创建 Provisioner</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#新建-PVC"><span class="nav-number">1.2.</span> <span class="nav-text">新建 PVC</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#测试"><span class="nav-number">1.3.</span> <span class="nav-text">测试</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#参考"><span class="nav-number">1.4.</span> <span class="nav-text">参考</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#创建-Elasticsearch-集群"><span class="nav-number">2.</span> <span class="nav-text">创建 Elasticsearch 集群</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#创建-Kibana-服务"><span class="nav-number">3.</span> <span class="nav-text">创建 Kibana 服务</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#部署-Fluentd"><span class="nav-number">4.</span> <span class="nav-text">部署 Fluentd</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#工作原理"><span class="nav-number">4.1.</span> <span class="nav-text">工作原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#配置"><span class="nav-number">4.2.</span> <span class="nav-text">配置</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#日志源配置"><span class="nav-number">4.2.1.</span> <span class="nav-text">日志源配置</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#路由配置"><span class="nav-number">4.2.2.</span> <span class="nav-text">路由配置</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#安装"><span class="nav-number">4.3.</span> <span class="nav-text">安装</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#测试-1"><span class="nav-number">4.4.</span> <span class="nav-text">测试</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#部署logtrail"><span class="nav-number">5.</span> <span class="nav-text">部署logtrail</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

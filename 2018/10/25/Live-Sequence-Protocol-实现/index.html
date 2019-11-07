@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="分布式环境中，网络不稳定导致消息（数据包）的传输存在乱序、重复和丢失的情况，同时，节点宕机也不可避免。如何优雅地处理这些问题，是构建一个健壮的分布式系统的关键。网络的复杂性使得数据包传输协议至关重要。低级别的IP协议提供不可靠的数据报服务，即消息可能延时、重复或丢失，另外，它也限制了在网络节点中传输的消息的最大字节数，因此很少直接利用IP协议来构建分布式应用。在传输层，UDP也不提供可靠的数据报服">
+<meta name="keywords" content="分布式系统,网络编程,传输协议,可靠服务,流量控制">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Live Sequence Protocol 实现">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;10&#x2F;25&#x2F;Live-Sequence-Protocol-%E5%AE%9E%E7%8E%B0&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="分布式环境中，网络不稳定导致消息（数据包）的传输存在乱序、重复和丢失的情况，同时，节点宕机也不可避免。如何优雅地处理这些问题，是构建一个健壮的分布式系统的关键。网络的复杂性使得数据包传输协议至关重要。低级别的IP协议提供不可靠的数据报服务，即消息可能延时、重复或丢失，另外，它也限制了在网络节点中传输的消息的最大字节数，因此很少直接利用IP协议来构建分布式应用。在传输层，UDP也不提供可靠的数据报服">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;raw.githubusercontent.com&#x2F;qqzeng&#x2F;15-440&#x2F;master&#x2F;p1&#x2F;traffic%20control.png">
+<meta property="og:updated_time" content="2019-10-24T05:41:05.446Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;raw.githubusercontent.com&#x2F;qqzeng&#x2F;15-440&#x2F;master&#x2F;p1&#x2F;traffic%20control.png">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/10/25/Live-Sequence-Protocol-%E5%AE%9E%E7%8E%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Live Sequence Protocol 实现 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/10/25/Live-Sequence-Protocol-%E5%AE%9E%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Live Sequence Protocol 实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-10-25 18:55:51" itemprop="dateCreated datePublished" datetime="2018-10-25T18:55:51+08:00">2018-10-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:41:05" itemprop="dateModified" datetime="2019-10-24T13:41:05+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>5.7k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>5 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>分布式环境中，网络不稳定导致消息（数据包）的传输存在乱序、重复和丢失的情况，同时，节点宕机也不可避免。如何优雅地处理这些问题，是构建一个健壮的分布式系统的关键。网络的复杂性使得数据包传输协议至关重要。低级别的IP协议提供不可靠的数据报服务，即消息可能延时、重复或丢失，另外，它也限制了在网络节点中传输的消息的最大字节数，因此很少直接利用IP协议来构建分布式应用。在传输层，UDP也不提供可靠的数据报服务，但它可以通过端口定向传输报文。而TCP则会保证消息传输的可靠性、有序性，并允许任意字节大小的消息传递，还提供额外的功能，如流量控制、拥塞控制。</p>
+<a id="more"></a>
+
+<p>我们的目的是实现一个基于UDP、具备TCP几个关键特性的消息传输协议 (<code>Live Sequence Protocol</code>），同时它还具备如下功能：</p>
+<ul>
+<li>不同于UDP或TCP，它支持 <code>client-server</code>通信模型 。</li>
+<li><code>server</code>会维护若干个<code>client</code>的连接。</li>
+<li><code>server</code>与<code>client</code>的通信是通过向对方发送消息来实现，消息大小限制与UDP相同。</li>
+<li>消息传输是可靠的：消息一旦发送，就会被顺序接收，且每个消息只会被接收一次。</li>
+<li><code>server</code>与<code>client</code>可以检测连接的状态。</li>
+</ul>
+<p>协议具体的工作原理、关键特性、运行流程及开放使用的接口可以参考<a href="https://github.com/qqzeng/15-440/blob/master/p1/p1.pdf" target="_blank" rel="noopener"><code>p1.pdf</code></a>。下面我会讨论协议实现过程中的几个关键点，以及个人在实现过程中遇到的棘手的问题。</p>
+<h2 id="系统逻辑框架构建"><a href="#系统逻辑框架构建" class="headerlink" title="系统逻辑框架构建"></a>系统逻辑框架构建</h2><p>清晰且优雅地构建整个系统的逻辑框架至关重要，代码框架设计关系到后期功能模块调试与扩展，不合理的系统逻辑框架设计会使得后期的扩展寸步难行，也会导致代码的可调试性、可读性变差。因此，在编写出你的第一个可用的版本之前，尽可能合理地安排系统框架，这需要理解并梳理系统的主干及各分支（异常）运行流程，为了更简单、高效且合理地实现模块功能，必须尽可能熟悉(<code>go</code>)语言的特性(<code>channel</code>、<code>gorountine</code>及<code>interface</code>)。 </p>
+<p>协议实现文档清晰地描述了协议的完整工作流程，按照此流程，其核心是<code>epoch event</code>触发后，协议的应对逻辑，可以实现出一个可运行的版本。合理安排程序框架关键在于处理好以下三个方面的问题：</p>
+<ul>
+<li>哪些功能逻辑应该被顺序执行，如何保证同步顺序执行。<br>比如，当创建<code>client</code>后，只有当其与<code>server</code>建立连接<code>connection</code>（抽象连接，并非消息传输所使用的连接）后才能返回，同时启动后台服务。注意<code>client</code>创建UDP连接到<code>server</code>可能会尝试多次，因为<code>server</code>可能存在慢启动问题，而且<code>Connect</code>消息也可能丢失。</li>
+<li>系统需要哪些后台服务(<code>background goroutine</code>)， 后台服务如何可靠地同主线程协调交互。<br>比如，对于<code>client</code>而言，至少需要三个<code>goroutine</code>来处理消息。<ul>
+<li><code>read goroutine</code>持续从连接中读取消息，直到连接关闭。</li>
+<li><code>write goroutine</code>，因为写操作的调用是非阻塞的，但由于滑动窗口大小限制，并非所有消息都能立刻cache到滑动窗口并立即发送出去，因此，可以将用户<code>wirte</code>的消息放入到消息的<code>write channel</code>中，然后由专门的后台服务从<code>channel</code>中取消息，并在恰当的时候发送消息。</li>
+<li><code>epoch event trigger goroutine</code>，即处理与<code>epoch</code>相关的逻辑，超时如何处理？接收到<code>Ack</code>消息或<code>Data</code>消息如何处理？达到<code>max epoch</code>时如何处理？</li>
+</ul>
+</li>
+<li>确保开放接口的实现符合协议规范中预定义的准则要求。<br>比如，<code>server</code>的<code>Read</code>接口的调用会阻塞直到其从任一<code>client</code>收到消息，然后返回消息的<code>payload</code>及对应的<code>connection ID</code>。如果连接丢失，关闭或者<code>Server</code>主动关闭终止，都应该返回错误提示。这个方法不应该被简单地设计成从连接中持续读取数据，因为<code>Server</code>可能连接多个<code>client</code>，针对每一个<code>client</code> 连接的读取，必须启用单独的<code>goroutine</code>。所以，一种简单的设计是<code>server</code>并发地从各连接读取数据，若通过了校验（如保证用户调用<code>Read</code>所返回的数据正是用户所期望的），则将数据放入到<code>channel</code>，让<code>Read</code>持续从<code>channel</code>中取数据，注意数据一旦添加到<code>channel</code>中，则会以放入的顺序被<code>Read</code>取出，并返回给用户。</li>
+</ul>
+<h2 id="理解UDP通信本质"><a href="#理解UDP通信本质" class="headerlink" title="理解UDP通信本质"></a>理解UDP通信本质</h2><p>大家可能对<code>TCP</code>原理及编程更为熟悉，<code>UDP</code>相对简单，但因为<code>lsp(Live Sequence Protocol)</code>基于<code>UDP</code>，并在更高的协议抽象层面具备TCP的特性，所以，不要混淆了二者的通信原理。<code>UDP</code>是无连接的！它会完全按照程序员的意愿发送消息，它不考虑对方主机是否存在或正常工作，也不会主动重发消息，因此，也就无法保证消息的可靠接收与发送。</p>
+<p>所以，<code>server</code>不需要也不能维护其与<code>client</code>的连接！但应当在<code>sever</code>端创建并维护与其通信的<code>client</code>关联的信息实体（需包含哪些数据？），那何时创建？答案是当<code>server</code>读取到数据时，因为此时可以获取读取所返回的<code>client</code>地址，<code>server</code>可以通过cache已经连接的信息来判断此次读取对应的连接是否是新的连接。若不是，则直接进入消息读取处理逻辑，否则需要先初始化<code>server</code>维护的<code>client</code>相关联的信息实体。</p>
+<p>最后，注意<code>server</code>与<code>client</code>使用的是不同的<code>UDP</code>读写通信接口。（<code>client</code>直接持有与<code>server</code>通信的连接，而<code>server</code>是通过指定地址（<code>IP+port</code>）发送与接收消息）。</p>
+<h2 id="如何实现滑动窗口"><a href="#如何实现滑动窗口" class="headerlink" title="如何实现滑动窗口"></a>如何实现滑动窗口</h2><p>滑动窗口<code>sliding window</code>是协议实现流量控制的关键，是整个协议的功能核心，并且其与TCP的滑动窗口机制类似。关于滑动窗口，在理解它的工作原理后，重点考虑以下三个方面：</p>
+<ul>
+<li>设计滑动窗口的数据结构。<ul>
+<li>消息应该被有序添加到滑动窗口。</li>
+<li>发送消息窗口需要标识每一条消息是否已经被ack。</li>
+</ul>
+</li>
+<li>发送消息所关联的滑动窗口<code>latestSentDataMsg</code>。<br>以<code>client</code>作为示例，维持其发送消息的窗口，以便对未按时返回<code>Ack</code>的消息进行重发（已发送的<code>data</code>消息可能会丢失，或者接收主机响应的<code>Ack</code>消息丢失）。<ul>
+<li>因为窗口内的消息所返回的<code>Ack</code>是无序的（消息异步发送，网络传输也不能保证消息按序到达），所以，需要维护一个指针，表示当前返回的<code>Ack</code>消息的最小的序号<code>receivedAckSeqNum</code>，以作为窗口向前推进的依据。</li>
+<li>当<code>client</code>发送<code>data</code>消息时，需同时将其cache到<code>latestSentDataMsg</code>。而当其接收到<code>Ack</code>消息时，需要执行更新此指针<code>receivedAckSeqNum</code>的逻辑。<br>而<code>server</code>则需要对其所维护的每一个连接构建对应的发送消息窗口，但处理逻辑类似。</li>
+</ul>
+</li>
+<li>接收消息所关联的滑动窗口<code>latestReceivedDataMsg</code>。<br>同样以<code>client</code>作为示例，维持其接收消息的窗口，以便在计时器超时后，对最近收到的若干个<code>data</code>消息，重发<code>Ack</code>消息。<ul>
+<li>同样，接收消息窗口也是无序的，因此，为了保证返回给用户的消息有序，需要维护一个指针，表示下一个期望接收到的<code>data</code>消息序号<code>nextReceiveDataSeqNum</code>（或者是当前已经接收到的最大的<code>data</code>消息的消息序号），它是依次递增的。对于接收到的任何<code>data</code>消息，若其<code>SeqNum</code>在此指针之后，都应该直接添加（暂时缓存）到<code>latestReceivedDataMsg</code>中，而不应该作为<code>Read</code>调用的返回结果。</li>
+<li>当<code>client</code>收到<code>server</code>的<code>data</code>消息时，也需要将其cache到<code>latestReceivedDataMsg</code>，并判断是否需要更新<code>nextReceiveDataSeqNum</code>，若需要更新，则应当将更新过程中所涉及到的cache在接收消息窗口中的<code>data</code>消息按序添加到供<code>Read</code>接口所读取的<code>channel</code>。<br><code>server</code>同样是一个连接对应一个接收消息窗口。</li>
+</ul>
+</li>
+</ul>
+<h2 id="如何实现流量控制"><a href="#如何实现流量控制" class="headerlink" title="如何实现流量控制"></a>如何实现流量控制</h2><p>流量控制表示若当前主机有过多的消息未被ack（网络拥塞），因此发送主机需要对用户调用<code>Write</code>接口的<code>data</code>消息进行阻塞以延缓发送。其实现关键是滑动窗口机制。具体实现原理为：</p>
+<ol>
+<li>当用户调用<code>Write</code>接口以发送消息时，将消息添加到消息发送队列<code>channel</code>，然后返回，不能阻塞。</li>
+<li>后台服务<code>write goroutine</code>从消息发送队列中不断的取消息，但在消息正式发送前，需要检测消息发送滑动窗口是否空闲<code>idle</code>，并且包含多少空闲的<code>slot</code>。</li>
+<li>空闲的<code>slot</code>数目可以根据以下表达式计算：<br><code>idleSlotNum := cli.params.WindowSize-(lastMsg.SeqNum-cli.receivedAckSeqNum)</code>，其中，<code>lastMsg</code>为消息发送窗口中最后一个消息，即<code>SeqNum</code>最大的消息。</li>
+<li>如果<code>idleSlotNum</code>大于0，则可以发送对应数目的消息，并将已经发送的消息记录到消息发送窗口，同时递增<code>nextSendDataSeqNum</code>指针。否则，<code>write goroutine</code>应该被阻塞住。那如何解除阻塞？每当<code>client</code>在接收到<code>Ack</code>消息时都要去尝试解除阻塞。</li>
+</ol>
+<p>如图所示，当滑动窗口处于(a)的情况下，当用户调用<code>Write</code>以发送消息时，消息会被阻塞在<code>write channel</code>中，因为此时<code>receivedAckSeqNum</code>为9，消息发送窗口的<code>idle</code>的<code>slot</code>数目为：5-(14-9)=0。而当<code>client</code>接收若干<code>Ack</code>消息后，滑动窗口转移到(b)状态时，注意到<code>receivedAckSeqNum</code>从9逐一递增到11，消息发送窗口<code>idleSlotNum</code>为：5-(14-11)=2，因此窗口前移，并可以从<code>write channel</code>中顺序取出两个消息，进行发送。</p>
+<p><img src="https://raw.githubusercontent.com/qqzeng/15-440/master/p1/traffic%20control.png" alt="traffic control"></p>
+<h2 id="如何检测消息重复"><a href="#如何检测消息重复" class="headerlink" title="如何检测消息重复"></a>如何检测消息重复</h2><p>消息重复主要包括<code>data</code>和<code>Ack</code>消息的重复接收。以<code>client</code>作为示例。</p>
+<ul>
+<li><code>data</code>消息的重复接收。<ul>
+<li>当<code>client</code>读取到<code>data</code>消息后，需要判断消息是否已经接收过。若消息重复，则直接返回<code>Ack</code>消息，否则应该先将消息cache到<code>latestReceivedDataMsg</code>。</li>
+<li>可以通过消息的<code>SeqNum</code>来去重。这涉及两种情况：其一，消息已经被<code>Ack</code>，并且已经从<code>latestReceivedDataMsg</code>中移除，我们称之为消息被丢弃(<code>discarded</code>)。其二，消息被<code>Ack</code>，但仍然cache在<code>latestReceivedDataMsg</code>中。</li>
+</ul>
+</li>
+<li><code>Ack</code>消息的重复接收。<code>Ack</code>消息的去重逻辑同<code>data</code>消息类似。</li>
+</ul>
+<h2 id="如何保证消息顺序"><a href="#如何保证消息顺序" class="headerlink" title="如何保证消息顺序"></a>如何保证消息顺序</h2><p>发送主机异步发送消息，且消息在网络中传输也有不同程度的延迟，因此接收主机接收的消息序列的顺序很可能与发送主机发送的消息顺序不同。如何保证消息顺序？准确而言，如何以发送主机发送消息的顺序来返回给用户。</p>
+<p>针对具备滑动窗口机制的消息传输，可以保证滑动窗口前所接收的消息，即已经被<code>discarded</code>的消息肯定是有序返回给用户的。而滑动窗口内的消息，因为无法规避从网络中读取乱序消息的问题，但在读取到消息后可以控制以何种顺序将消息返回给用户。简单而言，将收到的<code>data</code>消息先cache在<code>latestReceivedDataMsg</code>中，然后通过指针<code>nextReceiveDataSeqNum</code>来判断是否应该将窗口中cache的消息返回给用户。</p>
+<h2 id="如何优雅地关闭连接"><a href="#如何优雅地关闭连接" class="headerlink" title="如何优雅地关闭连接"></a>如何优雅地关闭连接</h2><p>保证连接优雅地关闭是一个非常棘手的问题。其中，相比于<code>client</code>端的连接关闭，<code>server</code>的关闭又更为复杂。协议规范清晰地描述了<code>client</code>及<code>server</code>在关闭连接时需要注意的问题。其核心是：</p>
+<ul>
+<li>当存在<code>pending</code>消息时，需要将其处理完成（即需保证接收到<code>Ack</code>消息）。</li>
+<li>同时，一旦<code>data</code>消息被加入到<code>write channel</code>，它必须保证最后能够被发送出去。<br><code>client</code>的关闭相对简单，具体处理逻辑为：当用户调用<code>Close</code>接口时，需要判断是否存在<code>pending</code>消息，如何检测？两个条件：</li>
+<li>保证消息发送窗口的最后一个消息的<code>SeqNum</code>恰好为其持有的<code>receivedAckSeqNum</code>的值。</li>
+<li>保证<code>write channel</code>中没有任何未被处理的消息。<br>因此如果此时存在<code>pending</code>消息，<code>Close</code>会被阻塞。那如何解除阻塞？每当<code>client</code>在接收到<code>Ack</code>消息时都要去尝试解除阻塞。此外，值得注意的是，在阻塞的过程中，如果触发了<code>max epoch event</code>，则<code>client</code>应该立刻返回，因为这表明连接已经<code>discarded</code>，此时要么所有<code>pending</code>消息已被处理，要么<code>server</code>主动关闭了连接。<br><code>server</code>的<code>CloseConn</code>接口可以看作是<code>client</code>的<code>Close</code>接口的非阻塞版本。而<code>Close</code>接口需要协调所有的<code>connection</code>的关闭。同样，<code>server</code>的某个连接也可能到达<code>max epoch</code>，此时其对应的连接应该被关闭。当所有连接都关闭时，<code>Close</code>才能返回。<br>在连接关闭时，需要及时退出对应的<code>background goroutine</code>。</li>
+</ul>
+<h2 id="需注意的细节问题"><a href="#需注意的细节问题" class="headerlink" title="需注意的细节问题"></a>需注意的细节问题</h2><p>往往一些编程方面的细节，包括逻辑漏洞或者被忽视的语法问题会造成很长时间的调试。而且，当通信过程中，数据交换复杂变得越发复杂时，很难从庞大的日志文件中找出错误的根源。个人在实现的过程中，遇到两个问题：</p>
+<ul>
+<li><code>dead lock</code>。死锁很容易产生，一般有两个原因，其一，资源的相互持有，造成两个线程都无法向前推进。其二，没有正确嵌套使用锁，你需要清楚锁是否可重入。</li>
+<li><code>buffered channel</code>。其导致的问题比较隐蔽，你首先要明确是使用带缓冲的<code>channel</code>或者不带缓冲的<code>channel</code>，如果是<code>buffered channel</code>，你需要确定它的大小，如果你不确定缓冲区数量是否足够，建议设置的稍大一些，但这个前提是，必须在合适的时机清空<code>buffered channel</code>，避免在复用<code>buffered channel</code>之后导致逻辑受到影响。</li>
+</ul>
+<p>最后，需要提醒的是，分布式程序异步、并发，且网络复杂的特性导致其很难debug。所以，尽可能设计完善的日志流程，以帮助跟踪未符合期望的执行逻辑，并定位问题。</p>
+<p>另外，cmu提供较为完善的测试程序，如果程序出现问题，可以对某一个或几个子测试用例进行单独测试，熟悉测试用例代码，了解测试用例流程是有必要的。</p>
+<p><a href="https://github.com/qqzeng/15-440/tree/master/p1/src/github.com/cmu440/lsp" target="_blank" rel="noopener">参考代码在这里</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C%E7%BC%96%E7%A8%8B/" rel="tag"><i class="fa fa-tag"></i> 网络编程</a>
+              <a href="/tags/%E4%BC%A0%E8%BE%93%E5%8D%8F%E8%AE%AE/" rel="tag"><i class="fa fa-tag"></i> 传输协议</a>
+              <a href="/tags/%E5%8F%AF%E9%9D%A0%E6%9C%8D%E5%8A%A1/" rel="tag"><i class="fa fa-tag"></i> 可靠服务</a>
+              <a href="/tags/%E6%B5%81%E9%87%8F%E6%8E%A7%E5%88%B6/" rel="tag"><i class="fa fa-tag"></i> 流量控制</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/10/15/2018-10-15-TCP%E4%B9%8B3%E6%AC%A1%E6%8F%A1%E6%89%8B%E5%92%8C4%E6%AC%A1%E6%8C%A5%E6%89%8B/" rel="next" title="TCP之3次握手和4次挥手">
+                  <i class="fa fa-chevron-left"></i> TCP之3次握手和4次挥手
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/10/29/groupcache-%E8%AE%BE%E8%AE%A1%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/" rel="prev" title="groupcache 设计原理剖析">
+                  groupcache 设计原理剖析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#系统逻辑框架构建"><span class="nav-number">1.</span> <span class="nav-text">系统逻辑框架构建</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#理解UDP通信本质"><span class="nav-number">2.</span> <span class="nav-text">理解UDP通信本质</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何实现滑动窗口"><span class="nav-number">3.</span> <span class="nav-text">如何实现滑动窗口</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何实现流量控制"><span class="nav-number">4.</span> <span class="nav-text">如何实现流量控制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何检测消息重复"><span class="nav-number">5.</span> <span class="nav-text">如何检测消息重复</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何保证消息顺序"><span class="nav-number">6.</span> <span class="nav-text">如何保证消息顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#如何优雅地关闭连接"><span class="nav-number">7.</span> <span class="nav-text">如何优雅地关闭连接</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#需注意的细节问题"><span class="nav-number">8.</span> <span class="nav-text">需注意的细节问题</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

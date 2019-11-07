@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="应用类 Starter   名称 描述 POM    spring-boot-starter 核心 starter，包含自动配置支持、日志和 YAML Pom   spring-boot-starter-activemq 提供 JMS 消息支持，使用 Apache ActiveMQ Pom   spring-boot-starter-amqp 提供 Spring AMQP 与 Rabbit MQ">
+<meta name="keywords" content="Spring,SpringBoot">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SpringBoot之Starter组件概览">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;12&#x2F;16&#x2F;2018-12-16-SpringBoot%E4%B9%8BStarter%E7%BB%84%E4%BB%B6%E6%A6%82%E8%A7%88&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="应用类 Starter   名称 描述 POM    spring-boot-starter 核心 starter，包含自动配置支持、日志和 YAML Pom   spring-boot-starter-activemq 提供 JMS 消息支持，使用 Apache ActiveMQ Pom   spring-boot-starter-amqp 提供 Spring AMQP 与 Rabbit MQ">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.686Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/12/16/2018-12-16-SpringBoot%E4%B9%8BStarter%E7%BB%84%E4%BB%B6%E6%A6%82%E8%A7%88/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>SpringBoot之Starter组件概览 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/12/16/2018-12-16-SpringBoot%E4%B9%8BStarter%E7%BB%84%E4%BB%B6%E6%A6%82%E8%A7%88/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          SpringBoot之Starter组件概览
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-12-16 18:29:34" itemprop="dateCreated datePublished" datetime="2018-12-16T18:29:34+08:00">2018-12-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/" itemprop="url" rel="index">
+                    <span itemprop="name">后端开发</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.6k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="应用类-Starter"><a href="#应用类-Starter" class="headerlink" title="应用类 Starter"></a>应用类 Starter</h1><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>描述</th>
+<th>POM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spring-boot-starter</code></td>
+<td>核心 starter，包含自动配置支持、日志和 YAML</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-activemq</code></td>
+<td>提供 JMS 消息支持，使用 Apache ActiveMQ</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-activemq/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-amqp</code></td>
+<td>提供 Spring AMQP 与 Rabbit MQ 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-amqp/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-aop</code></td>
+<td>提供 Spring AOP 与 AspectJ 面向切面编程支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-aop/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-artemis</code></td>
+<td>提供 JMS 消息服务支持，使用 Apache Artemis</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-artemis/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-batch</code></td>
+<td>提供 Spring Batch 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-batch/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-cache</code></td>
+<td>提供 Spring Framework 缓存支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-cache/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-cloud-connectors</code></td>
+<td>使用 Spring Cloud Connectors 简单连接到类似 Cloud Foundry 和 Heroku 等云平台</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-cloud-connectors/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-cassandra</code></td>
+<td>提供对 Cassandra 分布式数据库和 Spring Data Cassandra 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-cassandra/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-cassandra-reactive</code></td>
+<td>提供对 Cassandra 分布式数据库和 Spring Data Cassandra Reactive 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-cassandra-reactive/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-couchbase</code></td>
+<td>提供对 Couchbase 面向文档数据库和 Spring Data Couchbase 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-couchbase/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-couchbase-reactive</code></td>
+<td>提供对 Couchbase 面向文档数据库和 Spring Data Couchbase Reactive 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-couchbase-reactive/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-elasticsearch</code></td>
+<td>提供对 Elasticseach 搜索与分析引擎和 Spring Data Elasticsearch 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-elasticsearch/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-jpa</code></td>
+<td>提供 Spring Data JPA 与 Hibernate 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-jpa/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-ldap</code></td>
+<td>提供对 Spring Data LDAP 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-ldap/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-mongodb</code></td>
+<td>提供对 MongoDB 面向文档数据库和 Spring Data MongoDB 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-mongodb/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-mongodb-reactive</code></td>
+<td>提供对 MongoDB 面向文档数据库和 Spring Data MongoDB Reactive 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-mongodb-reactive/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-neo4j</code></td>
+<td>提供对 Neo4j 图数据库与 SPring Data Neo4j 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-neo4j/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-redis</code></td>
+<td>提供对 Redis 键值数据存储、Spring Data Redis 和 Lettuce 客户端的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-redis/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-redis-reactive</code></td>
+<td>提供对 Redis 键值数据存储、Spring Data Redis Reactive 和 Lettuce 客户端的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-redis-reactive/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-rest</code></td>
+<td>提供使用 Spring Data REST 通过 REST 暴露 Spring Data 资源库的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-rest/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-data-solr</code></td>
+<td>提供对 Apache Solr 搜索平台与 Spring Data Solr 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-data-solr/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-freemarker</code></td>
+<td>提供使用 Freemakrer 视图构建 MVC web 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-freemarker/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-groovy-templates</code></td>
+<td>提供使用 Groovy 模板视图构建 MVC web 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-groovy-templates/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-hateoas</code></td>
+<td>提供使用 Spring MVC 与Spring HATEOAS 构建基于超媒体的 RESTful web 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-hateoas/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-integration</code></td>
+<td>提供对 Spring Integration 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-integration/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jdbc</code></td>
+<td>提供 JDBC 与 Tomcat JDBC 连接池的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jdbc/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jersey</code></td>
+<td>提供对使用 JAX-RS 与 Jersey 构建 RESTful web 应用的支持。<a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-web" target="_blank" rel="noopener"><code>spring-boot-starter-web</code></a> 的替代方案</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jersey/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jooq</code></td>
+<td>提供对使用 JOOQ 访问 SQL 数据库的支持。<a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-data-jpa" target="_blank" rel="noopener"><code>spring-boot-starter-data-jpa</code></a> 或 <a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-jdbc" target="_blank" rel="noopener"><code>spring-boot-starter-jdbc</code></a> 的替代方案</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jooq/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-json</code></td>
+<td>提供了读写 json 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-json/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jta-atomikos</code></td>
+<td>提供 Atomikos JTA 事务支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jta-atomikos/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jta-bitronix</code></td>
+<td>提供 Bitronix JTA 事务支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jta-bitronix/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-jta-narayana</code></td>
+<td>提供 Narayana JTA 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jta-narayana/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-mail</code></td>
+<td>提供使用　Java Mail 与 Spring Framework 的邮件发送支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-mail/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-mustache</code></td>
+<td>提供使用 Mustache 视图构建 web 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-mustache/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-quartz</code></td>
+<td>Quartz 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-quartz/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-security</code></td>
+<td>Spring Security 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-security/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-test</code></td>
+<td>提供包含了 JUnit、Hamcrest 与 Mockito 类库的 Spring Boot 单元测试支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-test/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-thymeleaf</code></td>
+<td>提供使用 Thymeleaf 视图构建 MVC web 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-thymeleaf/pom.xml" target="_blank" rel="noopener">pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-validation</code></td>
+<td>提供 Hibernate Validator 与 Java Bean Validation 的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-validation/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-web</code></td>
+<td>提供使用 Spring MVC 构建 web（包含 RESTful）应用的支持，使用 Tomcat 作为默认嵌入式容器</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-web/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-web-services</code></td>
+<td>Spring Web Services 支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-web-services/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-webflux</code></td>
+<td>提供使用 Spring Framework 的 Reactive Web 支持构建 WebFlux 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-webflux/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-websocket</code></td>
+<td>提供使用 Spring Framework 的 WebSocket 支持构建 WebSocket 应用的支持</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-websocket/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+</tbody></table><a id="more"></a>
+<h1 id="生产类-starter"><a href="#生产类-starter" class="headerlink" title="生产类 starter"></a>生产类 starter</h1><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>描述</th>
+<th>POM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spring-boot-starter-actuator</code></td>
+<td>Spring Boot 的 Actuator 支持，其提供了生产就绪功能，帮助您监控和管理应用</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-actuator/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+</tbody></table>
+<h1 id="技术类-starter"><a href="#技术类-starter" class="headerlink" title="技术类 starter"></a>技术类 starter</h1><table>
+<thead>
+<tr>
+<th>名称</th>
+<th>描述</th>
+<th>POM</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>spring-boot-starter-jetty</code></td>
+<td>使用 Jetty 作为嵌入式 servlet 容器。可代替 <a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-tomcat" target="_blank" rel="noopener"><code>spring-boot-starter-tomcat</code></a></td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-jetty/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-log4j2</code></td>
+<td>使用 Log4j2 作为日志组件。可代替 <a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-logging" target="_blank" rel="noopener"><code>spring-boot-starter-logging</code></a></td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-log4j2/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-logging</code></td>
+<td>使用 Logback 作为日志组件，此 starter 为默认的日志 starter</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-logging/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-reactor-netty</code></td>
+<td>使用 Reactor Netty 作为内嵌响应式 HTTP 服务器</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-reactor-netty/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-tomcat</code></td>
+<td>使用 Tomcat 作为嵌入式 servlet 容器，此为 <a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-web" target="_blank" rel="noopener"><code>spring-boot-starter-web</code></a> 默认的 servlet 容器 starter</td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-tomcat/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+<tr>
+<td><code>spring-boot-starter-undertow</code></td>
+<td>使用 Undertow 作为嵌入式 servlet 容器，可代替 <a href="https://docs.spring.io/spring-boot/docs/2.0.0.RELEASE/reference/htmlsingle/#spring-boot-starter-tomcat" target="_blank" rel="noopener"><code>spring-boot-starter-tomcat</code></a></td>
+<td><a href="https://github.com/spring-projects/spring-boot/tree/v2.0.0.RELEASE/spring-boot-project/spring-boot-starters/spring-boot-starter-undertow/pom.xml" target="_blank" rel="noopener">Pom</a></td>
+</tr>
+</tbody></table>
+<p><strong>提示</strong></p>
+<blockquote>
+<p>有关其它社区贡献的 starter 列表，请参阅 GitHub 上的 <code>spring-boot-starters</code> 模块中的 <a href="https://github.com/spring-projects/spring-boot/tree/master/spring-boot-project/spring-boot-starters/README.adoc" target="_blank" rel="noopener">README 文件</a>。</p>
+</blockquote>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p><a href="https://docs.spring.io/spring-boot/docs/2.1.1.RELEASE/reference/htmlsingle/#using-boot-starter" target="_blank" rel="noopener">SpringBoot官方文档</a><br><a href="https://docshome.gitbooks.io/springboot/content/pages/using-spring-boot.html#using-boot-starter" target="_blank" rel="noopener">SpringBoot官方文档中文翻译</a><br><a href="https://blog.csdn.net/cxd275050943/article/details/74452102" target="_blank" rel="noopener">SpringBoot组件说明</a>  </p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Spring/" rel="tag"><i class="fa fa-tag"></i> Spring</a>
+              <a href="/tags/SpringBoot/" rel="tag"><i class="fa fa-tag"></i> SpringBoot</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/12/15/2018-12-15-Redis%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="next" title="Redis学习笔记">
+                  <i class="fa fa-chevron-left"></i> Redis学习笔记
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/12/20/%E7%90%86%E8%A7%A3-Paxos-Made-Simple/" rel="prev" title="理解 Paxos Made Simple">
+                  理解 Paxos Made Simple <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#应用类-Starter"><span class="nav-number">1.</span> <span class="nav-text">应用类 Starter</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#生产类-starter"><span class="nav-number">2.</span> <span class="nav-text">生产类 starter</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#技术类-starter"><span class="nav-number">3.</span> <span class="nav-text">技术类 starter</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#参考文献"><span class="nav-number">4.</span> <span class="nav-text">参考文献</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

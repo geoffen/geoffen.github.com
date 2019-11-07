@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="ZooKeeper是 Yahoo! 于 2010 年在 USENIX 会议上发表的一篇论文中提出的，被用作分布式应用程序的协调服务(coordination service)。虽然ZooKeeper被认为是 Google Chubby的开源实现，但其设计理念却存在较大差异：ZooKeeper致力于提供一个简单且高性能(high performance)的内核(kernel)以为客户端（应用程序）构">
+<meta name="keywords" content="分布式系统,分布式协调服务,原子广播协议,分布式锁">
+<meta property="og:type" content="article">
+<meta property="og:title" content="理解分布式协调服务 zookeeper">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;12&#x2F;04&#x2F;%E7%90%86%E8%A7%A3%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1-ZooKeeper&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="ZooKeeper是 Yahoo! 于 2010 年在 USENIX 会议上发表的一篇论文中提出的，被用作分布式应用程序的协调服务(coordination service)。虽然ZooKeeper被认为是 Google Chubby的开源实现，但其设计理念却存在较大差异：ZooKeeper致力于提供一个简单且高性能(high performance)的内核(kernel)以为客户端（应用程序）构">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.910Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/12/04/%E7%90%86%E8%A7%A3%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1-ZooKeeper/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>理解分布式协调服务 zookeeper | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/12/04/%E7%90%86%E8%A7%A3%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1-ZooKeeper/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          理解分布式协调服务 zookeeper
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-12-04 19:23:30" itemprop="dateCreated datePublished" datetime="2018-12-04T19:23:30+08:00">2018-12-04</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>6.6k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>6 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>ZooKeeper</code>是 Yahoo! 于 2010 年在 USENIX 会议上发表的一篇论文中提出的，被用作分布式应用程序的协调服务(<code>coordination service</code>)。虽然<code>ZooKeeper</code>被认为是 Google <code>Chubby</code>的开源实现，但其设计理念却存在较大差异：<code>ZooKeeper</code>致力于提供一个简单且高性能(<code>high performance</code>)的内核(<code>kernel</code>)以为客户端（应用程序）构建更复杂、更高层(<code>high level</code>)的协调原语(<code>coordination primitives</code>)。换言之，<code>ZooKeeper</code>并不针对特定应用或者具体某一协调服务而设计实现，它只提供构建应用协调原语的内核，而将具体协调原语的构建逻辑放权给客户端，并且，它确保了客户端在不需要更改内核服务的前提下，能够灵活构建出新的、更高级的且更强大的协调原语，比如分布式互斥锁、分布式队列等。<code>ZooKeeper</code>为每个客户端操作提供<code>FIFO</code>顺序保证，并且为所有写操作提供<code>linearlizablity</code>保证。<code>ZooKeeper</code>的实现原理为构建在其之上的服务提供高性能保证。</p>
+<a id="more"></a>
+
+<p><a href="https://scholar.google.com/scholar_url?url=https://www.usenix.org/event/usenix10/tech/full_papers/Hunt.pdf&hl=zh-CN&sa=T&oi=gsb-ggp&ct=res&cd=0&d=16979330189653726967&ei=n4kGXN6bNYSwyQTtrY2YBw&scisig=AAGBfm3u4LNga1CwiXqT9W5TbZFnKyv21Q" target="_blank" rel="noopener">Zookeeper</a> 为分布式应用提供诸如配置管理(<code>configuration managation</code>)、leader 选举等协调服务，这通过为应用程序提供构建协调原语的 <code>API</code>来实现。并且，与那些提供阻塞原语的服务不同，<code>ZooKeeper</code>实现的 <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm" target="_blank" rel="noopener">wait-free</a> 数据对象确保其容错和高性能特性，因为若利用阻塞原语来构建协调服务，可能会导致那些慢的(<code>slow</code>)或者有错误的(<code>faulty</code>)的客户端影响正常的客户端的服务性能。此博客阐述个人对<code>ZooKeeper</code>的理解，并从一个<code>ZooKeeper</code>的应用实例开始讨论，分别阐述<code>ZooKeeper</code>两个<code>ordering guarantees</code>、。因为本文并非对原论文的完整翻译，因此你需要提前阅读原论文，确保熟知<code>ZooKeeper</code>数据模型以及客户端<code>API</code>等内容，而且，博客也会省略论文所阐述的利用<code>ZooKeeper</code>来实现部分协调服务部分，具体内容可以参考原论文。</p>
+<h2 id="一个应用实例阐述"><a href="#一个应用实例阐述" class="headerlink" title="一个应用实例阐述"></a>一个应用实例阐述</h2><p>我们知道<code>MapReduce</code>需要知道集群<code>master</code>的<code>ip:port</code>以使得其它节点能够与<code>master</code>建立连接通信，为此，<code>MapReduce</code>可以利用<code>ZooKeeper</code>作为动态配置服务，让<code>master candidate</code>在<code>ZooKeeper</code>上并发注册（创建）各自<code>ephemeral</code>类型的<code>ip:port</code>节点，并让<code>slave</code>监听对应节点的<code>watch event</code>，因此一旦有<code>master candidate</code>注册成功（且只能有一个创建成功），则其它节点将能获取到<code>master</code>的<code>ip:port</code>。</p>
+<p>若使用基于<code>raft</code>构建的复制状态机实现，比如在<code>raft</code>集群上构建一个<code>key/value</code>存储系统来存放<code>GFS master</code>的元信息。则整个过程大致如下：首先，<code>master candidate</code>向<code>raft</code>发送<code>Put(&quot;gfs-master&quot;, &quot;ip:port&quot;)</code>命令日志，当<code>raft</code>集群<code>apply</code>此命令日志后，其它节点可通过向<code>raft</code>发送<code>Get(&quot;gfs-master&quot;)</code>命令来获取<code>master</code>的<code>ip:port</code>。但此过程存在几个问题：其一，若多个<code>master candidate</code>同时向<code>raft</code>发送节点地址的注册命令日志，此时将产生<code>race condition</code>，其会导致后发送的命令被应用到状态机，因此<code>master candidate</code>需要进一步判断自己是否成为真正的<code>master</code>（不能仅通过发送了节点地址命令日志来确定）；其二，若<code>master</code>失效，其地址项日志必须要从存储中移除，那么谁来执行此操作？因此，必须对<code>master</code>的元数据信息设置<code>timeout timestamp</code>，并且让<code>master</code>通过定期向<code>raft</code>发送<code>Put(ip:port, timestamp)</code>日志来更新<code>timeout</code>的<code>timestamp</code>，而集群其它节点通过向<code>raft</code>轮询(<code>poll</code>)此<code>timestamp</code>来确保<code>master</code>正常工作，毫无疑问，这将产生大量不必要的<code>poll cost</code>。对比使用<code>ZooKeeper</code>来提供此协调服务（上一段），问题是如何被<code>ZooKeeper</code>高效便捷地解决呢？首先它会确保在多个<code>master candidate</code>同时注册地址信息时，只会有一个操作成功；其次，<code>ZooKeeper</code>的<code>session</code>机制简化了<code>timestamp timeout</code>设置，一旦<code>master</code>宕机，其在<code>ZooKeeper</code>上注册的元信息节点将会自动清除。而且，对应的节点移除消息也会通知到其它节点，避免了<code>slave</code>的大量的轮询消耗。由此可见，使用<code>ZooKeeper</code>来进行集群配置信息的管理，有利于简化服务实现的逻辑。</p>
+<h2 id="ZooKeeper-两个-ordering-guarantees"><a href="#ZooKeeper-两个-ordering-guarantees" class="headerlink" title="ZooKeeper 两个 ordering guarantees"></a>ZooKeeper 两个 ordering guarantees</h2><p>在讨论<code>ZooKeeper</code>两个基本的<code>ordering guarantees</code>之前，先了解什么是 <code>wait-free</code>，你可以从<a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm" target="_blank" rel="noopener">维基</a>或者 <a href="https://cs.brown.edu/~mph/Herlihy91/p124-herlihy.pdf" target="_blank" rel="noopener">Herlihy的论文</a> 上找到其明确定义：</p>
+<blockquote>
+<p>A wait-free implementation of a concurrent data object is one that guarantees that any process can complete any operation in a finite number of steps, regardless of the execution speeds of the other processes.</p>
+</blockquote>
+<blockquote>
+<p>Wait-freedom is the strongest non-blocking guarantee of progress, combining guaranteed system-wide throughput with starvation-freedom. An algorithm is wait-free if every operation has a bound on the number of steps the algorithm will take before the operation completes</p>
+</blockquote>
+<p>而对于<code>ZooKeeper</code>而言，其提供的<code>API</code>被称为是<code>wait-free</code>的，因为<code>ZooKeeper</code>直接响应客户端请求，即此请求的返回并不会受到其它客户端操作的影响（通常是<code>slow</code>或者<code>faulty</code>）。换言之，若此客户端请求为写节点数据操作，只要<code>ZooKeeper</code>收到状态变更，则会立即响应此客户端。如果在这之前某一客户端监听了此节点的数据变更事件，则一旦此节点的数据发生变化，则<code>ZooKeeper</code>会推送变更事件给监听的客户端，然后立即返回给写数据的客户端，并不会等待此监听客户端确认此事件。相比于同步阻塞的调用，<code>wait-free</code>明显提供更好的性能，因为客户端不用同步等待每次调用的返回，且其可以进行异步的批量调用<code>batch call</code>操作，以均摊(<code>amortize</code>)网络传输和IO开销。<code>wait-free</code>的<code>API</code>是<code>ZooKeeper</code>具备高性能的基础，因此也是<code>ZooKeeper</code>的设计核心。</p>
+<p><code>ZooKeeper</code>提供了两个基本的<code>ordering guarantees</code>：<code>Linearizable writes</code>及<code>FIFO client order</code>。<code>Linearizable write</code>表示对<code>ZooKeeper</code>的节点状态更新的请求都是线性化的(<code>serializable</code>)，而<code>FIFO client order</code>则表示对于同一个客户端而言，<code>ZooKeeper</code>会保证其操作的执行顺序与客户端发送此操作的顺序一致。毫无疑问，这是两个很强的保证。</p>
+<p><code>ZooKeeper</code>提供了<code>Linearizable write</code>，那什么是<code>Linearizablility</code>？<a href="https://cs.brown.edu/~mph/Herlihy91/p124-herlihy.pdf" target="_blank" rel="noopener">Herlihy的论文</a>同样给出了其定义，为了方便，你也可以参考<a href="https://medium.com/databasss/on-ways-to-agree-part-2-path-to-atomic-broadcast-662cc86a4e5f" target="_blank" rel="noopener">这里</a>或者<a href="http://www.bailis.org/blog/linearizability-versus-serializability/" target="_blank" rel="noopener">这里</a>。</p>
+<blockquote>
+<p>Linearizability is a correctness condition for concurrent objects that provides the illusion that each operation applied by concurrent processes takes effect instantaneously at some point between its invocation and its response, implying that the meaning of a concurrent object’s operations can be given by pre- and post-conditions.</p>
+</blockquote>
+<p>简单而言，<code>Linearizability</code>是分布式系统领域的概念（区别于数据库领域与事务相关的概念<code>Serializability</code>），一个分布式系统若实现了<code>linearizability</code>，它必须能够保证系统中存在一个时间点，在此时间点之后，整个系统会提交到新的状态，且绝不会返回到旧的状态，此过程是即时的(<code>instantaneous</code>)，一旦这个值被提交，其它所有的进程都会看到，系统的写操作会保证是全局有序(<code>totally ordered</code>)。</p>
+<p>而<code>ZooKeeper</code>论文提到其<code>write</code>具备<code>Linearizability</code>，确切而言是<code>A-linearizability</code>(<code>asynchronous linearizability</code>)。简而言之，<code>Linearizability</code>原本（原论文）是针对单个对象，单个操作(<code>single object, single operation</code>)而言的，但<code>ZooKeeper</code>扩大其应用范围，它允许客户端同时执行多个操作（读写），并且保证每个操作同样会遵循<code>Linearizability</code>。</p>
+<p>值得注意的是，<code>ZooKeeper</code>对其操作（<code>create</code>,<code>delete</code>等）提供<code>pipelining</code>特性，即<code>ZooKeeper</code>允许客户端批量地执行异步操作（比如发送了<code>setData</code>操作后可以立即调用<code>geData</code>），而不需要等到上一个操作的结果返回。毫无疑问，这降低了操作的延迟(<code>lantency</code>)，增加了客户端服务的吞吐量(<code>throughtout</code>)，也是<code>ZooKeeper</code>高性能的保证。但通常情况下，这会带来一个问题，因为所有操作都是异步的，因此这些操作可能会被重排序(<code>re-order</code>)，这肯定不是客户端希望发生的（比如对于两个写操作而言，<code>re-order</code>后会产生奇怪的行为）。因此，对于特定客户端，<code>ZooKeeper</code>还提供<code>client FIFO order</code>的保证。</p>
+<h2 id="ZooKeeper-实现原理"><a href="#ZooKeeper-实现原理" class="headerlink" title="ZooKeeper 实现原理"></a>ZooKeeper 实现原理</h2><p>同分布式存储系统类似，<code>ZooKeeper</code>也会对数据进行冗余备份。在客户端发送请求之前，它会连接到一个<code>ZooKeeper server</code>，并将后续的请求提交给对应的<code>server</code>，当<code>server</code>收到请求后，有做如下三个保证：其一，若请求所操作的节点被某些客户端注册了监听事件，它会向对应的客户端推送事件通知。其二，若此请求为写操作，则<code>server</code>一次性只会对一个请求做处理（不会同时处理其它的读或者写请求）。其三，写操作最终是交由<code>leader</code>来处理（若接收请求的<code>server</code>并非<code>leader</code>，其主动会对请求进行转发），<code>leader</code>会利用<code>Zab</code>（原子广播协议，<code>ZooKeper atomic broadcast</code>）对此请求进行协调，最终各节点会对请求的执行结果达成一致，并将结果 <code>replica</code>到<code>ensemble servers</code>。<code>ZooKeeper</code>将数据存储到内存中（更快），但为了保证数据存储的可靠性，在将数据写到内存数据库前，也会将数据写到磁盘等外部存储。同时，对操作做好相应的<code>replay log</code>，并且其定期会对数据库进行<code>snapshot</code>。</p>
+<p>若请求为读操作，则接收请求的<code>server</code>直接在本地对请求进行处理（因此读操作仅仅是在<code>server</code>的本地内存数据库进行检索处理，这也是<code>ZooKeeper</code>高性能的保证）。正因为如此，同<code>GFS</code>可能向客户端返回过期数据的特点类似，<code>ZooKeeper</code>也有此问题。如果应用程序不希望得到过期数据（即只允许得到最近一次写入的数据），则可以采用<code>sync</code>操作进行读操作前的写操作同步，即如果在读操作之前集群还有<code>pending</code>的写操作，会阻塞直至写操作完成。值得注意的是，每一次的读操作都会携带一个<code>zxid</code>，它表示<code>ZooKeeper</code>最近一次执行事务的编号（关于事务，后面会介绍），因此<code>zxid</code>定义了读操作与写操作之间的偏序关系。同时，当客户端连接到<code>server</code>时，如果此<code>server</code>发现其本地存储的当前<code>zxid</code>小于客户端提供的<code>zxid</code>的大小，其会拒绝客户端的连接请求，直至其将本地数据库同步至全局最新的状态。</p>
+<p>在<code>ZooKeeper</code>内部，它会将接收到的写操作转换为事务(<code>transaction</code>)操作。因为<code>ZooKeeper</code>可能需要同时处理若干个操作，因此其会提前计算好操作被提交后数据库所处的状态。这里给出论文中提到的一个事务转换的示例：如果客户端发送一个条件更新的命令<code>setData</code>并附带上目标节点的<code>version number</code>及数据内容，当<code>ZooKeeper server</code>收到请求后，会根据更新后的数据，版本号以及更新的时间戳，为此请求生成一个<code>setDataTXN</code>事务。当事务执行出错时（比如版本号不对应），则会产生一个<code>errorTXN</code>的事务。</p>
+<p>值得注意的是，<code>ZooKeeper</code>内部所构建的事务操作是幂等的(<code>idempotent</code>)。这有利于<code>ZooKeeper</code>执行失效恢复过程。具体而言，为了应对节点宕机等故障，<code>ZooKeeper</code>会定期进行<code>snapshot</code>操作，<code>ZooKeeper</code>称其为<code>fuzzy snapshot</code>。但与普通的分布式系统不同的是，它在进行快照时，并不会锁定当前<code>ZooKeeper</code>集群（一旦锁定，便不能处理客户端的写操作，且快照的时间一般也相对较长，因此会降低客户端的服务性能），它会对其树形存储进行深度优先搜索，并将搜索过程中所遍历的每一个节点的元信息及数据写到磁盘。因为<code>ZooKeeper</code>快照期间并没有锁定<code>ZooKeeper</code>的状态，因此在此过程中，若有<code>server</code>在同步写操作，则写操作可能只被<code>replica</code>到部分节点，最终使得<code>snapshot</code>的结果处于不一致的状态。但正是由于<code>ZooKeeper</code>的事务操作是<code>idempontent</code>，因此，在<code>recover</code>过程应用<code>snapshot</code>时，还会重新按顺序提交从快照启动开始到结束所涉及到的事务操作。原论文给出了一个快照恢复过程示例。因此我们会发现，<code>fuzzy snapshot</code>同样是<code>ZooKeeper</code> 高性能的体现。另外，事务幂等的特性也使得<code>ZooKeeper</code>不需要保存请求消息的ID（保存的目的是为了防止对重复执行同一请求消息），因为事务的重复执行并不会导致节点数据的不一致性。由此可见，事务幂等性的大大设计简化了<code>ZooKeeper</code>的请求处理过程及日志恢复的过程。</p>
+<p>最后，关于原论文所阐述的基于<code>ZooKeeper</code>内核来构建协调服务的相关实例部分，<a href="https://github.com/qqzeng/zkprimitives" target="_blank" rel="noopener">参考实现代码在这里</a>。</p>
+<p>参考文献</p>
+<p>[1] Hunt P, Konar M, Junqueira F P, et al. ZooKeeper: Wait-free Coordination for Internet-scale Systems[C]//USENIX annual technical conference. 2010, 8(9).<br>[2] Herlihy M P, Wing J M. Linearizability: A correctness condition for concurrent objects[J]. ACM Transactions on Programming Languages and Systems (TOPLAS), 1990, 12(3): 463-492.<br>[3] <a href="https://medium.com/databasss/on-ways-to-agree-part-2-path-to-atomic-broadcast-662cc86a4e5f" target="_blank" rel="noopener">https://medium.com/databasss/on-ways-to-agree-part-2-path-to-atomic-broadcast-662cc86a4e5f</a><br>[4] <a href="https://en.wikipedia.org/wiki/Non-blocking_algorithm" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/Non-blocking_algorithm</a><br>[5] <a href="http://www.bailis.org/blog/linearizability-versus-serializability/" target="_blank" rel="noopener">http://www.bailis.org/blog/linearizability-versus-serializability/</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" rel="tag"><i class="fa fa-tag"></i> 分布式协调服务</a>
+              <a href="/tags/%E5%8E%9F%E5%AD%90%E5%B9%BF%E6%92%AD%E5%8D%8F%E8%AE%AE/" rel="tag"><i class="fa fa-tag"></i> 原子广播协议</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" rel="tag"><i class="fa fa-tag"></i> 分布式锁</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/11/17/2018-11-17-Http%E4%B9%8B%E6%B6%88%E6%81%AF%E5%A4%B4/" rel="next" title="Http之消息头">
+                  <i class="fa fa-chevron-left"></i> Http之消息头
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/12/07/2018-12-07-Spring%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/" rel="prev" title="Spring全家桶注解概览">
+                  Spring全家桶注解概览 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一个应用实例阐述"><span class="nav-number">1.</span> <span class="nav-text">一个应用实例阐述</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ZooKeeper-两个-ordering-guarantees"><span class="nav-number">2.</span> <span class="nav-text">ZooKeeper 两个 ordering guarantees</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#ZooKeeper-实现原理"><span class="nav-number">3.</span> <span class="nav-text">ZooKeeper 实现原理</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

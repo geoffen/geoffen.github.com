@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="MapReduce 最早是由谷歌于 2004 年在操作系统顶会 OSDI 上发表的一篇面向大规模数据处理的分布式计算框架（并行计算模型）论文中提出。MapReduce使用 Google File System 作为数据存储，支撑起了谷歌全网搜索等大规模数据存储与处理业务。MapReduce 对于大规模数据的高效处理体现在三个方面：其一，大规模数据并行处理，分而治之；其二，MapReduce编程模型">
+<meta name="keywords" content="分布式系统,分布式计算框架,MapReduce">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MapReduce 原型实现">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;11&#x2F;16&#x2F;MapReduce-%E5%8E%9F%E5%9E%8B%E5%AE%9E%E7%8E%B0&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="MapReduce 最早是由谷歌于 2004 年在操作系统顶会 OSDI 上发表的一篇面向大规模数据处理的分布式计算框架（并行计算模型）论文中提出。MapReduce使用 Google File System 作为数据存储，支撑起了谷歌全网搜索等大规模数据存储与处理业务。MapReduce 对于大规模数据的高效处理体现在三个方面：其一，大规模数据并行处理，分而治之；其二，MapReduce编程模型">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:39:59.899Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/11/16/MapReduce-%E5%8E%9F%E5%9E%8B%E5%AE%9E%E7%8E%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>MapReduce 原型实现 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/11/16/MapReduce-%E5%8E%9F%E5%9E%8B%E5%AE%9E%E7%8E%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          MapReduce 原型实现
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-16 22:53:42" itemprop="dateCreated datePublished" datetime="2018-11-16T22:53:42+08:00">2018-11-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:39:59" itemprop="dateModified" datetime="2019-10-24T13:39:59+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.4k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>MapReduce</code> 最早是由谷歌于 2004 年在操作系统顶会 OSDI 上发表的一篇面向大规模数据处理的分布式计算框架（并行计算模型）论文中提出。<code>MapReduce</code>使用 <code>Google File System</code> 作为数据存储，支撑起了谷歌全网搜索等大规模数据存储与处理业务。<code>MapReduce</code> 对于大规模数据的高效处理体现在三个方面：其一，大规模数据并行处理，分而治之；其二，<code>MapReduce</code>编程模型；最后，<code>MapReduce</code>运行时环境（失败恢复、任务调度以及负载均衡等）。它简化了并行编程，使得开发人员很容易编写出高效且具备容错能力的并行化程序。</p>
+<a id="more"></a>
+
+<p>博客基于 MIT 6.824 (2018) 的课程 Lab1。整个实验实现了<code>MapReduce</code>原型，并且对其关键特性进行测试，主要包括<code>MapReduce</code>编程模型，集中在 <code>Map</code>与<code>Reduce</code>两个阶段，以及任务失败处理。在阅读原论文 <a href="https://pdos.csail.mit.edu/6.824/papers/mapreduce.pdf" target="_blank" rel="noopener">MapReduce</a> 的基础，Lab1 能够让我们对 <code>MapReduce</code>原理有更为深刻的理解，也能够提高我们实现分布式系统的实践能力，这包括节点通信模型、系统构建框架以及诸如失败恢复机制等。而且，仔细阅读整个 Lab 的代码可以学习到很多原理及设计知识，而不仅仅是完成其 Lab 任务。下文会简单介绍整个 Lab1 框架，然后阐述几个关键点（模块）。</p>
+<h2 id="Sequential-及-Distributed-运行模式"><a href="#Sequential-及-Distributed-运行模式" class="headerlink" title="Sequential 及 Distributed 运行模式"></a>Sequential 及 Distributed 运行模式</h2><p>Lab1 实现了两种不同运行模式的<code>MapReduce</code>原型框架：一种是<code>Sequential</code>运行模式，它顺序编程实现<code>MapReduce</code>过程，也不具备容错功能，因此并非真正意义上的实现。具体地，基于此种运行模式，所有<code>task</code>串行执行且<code>Map</code>与<code>Reduce</code>两个阶段也是串行执行，且未提供任务执行失败的恢复机制。大概地，它首先创建输入文件并读取<code>Map</code>输入，同时创建对应数量的<code>Map task</code>（即循环调用<code>Map</code>函数来处理输入文件），并顺序调度执行，将中间结果写到磁盘上，当所有<code>Map task</code>执行完成后，启动一定数量的<code>Reduce task</code>，并让<code>Reduce task</code>从本地磁盘相应位置读取<code>Map task</code>输出，同样被顺序调度执行，最后，将<code>Reduce task</code>输出写到本地磁盘，最终<code>merge</code>所有输出文件，以合并写到本地输出文件。</p>
+<p>另一种是 <code>Distributed</code>运行模式，它更接近真实的<code>MapReduce</code>原型框架实现。客户端会依次启动一个<code>master</code>节点及多个<code>slave</code>节点(go 的<code>goroutine</code>)，并将输入文件信息传给<code>master</code>节点，此后客户端会阻塞等待<code>master</code>返回 。<code>master</code>启动后开始监听<code>slave</code>的连接(<code>one client one goroutine</code>），<code>slave</code>启动后会主动往<code>master</code>节点注册，并等待<code>master</code>分配任务。所有节点通过<code>go rpc</code>实现对等通信。一旦有<code>slave/worker</code>注册成功，<code>master</code>开始实施任务调度，通过<code>rpc</code>将任务信息（任务类型、任务输入文件位置等）发送给<code>worker</code>，而<code>worker</code>在注册成功后，就不断监听<code>master</code>的连接并调用<code>worker</code>的任务执行<code>handler</code>(<code>doTask</code>)， <code>doTask</code>会调用应用程序的<code>Map</code>或<code>Reduce</code>执行<code>MapReduce</code>任务，所有的<code>worker</code>在本节点执行任务的过程同<code>Sequential</code>运行模式下类似，只是各个<code>worker</code>并行执行，互不干扰。值得注意的是，在整个<code>MapReduce Job</code>调度执行过程中，<code>worker</code>允许动态加入，<code>master</code>一旦发现<code>worker</code>注册加入，若此时有未完成的任务等待调度，就会将此任务让新加入的<code>worker</code>调度执行。只有所有的<code>Map task</code>调度完成后，<code>Reduce task</code>才会被调度。当所有<code>Reduce task</code>执行完成后，同样会进行<code>merge</code>的过程，然后从<code>MapReduce</code>框架返回。</p>
+<h2 id="Map-及-Reduce-工作流程"><a href="#Map-及-Reduce-工作流程" class="headerlink" title="Map 及 Reduce 工作流程"></a>Map 及 Reduce 工作流程</h2><p>这里简要阐述 <code>Map &amp; Reduce</code>阶段执行流程。当<code>worker</code>执行<code>map task</code>时，包括以下几个步骤：首先从本地磁盘读取其负责处理的原始输入文件；然后，通过将文件名及文件内容作为参数传递给<code>MapFun</code>来执行用户自定义逻辑；最后，对于每一个<code>Reduce task</code>，通过迭代<code>MapFunc</code>返回的执行结果，并按记录(<code>record</code>)的<code>key</code>进行<code>partition</code>以将分配给对应的<code>Reducer</code>的中间输出结果写到本地磁盘对应文件。</p>
+<p><code>Reduce task</code>的执行过程大致如下：首先读取本<code>Reduce task</code>负责的输入文件，并使用<code>JSON</code>来<code>decode</code>文件内容，并将<code>decode</code>后的<code>kev/value</code>存储到<code>map</code>中，同一个<code>key</code>对应一个<code>value list</code>，然后将整个<code>map</code>的<code>key</code>进行排序，并对每一个<code>key/value list</code>通过调用<code>ReduceFunc</code>来执行用户名自定义逻辑，同时，将其返回的结果，经<code>JSON encode</code>后写入输出文件。这些由<code>Reduce task</code>输出的文件内容，会被<code>merge</code>到最终的输出文件。</p>
+<h2 id="再谈失败恢复"><a href="#再谈失败恢复" class="headerlink" title="再谈失败恢复"></a>再谈失败恢复</h2><p>容错（失败恢复）是<code>MapReduce</code>运行时的一个关键特性。且 Lab1 也模拟实现了任务执行失败后所采取的措施。任务执行失败，典型的包括两种情况：网络分区（网络故障）及节点宕机，且事实上无法很好地区分这两种情形（在两种情形下，<code>master</code>都会发现不能成功<code>ping</code>通 <code>worker</code>）。而实验则是采用阻止<code>worker</code>与<code>master</code>的<code>rpc</code>连接来模拟实现。具体地，所有<code>worker</code>在执行若干个<code>rpc</code>连接请求后（一个<code>rpc</code>连接请相当于一次任务分配），关闭其<code>rpc</code>连接，如此<code>master</code>不能连接<code>worker</code>而导致任务分配执行失败。个人认为，一般情况下会让    <code>master</code>缓存<code>worker</code>的连接<code>handler</code>，并不会在每次发送<code>rpc</code>请求时，都需要执行<code>Dial/DialHttp</code>，若是如此，便不能以原实验的方式来模拟任务执行失败（虽然这可能并不影响）。另外 Lab1 显式禁止了<code>worker</code>同时被分配两个任务的情况，这是显而易见的。</p>
+<p>关于失败恢复（节点容错），下面讨论更多细节。容错是<code>MapReduce</code>的一个重要特性，因为节点失效在大数据处理工作中过于频繁，而且当发生节点宕机或者网络不可达时，整个<code>MapReduce job</code>会执行失败，此时<code>MapReduce</code>并不是重启整个<code>job</code>，那样会导致重新提交执行一个庞大的<code>job</code>而耗时（资源）过多，因此它只会重启对应<code>worker</code>所负责执行的<code>task</code>。值得注意的是，正是因为<code>worker</code>并不维护<code>task</code>相关信息，它们只是从磁盘读取输入文件或者将输出写到磁盘，也不存在与其它<code>worker</code>进行通信协调，因此<code>task</code>的执行是幂等的，两次执行会产生相同的执行结果，这也可以说是<code>MapReduce</code>并行执行任务的约束条件之一，也是<code>MapReduce</code>同其它的并行执行框架的不同之处，但无论如何，这样设计使得<code>MapReduce</code>执行任务更为简单。因为<code>Map task</code>会为<code>Reduce task</code>产生输入文件，因此若<code>Reduce task</code>已经从<code>Map task</code>获得了其所需要的所有输入，此时<code>Map</code>的失败，并不会导致其被重新执行。另外关键的是，<code>GFS</code>的<code>atomic rename</code>机制确保即使<code>Map/Reduce task</code>在已经溢写了部分内容到磁盘后失败了，此时重新执行也是安全的，因为<code>GFS</code>会保证直到所有输出写磁盘完成，才使得其输出文件可见，这种情况也会发生在两个<code>Reduce task</code>执行同一个任务，<code>GFS atomic rename</code>机制同样会保证其安全性。那么，若两个<code>Map</code>执行同一个<code>task</code>结果会如何？这种情况发生在，<code>master</code>错误地认为<code>Map task</code>宕机（可能只是发生了网络拥塞或者磁IO过慢，事实上，<code>MapReduce</code>的<code>stragger worker</code>正描述的是磁盘IO过慢的情况），此时即便两个<code>Map task</code>都执行成功（它们不会输出到相同的中间文件，因此不会有写冲突），<code>MapReduce</code>运行时也保证只告诉<code>Reduce task</code>从其中之一获取其输入。最后，注意<code>MapReduce</code>的失败恢复机制所针对的错误是<code>fail-stop</code>故障类型，即要么正常运行，要么宕机，不会产生不正确的输出。</p>
+<p>参考文献</p>
+<p>[1] Dean J, Ghemawat S. MapReduce: simplified data processing on large clusters[J]. Communications of the ACM, 2008, 51(1): 107-113.<br>[2].<a href="https://pdos.csail.mit.edu/6.824/index.html" target="_blank" rel="noopener">MIT 6.824</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E8%AE%A1%E7%AE%97%E6%A1%86%E6%9E%B6/" rel="tag"><i class="fa fa-tag"></i> 分布式计算框架</a>
+              <a href="/tags/MapReduce/" rel="tag"><i class="fa fa-tag"></i> MapReduce</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/11/16/%E8%A7%A3%E5%86%B3Hexo%E9%A6%96%E9%A1%B5%E9%98%85%E8%AF%BB%E6%AC%A1%E6%95%B0%E6%A0%B7%E5%BC%8F%E8%AF%A1%E5%BC%82%E7%9A%84%E9%97%AE%E9%A2%98/" rel="next" title="解决Hexo首页阅读次数样式诡异的问题">
+                  <i class="fa fa-chevron-left"></i> 解决Hexo首页阅读次数样式诡异的问题
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/11/17/2018-11-17-Http%E4%B9%8B%E6%B6%88%E6%81%AF%E5%A4%B4/" rel="prev" title="Http之消息头">
+                  Http之消息头 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Sequential-及-Distributed-运行模式"><span class="nav-number">1.</span> <span class="nav-text">Sequential 及 Distributed 运行模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Map-及-Reduce-工作流程"><span class="nav-number">2.</span> <span class="nav-text">Map 及 Reduce 工作流程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#再谈失败恢复"><span class="nav-number">3.</span> <span class="nav-text">再谈失败恢复</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

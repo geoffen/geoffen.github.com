@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="linux系统目录 &#x2F;boot 放置Linux内核以及其他用来启动树莓派的软件包 &#x2F;bin 放置与Raspbian有关(包括运行图形界面所需的)的二进制可执行文件 &#x2F;dev 这是虚拟文件夹之一，用来访问所有连接设备，包括存储卡 &#x2F;etc 系统管理和配置文件 &#x2F;home Linux上的我的文档，包含用户名命名的文件夹 &#x2F;lib 各种应用需要的代码库 &#x2F;lost+found 一般情况下是空的，当系统非">
+<meta name="keywords" content="Linux,学习笔记">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Linux学习笔记">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2017&#x2F;04&#x2F;16&#x2F;2017-04-16-Linux%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="linux系统目录 &#x2F;boot 放置Linux内核以及其他用来启动树莓派的软件包 &#x2F;bin 放置与Raspbian有关(包括运行图形界面所需的)的二进制可执行文件 &#x2F;dev 这是虚拟文件夹之一，用来访问所有连接设备，包括存储卡 &#x2F;etc 系统管理和配置文件 &#x2F;home Linux上的我的文档，包含用户名命名的文件夹 &#x2F;lib 各种应用需要的代码库 &#x2F;lost+found 一般情况下是空的，当系统非">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-31T07:23:37.421Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2017/04/16/2017-04-16-Linux%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Linux学习笔记 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2017/04/16/2017-04-16-Linux%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Linux学习笔记
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2017-04-16 12:22:22" itemprop="dateCreated datePublished" datetime="2017-04-16T12:22:22+08:00">2017-04-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-31 15:23:37" itemprop="dateModified" datetime="2019-10-31T15:23:37+08:00">2019-10-31</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/" itemprop="url" rel="index">
+                    <span itemprop="name">开发工具</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>4.3k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h3 id="linux系统目录"><a href="#linux系统目录" class="headerlink" title="linux系统目录"></a>linux系统目录</h3><ul>
+<li>/boot 放置Linux内核以及其他用来启动树莓派的软件包</li>
+<li>/bin 放置与Raspbian有关(包括运行图形界面所需的)的二进制可执行文件</li>
+<li>/dev 这是虚拟文件夹之一，用来访问所有连接设备，包括存储卡</li>
+<li>/etc 系统管理和配置文件</li>
+<li>/home Linux上的我的文档，包含用户名命名的文件夹</li>
+<li>/lib 各种应用需要的代码库</li>
+<li>/lost+found 一般情况下是空的，当系统非法关机后，这里就存放了一些文件</li>
+<li>/media 放置可移动存储驱动器，比如USB和CD</li>
+<li>/mnt 用来手动挂在外部硬件驱动器或存储设备</li>
+<li>/opt 可选软件文件夹，非系统部分的软件将会放置在这里</li>
+<li>/sbin 放置超级用户使用的系统管理命令</li>
+<li>/sys 放置操作系统文件</li>
+<li>/tmp 放置临时文件</li>
+<li>/usr 放置用户使用的程序</li>
+<li>/var 虚拟文件，用于程序保存数据</li>
+</ul>
+<a id="more"></a>
+
+<h3 id="更新源信息数据库"><a href="#更新源信息数据库" class="headerlink" title="更新源信息数据库"></a>更新源信息数据库</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get update</span><br></pre></td></tr></table></figure>
+<h3 id="更新已安装的包"><a href="#更新已安装的包" class="headerlink" title="更新已安装的包"></a>更新已安装的包</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get upgrade</span><br></pre></td></tr></table></figure>
+<h3 id="升级系统"><a href="#升级系统" class="headerlink" title="升级系统"></a>升级系统</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-get dist-upgrade</span><br></pre></td></tr></table></figure>
+
+<h3 id="开启root权限，su进入root"><a href="#开启root权限，su进入root" class="headerlink" title="开启root权限，su进入root"></a>开启root权限，su进入root</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">sudo passwd root</span><br><span class="line">sudo passwd --unlock root</span><br><span class="line">su</span><br></pre></td></tr></table></figure>
+
+<h3 id="显示系统日期时间"><a href="#显示系统日期时间" class="headerlink" title="显示系统日期时间"></a>显示系统日期时间</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">date</span><br></pre></td></tr></table></figure>
+
+<h3 id="从最后一行开始显示"><a href="#从最后一行开始显示" class="headerlink" title="从最后一行开始显示"></a>从最后一行开始显示</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tac /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="显示的时候，顺道输出行号"><a href="#显示的时候，顺道输出行号" class="headerlink" title="显示的时候，顺道输出行号"></a>显示的时候，顺道输出行号</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nl /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="一页一页的显示文件内容"><a href="#一页一页的显示文件内容" class="headerlink" title="一页一页的显示文件内容"></a>一页一页的显示文件内容</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">more /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="一页一页的显示文件内容-可以往前翻页"><a href="#一页一页的显示文件内容-可以往前翻页" class="headerlink" title="一页一页的显示文件内容(可以往前翻页)"></a>一页一页的显示文件内容(可以往前翻页)</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">less /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="只看头几行"><a href="#只看头几行" class="headerlink" title="只看头几行"></a>只看头几行</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">head -5 /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="只看尾巴几行"><a href="#只看尾巴几行" class="headerlink" title="只看尾巴几行"></a>只看尾巴几行</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tail -5 /proc/cgroups</span><br></pre></td></tr></table></figure>
+
+<h3 id="删除一个空的目录"><a href="#删除一个空的目录" class="headerlink" title="删除一个空的目录"></a>删除一个空的目录</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rmdir name</span><br></pre></td></tr></table></figure>
+
+<h3 id="编译c语言"><a href="#编译c语言" class="headerlink" title="编译c语言"></a>编译c语言</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">gcc test.c -o test</span><br><span class="line"><span class="meta">#</span><span class="bash"> arm 平台</span></span><br><span class="line">arm-linux-gcc test.c -o test</span><br><span class="line"><span class="meta">#</span><span class="bash"> 运行</span></span><br><span class="line">./test</span><br></pre></td></tr></table></figure>
+
+<h3 id="赋予超级可执行权限"><a href="#赋予超级可执行权限" class="headerlink" title="赋予超级可执行权限"></a>赋予超级可执行权限</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">chmod u+x test</span><br><span class="line">chmod 777 test</span><br></pre></td></tr></table></figure>
+
+<h3 id="关机"><a href="#关机" class="headerlink" title="关机"></a>关机</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 可以定时</span></span><br><span class="line">sudo shutdown -h now</span><br><span class="line">sudo halt</span><br><span class="line">sudo poweroff</span><br><span class="line">sudo init 0</span><br></pre></td></tr></table></figure>
+
+<h3 id="重启"><a href="#重启" class="headerlink" title="重启"></a>重启</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sudo reboot</span><br><span class="line">sudo init 6</span><br></pre></td></tr></table></figure>
+
+<h3 id="软件包管理软件"><a href="#软件包管理软件" class="headerlink" title="软件包管理软件"></a>软件包管理软件</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">apt --help</span><br><span class="line">dpkg --help</span><br><span class="line">yum --help</span><br></pre></td></tr></table></figure>
+
+<h3 id="Wget"><a href="#Wget" class="headerlink" title="Wget"></a>Wget</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">wget https://www.python.org/ftp/python/3.4.3/Python-3.4.3.tgz</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看系统信息"><a href="#查看系统信息" class="headerlink" title="查看系统信息"></a>查看系统信息</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 查看操作系统版本</span></span><br><span class="line">cat /proc/version</span><br><span class="line"><span class="meta">#</span><span class="bash"> 查看主板版</span></span><br><span class="line">cat /proc/cpuinfo</span><br><span class="line">cat /proc/...</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看硬盘剩余空间"><a href="#查看硬盘剩余空间" class="headerlink" title="查看硬盘剩余空间"></a>查看硬盘剩余空间</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">df -h</span><br></pre></td></tr></table></figure>
+
+<h3 id="搜索局域网中IP地址"><a href="#搜索局域网中IP地址" class="headerlink" title="搜索局域网中IP地址"></a>搜索局域网中IP地址</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">arp -a</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看挂载信息"><a href="#查看挂载信息" class="headerlink" title="查看挂载信息"></a>查看挂载信息</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo fdisk –l</span><br></pre></td></tr></table></figure>
+
+<h3 id="执行shell脚本"><a href="#执行shell脚本" class="headerlink" title="执行shell脚本"></a>执行shell脚本</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">./test.sh</span><br><span class="line">sh test.sh</span><br></pre></td></tr></table></figure>
+
+<h3 id="解压"><a href="#解压" class="headerlink" title="解压"></a>解压</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 解压一个zip格式压缩包</span></span><br><span class="line">unzip file1.zip </span><br><span class="line"><span class="meta">#</span><span class="bash"> 解压一个gzip格式的压缩包</span></span><br><span class="line">tar -xvfz archive.tar.gz</span><br></pre></td></tr></table></figure>
+
+<h3 id="压缩"><a href="#压缩" class="headerlink" title="压缩"></a>压缩</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 创建一个zip格式的压缩包</span></span><br><span class="line">zip file1.zip file1 </span><br><span class="line"><span class="meta">#</span><span class="bash"> 创建一个gzip格式的压缩包</span></span><br><span class="line">tar -cvfz archive.tar.gz dir1</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看USB设备"><a href="#查看USB设备" class="headerlink" title="查看USB设备"></a>查看USB设备</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">lsusb</span><br></pre></td></tr></table></figure>
+
+<h3 id="显示已载入系统的模块"><a href="#显示已载入系统的模块" class="headerlink" title="显示已载入系统的模块"></a>显示已载入系统的模块</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> lsmod 其实就是list modules的缩写</span></span><br><span class="line">lsmod</span><br></pre></td></tr></table></figure>
+
+<h3 id="设置启动服务"><a href="#设置启动服务" class="headerlink" title="设置启动服务"></a>设置启动服务</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo insserv /etc/init.d/mysript</span><br></pre></td></tr></table></figure>
+
+<h3 id="删除启动服务"><a href="#删除启动服务" class="headerlink" title="删除启动服务"></a>删除启动服务</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo insserv -r /etc/init.d/mysript</span><br></pre></td></tr></table></figure>
+
+<h3 id="修改主机名"><a href="#修改主机名" class="headerlink" title="修改主机名"></a>修改主机名</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo hostname newname</span><br></pre></td></tr></table></figure>
+
+<h3 id="增加用户"><a href="#增加用户" class="headerlink" title="增加用户"></a>增加用户</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo adduser username</span><br></pre></td></tr></table></figure>
+
+<h3 id="删除用户"><a href="#删除用户" class="headerlink" title="删除用户"></a>删除用户</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo deluser username</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看系统运行情况"><a href="#查看系统运行情况" class="headerlink" title="查看系统运行情况"></a>查看系统运行情况</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">top</span><br></pre></td></tr></table></figure>
+
+<h3 id="进程管理"><a href="#进程管理" class="headerlink" title="进程管理"></a>进程管理</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ps -aux</span><br><span class="line"><span class="meta">#</span><span class="bash"> 或者</span></span><br><span class="line">ps -ef | less</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>静态显示系统正在运行的进程</p>
+<ul>
+<li>ps -aux</li>
+<li><ul>
+<li>参数</li>
+</ul>
+</li>
+<li><ul>
+<li>-a：显示终端上的所有进程，包括造作系统动态执行的基本单元</li>
+</ul>
+</li>
+<li><ul>
+<li>-u：显示进程的详细状态</li>
+</ul>
+</li>
+<li><ul>
+<li>-x：显示没有控制的终端的进程</li>
+</ul>
+</li>
+<li><ul>
+<li>-w：显示加宽，以便显示等多信息</li>
+</ul>
+</li>
+<li><ul>
+<li>-r：只显示正在进行的进程<br>动态显示系统进程：top</li>
+</ul>
+</li>
+<li>top</li>
+<li><ul>
+<li>参数</li>
+</ul>
+</li>
+<li><ul>
+<li>M：根据内存使用量来排序</li>
+</ul>
+</li>
+<li><ul>
+<li>P：根据CPU占有率来排序</li>
+</ul>
+</li>
+<li><ul>
+<li>T：根据进程运行时间长短来排序</li>
+</ul>
+</li>
+<li><ul>
+<li>U：可以根据后面输入的用户名来筛选进程</li>
+</ul>
+</li>
+<li><ul>
+<li>K：可以根据后面输入的PID来杀死进程</li>
+</ul>
+</li>
+<li><ul>
+<li>q：退出</li>
+</ul>
+</li>
+<li><ul>
+<li>h：获取帮助</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>查看进程树：pstree [选项]  [PID或用户名]</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>查看后台任务列表： jobs -l</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>将后台任务恢复到前台运行： fg</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>激活后台被挂起的任务： bg</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>挂起当前进程：Ctrl+z 组合键</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>中断正在执行的命令程序：Ctrl+c组合键</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>杀死置顶PID的进程： kill 13613</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>显示同名的进程：pgrep -l vim</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>杀死多个同名进程： killall -9 vim</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>杀死符合条件的进程： pgrep -l -U google</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><ul>
+<li><ul>
+<li>强制提出用户： pkill -9 -U google</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<h3 id="查看内存分配情况"><a href="#查看内存分配情况" class="headerlink" title="查看内存分配情况"></a>查看内存分配情况</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">free -m (-k, -g)</span><br></pre></td></tr></table></figure>
+
+<h3 id="当前目录下的磁盘使用信息"><a href="#当前目录下的磁盘使用信息" class="headerlink" title="当前目录下的磁盘使用信息"></a>当前目录下的磁盘使用信息</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo du -sh</span><br></pre></td></tr></table></figure>
+
+<h3 id="对进程做出一定的操作"><a href="#对进程做出一定的操作" class="headerlink" title="对进程做出一定的操作"></a>对进程做出一定的操作</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kill -&lt;signal&gt; &lt;PID&gt;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>signal 1 (SIGHUP): hang-up的缩写，该信号通知应用程序重新启动</li>
+<li>signal 3 （SIGQUIT）：该信号通知应用程序清理自身资源并退出</li>
+<li>signal 6 （SIGABRT）：该信号通知应用程序终止并立即退出</li>
+<li>signal 9  （SIGKILL）：该信号立即终止应用程序</li>
+<li>PID ：应用程序的进程号，可以通过ps 查看</li>
+</ul>
+<h3 id="文件管理"><a href="#文件管理" class="headerlink" title="文件管理"></a>文件管理</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 显示当前的绝对路径</span></span><br><span class="line">pwd</span><br><span class="line"><span class="meta">#</span><span class="bash"> 切换路径</span></span><br><span class="line">cd </span><br><span class="line"><span class="meta">#</span><span class="bash"> 新建文件夹</span></span><br><span class="line">mkdir</span><br><span class="line"><span class="meta">#</span><span class="bash"> 新建文件</span></span><br><span class="line">touch</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>cd</p>
+<ul>
+<li>cd .. :切换到上级目录</li>
+<li>cd ~ :切换到/home/pi</li>
+<li>cd / :切换到更目录</li>
+<li><ul>
+<li>-L ：表示启动符号连接跟踪，默认情况下是不会启动的。</li>
+</ul>
+</li>
+<li><ul>
+<li>-maxdepth<number>: 该选项指定find命令最大的目录查看深度，如果为1的话表示当前目录文件和一级子目录文件。</number></li>
+</ul>
+</li>
+<li><ul>
+<li>-newer<file>:表示只查找指定文件的修改时间更新的文件</file></li>
+</ul>
+</li>
+<li><ul>
+<li>-empty：表示只查找空文件</li>
+</ul>
+</li>
+<li><ul>
+<li>-atime<number> ：表示只查找距离上次访问指定天数之后的文件</number></li>
+</ul>
+</li>
+<li><ul>
+<li>-name<filename>:表示搜索完全匹配指定文件名的文件</filename></li>
+</ul>
+</li>
+<li><ul>
+<li>-exec<command>:指示find命令为每个匹配的文件路径执行指定的命令。</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<h3 id="查找文件"><a href="#查找文件" class="headerlink" title="查找文件"></a>查找文件</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">find</span><br><span class="line"><span class="meta">#</span><span class="bash"> 该命令会搜索/mnt/volumer 中的所有名称匹配foobar的空文件，并执行rm命令将其删去</span></span><br><span class="line">find /mnt/volumer -empty -name foobar -exec rm</span><br><span class="line"><span class="meta">#</span><span class="bash"> 按文件名查找文件</span></span><br><span class="line">ind ./ -name test.py</span><br><span class="line"><span class="meta">#</span><span class="bash"> 按文件大小查找文件</span></span><br><span class="line">find ./ -size +2M</span><br></pre></td></tr></table></figure>
+
+<h3 id="通过读取filename文件"><a href="#通过读取filename文件" class="headerlink" title="通过读取filename文件"></a>通过读取filename文件</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">file &lt;filename&gt;</span><br></pre></td></tr></table></figure>
+
+<h3 id="grep"><a href="#grep" class="headerlink" title="grep"></a>grep</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">grep &lt;pattern&gt; &lt;file&gt;</span><br><span class="line"><span class="meta">#</span><span class="bash"> &gt; 定向符号(以把一个命令的输出结果重定向到一个文件)</span></span><br><span class="line">top &gt; Desktop/file_top.txt</span><br><span class="line"><span class="meta">#</span><span class="bash"> &gt;&gt; 重定向符号(在一个文件里追加内容)</span></span><br><span class="line">ls -alh &gt;&gt; Desktop/file_top.txt</span><br><span class="line"><span class="meta">#</span><span class="bash"> 筛选内容</span></span><br><span class="line">tail -f /linux.log | grep 'error'</span><br><span class="line"><span class="meta">#</span><span class="bash"> 搜索文件中的内容(头部：^ 结尾：$)</span></span><br><span class="line">grep -n 'abcd' test.py</span><br></pre></td></tr></table></figure>
+<h3 id="查看历史命令"><a href="#查看历史命令" class="headerlink" title="查看历史命令"></a>查看历史命令</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">history</span><br></pre></td></tr></table></figure>
+
+<h3 id="管道命令"><a href="#管道命令" class="headerlink" title="管道命令"></a>管道命令</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 管道命令允许你把一个命令的输出结果转移给另一个命令</span></span><br><span class="line">ls /home/pi | grep duer_linux.log</span><br></pre></td></tr></table></figure>
+
+<h3 id="声卡"><a href="#声卡" class="headerlink" title="声卡"></a>声卡</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 查看声卡</span></span><br><span class="line">arecord -l</span><br><span class="line"><span class="meta">#</span><span class="bash"> 录音</span></span><br><span class="line">arecord -Dhw:1,0 -c 2 -r 16000 -f S16_LE test.wav</span><br><span class="line">arecord -D "plughw:0,0" -f S16_LE -r 16000 -d 5 -t wav file.wav</span><br></pre></td></tr></table></figure>
+
+<h3 id="软链接"><a href="#软链接" class="headerlink" title="软链接"></a>软链接</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 创建文件的软链接（win中的快捷方式）</span></span><br><span class="line">ln -s test.py test_link.py</span><br><span class="line"><span class="meta">#</span><span class="bash"> 创建文件的硬链接(创建文件的不同文件名：内存中记录指向该数据的文件名的个数，为0时是彻底删除)</span></span><br><span class="line">ln test.py test_link.py</span><br></pre></td></tr></table></figure>
+
+<h3 id="合并两个文件"><a href="#合并两个文件" class="headerlink" title="合并两个文件"></a>合并两个文件</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cat test_1.py test_2.py &gt; test_3.py</span><br></pre></td></tr></table></figure>
+
+<h3 id="目录结构"><a href="#目录结构" class="headerlink" title="目录结构"></a>目录结构</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tree .</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>文件打包管理：tar</p>
+<ul>
+<li>-c ：生成压缩包文件，创建打包文件</li>
+<li>-v ：列出压缩解压的详细过程，显示进度</li>
+<li>-f ：指出压缩文件名称，f后面一定是.tar文件，所以必须放选项最后（必须在参数的最后）</li>
+<li>-t ：列出压缩中包含的文件</li>
+<li>-x ：解开压缩文件</li>
+<li>-C ：指定解压路径（大写字母C）</li>
+<li>-z ：表示是tar.gz格式</li>
+</ul>
+</blockquote>
+<h3 id="解压缩"><a href="#解压缩" class="headerlink" title="解压缩"></a>解压缩</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#</span><span class="bash"> 打包成tar文件（未压缩）</span></span><br><span class="line">tar -cvf testTar.tar ./*</span><br><span class="line"><span class="meta">#</span><span class="bash"> 解压tar文件</span></span><br><span class="line">tar -xvf testTar.tar</span><br><span class="line"><span class="meta">#</span><span class="bash"> 将已经打包的文件压缩成tar.gz文件：gzip</span></span><br><span class="line">gzip -r testTar.tar</span><br><span class="line"><span class="meta">#</span><span class="bash"> 将tar.gz压缩包文件解压成tar打包文件</span></span><br><span class="line">gzip -d testTar.tar.gz</span><br><span class="line"><span class="meta">#</span><span class="bash"> 直接压缩成tar.gz压缩包：</span></span><br><span class="line">tar -zcvf teatTar.tar.gz ./*</span><br><span class="line"><span class="meta">#</span><span class="bash"> 直接解压tar.gz压缩包</span></span><br><span class="line">tar -zxvf tearTar.tar.gz</span><br><span class="line"><span class="meta">#</span><span class="bash"> 解压到指定路径</span></span><br><span class="line">tar -zxvf testTar.tar.gz -C /home/pi/test</span><br><span class="line"><span class="meta">#</span><span class="bash"> 直接压缩成tar.bz2压缩包：</span></span><br><span class="line">tar -jcvf testTar.tar.bz2 ./*</span><br><span class="line"><span class="meta">#</span><span class="bash"> 直接解压tar.bz2压缩包</span></span><br><span class="line">tar -jxvf tesrTar.tar.bz2</span><br><span class="line"><span class="meta">#</span><span class="bash"> 压缩成zip</span></span><br><span class="line">zip -r testZip.zip ./*</span><br><span class="line"><span class="meta">#</span><span class="bash"> 解压zip</span></span><br><span class="line">unzip -d /home/pi/test testZip.zip</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看位置"><a href="#查看位置" class="headerlink" title="查看位置"></a>查看位置</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">which java</span><br><span class="line"><span class="meta">#</span><span class="bash"> 或者</span></span><br><span class="line">whereis java</span><br></pre></td></tr></table></figure>
+
+<h3 id="退出超级管理员"><a href="#退出超级管理员" class="headerlink" title="退出超级管理员"></a>退出超级管理员</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">exit</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看Linux系统操作位"><a href="#查看Linux系统操作位" class="headerlink" title="查看Linux系统操作位"></a>查看Linux系统操作位</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">getconf LONG_BIT</span><br><span class="line"><span class="meta">#</span><span class="bash"> 包括系统内核</span></span><br><span class="line">uname -a</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看端口占用"><a href="#查看端口占用" class="headerlink" title="查看端口占用"></a>查看端口占用</h3><p><code>id</code>是指端口号或进程ID  </p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">netstat -anp | grep id</span><br></pre></td></tr></table></figure>
+
+<h3 id="查看进程信息"><a href="#查看进程信息" class="headerlink" title="查看进程信息"></a>查看进程信息</h3><p><code>id/name</code>:值进程ID或进程名称  </p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ps aux | grep id/name</span><br></pre></td></tr></table></figure>
+
+<p>或者  </p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ll /proc/id</span><br></pre></td></tr></table></figure>
+
+<h3 id="远程复制本地-20190112"><a href="#远程复制本地-20190112" class="headerlink" title="远程复制本地^20190112"></a>远程复制本地<a href="20190112更新">^20190112</a></h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">scp -rp www.yibuwulianwang.com:/usr/local/java/jdk1.8.0_151/ ./</span><br></pre></td></tr></table></figure>
+
+<h3 id="本地复制到远程"><a href="#本地复制到远程" class="headerlink" title="本地复制到远程"></a>本地复制到远程</h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apt install sshpass</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sshpass -p "password" scp -rp ./target/ybwlw.war root@47.106.91.50:/usr/local/src/tomcat/tomcat-1/webapps/</span><br></pre></td></tr></table></figure>
+
+<h3 id="检查和控制内核的环形缓冲区-20190409"><a href="#检查和控制内核的环形缓冲区-20190409" class="headerlink" title="检查和控制内核的环形缓冲区^20190409"></a>检查和控制内核的环形缓冲区<a href="20190409更新">^20190409</a></h3><figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">dmesg | grep pid/name</span><br></pre></td></tr></table></figure>
+
+<h3 id="Linux命令大全"><a href="#Linux命令大全" class="headerlink" title="Linux命令大全"></a>Linux命令大全</h3><p><a href="http://man.linuxde.net/" target="_blank" rel="noopener">Linux命令大全</a>  </p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Linux/" rel="tag"><i class="fa fa-tag"></i> Linux</a>
+              <a href="/tags/%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="tag"><i class="fa fa-tag"></i> 学习笔记</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2017/05/16/2017-05-16-SpringMVC%E5%B8%B8%E7%94%A8%E6%B3%A8%E8%A7%A3/" rel="prev" title="SpringMVC常用注解">
+                  SpringMVC常用注解 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#linux系统目录"><span class="nav-number">1.</span> <span class="nav-text">linux系统目录</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#更新源信息数据库"><span class="nav-number">2.</span> <span class="nav-text">更新源信息数据库</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#更新已安装的包"><span class="nav-number">3.</span> <span class="nav-text">更新已安装的包</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#升级系统"><span class="nav-number">4.</span> <span class="nav-text">升级系统</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#开启root权限，su进入root"><span class="nav-number">5.</span> <span class="nav-text">开启root权限，su进入root</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#显示系统日期时间"><span class="nav-number">6.</span> <span class="nav-text">显示系统日期时间</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#从最后一行开始显示"><span class="nav-number">7.</span> <span class="nav-text">从最后一行开始显示</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#显示的时候，顺道输出行号"><span class="nav-number">8.</span> <span class="nav-text">显示的时候，顺道输出行号</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#一页一页的显示文件内容"><span class="nav-number">9.</span> <span class="nav-text">一页一页的显示文件内容</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#一页一页的显示文件内容-可以往前翻页"><span class="nav-number">10.</span> <span class="nav-text">一页一页的显示文件内容(可以往前翻页)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#只看头几行"><span class="nav-number">11.</span> <span class="nav-text">只看头几行</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#只看尾巴几行"><span class="nav-number">12.</span> <span class="nav-text">只看尾巴几行</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#删除一个空的目录"><span class="nav-number">13.</span> <span class="nav-text">删除一个空的目录</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#编译c语言"><span class="nav-number">14.</span> <span class="nav-text">编译c语言</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#赋予超级可执行权限"><span class="nav-number">15.</span> <span class="nav-text">赋予超级可执行权限</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#关机"><span class="nav-number">16.</span> <span class="nav-text">关机</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#重启"><span class="nav-number">17.</span> <span class="nav-text">重启</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#软件包管理软件"><span class="nav-number">18.</span> <span class="nav-text">软件包管理软件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Wget"><span class="nav-number">19.</span> <span class="nav-text">Wget</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看系统信息"><span class="nav-number">20.</span> <span class="nav-text">查看系统信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看硬盘剩余空间"><span class="nav-number">21.</span> <span class="nav-text">查看硬盘剩余空间</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#搜索局域网中IP地址"><span class="nav-number">22.</span> <span class="nav-text">搜索局域网中IP地址</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看挂载信息"><span class="nav-number">23.</span> <span class="nav-text">查看挂载信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#执行shell脚本"><span class="nav-number">24.</span> <span class="nav-text">执行shell脚本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#解压"><span class="nav-number">25.</span> <span class="nav-text">解压</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#压缩"><span class="nav-number">26.</span> <span class="nav-text">压缩</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看USB设备"><span class="nav-number">27.</span> <span class="nav-text">查看USB设备</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#显示已载入系统的模块"><span class="nav-number">28.</span> <span class="nav-text">显示已载入系统的模块</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#设置启动服务"><span class="nav-number">29.</span> <span class="nav-text">设置启动服务</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#删除启动服务"><span class="nav-number">30.</span> <span class="nav-text">删除启动服务</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#修改主机名"><span class="nav-number">31.</span> <span class="nav-text">修改主机名</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#增加用户"><span class="nav-number">32.</span> <span class="nav-text">增加用户</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#删除用户"><span class="nav-number">33.</span> <span class="nav-text">删除用户</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看系统运行情况"><span class="nav-number">34.</span> <span class="nav-text">查看系统运行情况</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#进程管理"><span class="nav-number">35.</span> <span class="nav-text">进程管理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看内存分配情况"><span class="nav-number">36.</span> <span class="nav-text">查看内存分配情况</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#当前目录下的磁盘使用信息"><span class="nav-number">37.</span> <span class="nav-text">当前目录下的磁盘使用信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#对进程做出一定的操作"><span class="nav-number">38.</span> <span class="nav-text">对进程做出一定的操作</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#文件管理"><span class="nav-number">39.</span> <span class="nav-text">文件管理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查找文件"><span class="nav-number">40.</span> <span class="nav-text">查找文件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#通过读取filename文件"><span class="nav-number">41.</span> <span class="nav-text">通过读取filename文件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#grep"><span class="nav-number">42.</span> <span class="nav-text">grep</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看历史命令"><span class="nav-number">43.</span> <span class="nav-text">查看历史命令</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#管道命令"><span class="nav-number">44.</span> <span class="nav-text">管道命令</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#声卡"><span class="nav-number">45.</span> <span class="nav-text">声卡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#软链接"><span class="nav-number">46.</span> <span class="nav-text">软链接</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#合并两个文件"><span class="nav-number">47.</span> <span class="nav-text">合并两个文件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#目录结构"><span class="nav-number">48.</span> <span class="nav-text">目录结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#解压缩"><span class="nav-number">49.</span> <span class="nav-text">解压缩</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看位置"><span class="nav-number">50.</span> <span class="nav-text">查看位置</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#退出超级管理员"><span class="nav-number">51.</span> <span class="nav-text">退出超级管理员</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看Linux系统操作位"><span class="nav-number">52.</span> <span class="nav-text">查看Linux系统操作位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看端口占用"><span class="nav-number">53.</span> <span class="nav-text">查看端口占用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#查看进程信息"><span class="nav-number">54.</span> <span class="nav-text">查看进程信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#远程复制本地-20190112"><span class="nav-number">55.</span> <span class="nav-text">远程复制本地^20190112</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#本地复制到远程"><span class="nav-number">56.</span> <span class="nav-text">本地复制到远程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#检查和控制内核的环形缓冲区-20190409"><span class="nav-number">57.</span> <span class="nav-text">检查和控制内核的环形缓冲区^20190409</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Linux命令大全"><span class="nav-number">58.</span> <span class="nav-text">Linux命令大全</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

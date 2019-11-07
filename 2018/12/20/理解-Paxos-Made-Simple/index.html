@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="Paxos 算法在分布式系统领域早已是如雷贯耳般的存在，基本成为了分布式一致性协议的代名词，想必对于任何一个从事分布式领域的人来说都充满敬畏——即感叹算法的精巧，也畏惧算法的晦涩。Leslie Lamport 早在 1980s 就写作了描述 Paxos最原始的论文 《The Part-Time Parliament》，但因其难以理解（与论述方式相关?）而没有得到过多的关注（相反，Lamport 本">
+<meta name="keywords" content="分布式系统,一致性算法">
+<meta property="og:type" content="article">
+<meta property="og:title" content="理解 Paxos Made Simple">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;12&#x2F;20&#x2F;%E7%90%86%E8%A7%A3-Paxos-Made-Simple&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="Paxos 算法在分布式系统领域早已是如雷贯耳般的存在，基本成为了分布式一致性协议的代名词，想必对于任何一个从事分布式领域的人来说都充满敬畏——即感叹算法的精巧，也畏惧算法的晦涩。Leslie Lamport 早在 1980s 就写作了描述 Paxos最原始的论文 《The Part-Time Parliament》，但因其难以理解（与论述方式相关?）而没有得到过多的关注（相反，Lamport 本">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.898Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/12/20/%E7%90%86%E8%A7%A3-Paxos-Made-Simple/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>理解 Paxos Made Simple | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/12/20/%E7%90%86%E8%A7%A3-Paxos-Made-Simple/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          理解 Paxos Made Simple
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-12-20 19:50:57" itemprop="dateCreated datePublished" datetime="2018-12-20T19:50:57+08:00">2018-12-20</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E4%B8%80%E8%87%B4%E6%80%A7%E7%AE%97%E6%B3%95/" itemprop="url" rel="index">
+                    <span itemprop="name">一致性算法</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>8.7k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>8 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>Paxos 算法在分布式系统领域早已是如雷贯耳般的存在，基本成为了分布式一致性协议的代名词，想必对于任何一个从事分布式领域的人来说都充满敬畏——即感叹算法的精巧，也畏惧算法的晦涩。Leslie Lamport 早在 1980s 就写作了描述 <code>Paxos</code>最原始的论文 《The Part-Time Parliament》，但因其难以理解（与论述方式相关?）而没有得到过多的关注（相反，Lamport 本人却坚持认为自己采用了一种更加形象恰当且容易理解的方式阐述，摈弃了传统学术论文的”死板“风格）。在 2001年，Lamport 对 <code>Paxos</code> 论文进行整理简化并发表了《Paxos Made Simple》，引起了广泛关注。论文的第一句话 The Paxos algorithm, when presented in plain English, is very simple 可以体会到 Leslie Lamport 似乎仍旧对众人对 <code>Paxos</code> 冠以难理解性的言行的”不屑“。</p>
+<a id="more"></a>
+
+<p>最近重新阅读了《Paxo Made Simple》论文，想从论文本身出发，阐述自己对论文的一些（浅显，且可能有误）的理解，因为还未了解<code>Paoxs</code>系列其它论文（如 Fast Paxos），因此个人的理解可能存在一定的局限性。同时，个人坚持认为，反复读原始论文是理解算法的最根本途径，最好结合开源实现进行理解（开源实现一般都会对算法进行工程上的优化与”妥协”）。当然读完原论文可能会有困惑，因此，也可以尝试参考别人的理解（从不同的角度思考问题，或许会有收获），但最终还是要回归论文。如果你对本文有兴趣，你需要先阅读论文。另外，你需要先了解其应用场景。本文先简述其应用场景，然后按照原论文推理的逻辑和步骤来逐步阐述自己对这些步骤的理解。</p>
+<h2 id="Paxos-应用场景"><a href="#Paxos-应用场景" class="headerlink" title="Paxos 应用场景"></a>Paxos 应用场景</h2><p><code>Paxos</code>用于解决分布式场景的一致性问题。换言之，<code>Paxos</code>是一个一致性（共识）算法。这个说法可能比较笼统宽泛，因为你可能在很多领域了解过一致性问题（虽然这些解释背后的含义可能也存在共性）。比如对于分布式存储，典型的<code>Nosql</code>数据库领域，所谓的一致性可能是要求客户端能够读取其最新写入的数据。换言之，最近写入的数据需要对所后续的客户端的读都可见，强调的是可见性。这可以用线性一致性(<code>Linearizability</code>)来描述；再者，在数据库领域，顺序一致性(<code>serializability</code>)是事务正确性的保证，即强调正确性；而复制状态机(<code>replicated state machine</code>)是很多一致性算法的典型应用场景（包括<code>Paxos</code>），其强调的是让一组互为备份的节点执行一系列相同的命令日志来保证存储在此节点集合中的数据的一致，以达到容错目的。另外，从一致性算法的强弱角度来考虑，一致性算法包括强一致性，弱一致性以及最终一致性。而<code>Paxos</code>则属于强一致性算法。另外，我们再简单了共识算法的正确性的保证：</p>
+<blockquote>
+<ol>
+<li><em>Agreement</em> - all N (or a majority) nodes decide on the same value</li>
+<li><em>Validity</em> - the value that is decided upon must have been proposed by some node in N</li>
+<li><em>Termination</em> - all nodes eventually decide</li>
+</ol>
+</blockquote>
+<p>这些都容易理解，比如，对于<code>Agreement</code>而言，若某个算法都不难最后表决出来的值是同一个，那就不能称之为共识算法，而<code>Validity</code>可能觉得是很显然的事情，可以从这样一个角度思考，如果所有节点始终回复相同的值，而不管实际提出的值是什么，那么<code>Agreement</code>能够得到保证，但却违反了<code>Validity</code>条件。最后的<code>Termination</code>保证了算法最终能够停止，即我们不仅希望你们能够做表决，也希望能够最终表决出一个结果，否则此表决过程没有意义。而<code>Paxos</code>论文提到的<code>safty requirement</code> 如下：</p>
+<blockquote>
+<ol>
+<li>Only a value that has been proposed may be chosen,</li>
+<li>Only a single value is chosen, and</li>
+<li>A process never learns that a value has been chosen unless it actually has been.</li>
+</ol>
+</blockquote>
+<p>明确提出了，只保证了前面两点(<code>Agreement</code>及<code>Validity</code>，只是换了一种说法，并颠倒1与2的顺序)，换言之，理论上而言，<code>Paxos</code>是存在活锁的问题，后面会详细阐述。当然<code>Paxos</code>算法只考虑节点存在<code>non-Byzantine</code>及<code>asynchronous</code>网络的条件下。</p>
+<p>那么<code>Paxos</code>如何应用于复制状态机呢？简单而言，<code>Paxos</code>试图通过对所有的（客户端发送的）命令日志（如<code>SET X=1</code>）进行全局编号，如果能够全局编号成功，那么互为备份的节点按照此全局编号顺序来执行对应的命令日志，即能够保证数据的一致性。在一个分布式系统中，若执行命令日志序列前，系统处于一致的状态，且节点都执行了相同的命令日志序列，那么最终整个系统也处于一个一致的状态。因此为了保证每个节点都能够以相同的顺序执行命令日志，所有节点必须对于每一条命令日志达成共识（比如，有两个节点尝试提交命令日志，节点<code>a</code>尝试让<code>v=i</code>，而节点<code>b</code>尝试让<code>v=j</code>，明显这会产生冲突，因此需要协调以达成共识，即最终<code>v</code>的值要么是<code>i</code>，那么所有节点都会认为<code>v=a</code>），即每个节点看到的指令顺序是一致的。显然，问题在于不同的节点可能接收到的日志的编号的顺序是不同的，因此不能按照单个节点的意愿进行命令日志的执行（否则会出现数据一致的情况），换言之，所有节点需要相互通信协调，每个节点都对全局编号的排序进行表决。每一次表决，只能对一条命令日志（数据）进行编号，这样才能保证确定的日志执行，这也正是<code>Paxos</code>所做的，即<code>Paxos</code>的核心在于确保每次表决只产生一条命令日志（一个<code>value</code>，这里的命令日志可以表示一个操作，也可以表示一个值）。当然某一次表决成功（达成一致）并不意味着此时所有节点的本地的<code>value</code>都相同，因为可能有节点宕机，即通常而言，只要保证大多数(<code>quorum</code>)个节点存储相同的<code>value</code>即可。</p>
+<h2 id="论文理解"><a href="#论文理解" class="headerlink" title="论文理解"></a>论文理解</h2><p>这里省略了协议的一些基本术语及概念。但还是再强调一下，协议对某个数据达成一致的真正含义提什么，其表示<code>proposer</code>、<code>acceptor</code>及<code>learner</code>都要认为同一个值被选定。详细而言，对于<code>acceptor</code>而言，只要其接受了某个<code>proposal</code>，则其就认定该<code>proposal</code>的<code>value</code>被选定了。而对于<code>proposer</code>而言，只要其<code>issue</code>的<code>proposal</code>被<code>quorum</code>个<code>acceptor</code>接受了，则其就认定该<code>proposal</code>对应的<code>value</code>就被选定了。最后对于<code>learner</code>而言，需要<code>acceptor</code>将最终决定的<code>value</code>发送给它，则其就认定该<code>value</code>被选定了。另外，<code>acceptor</code>是可能有多个的，因为单个<code>acceptor</code>很明显存在单点故障的问题。</p>
+<p>我们直接一步步来观察 Lamport 论文中的推导，以达到最终只有一个值被选中的目的（确定一个值），即<code>Only a single value is chosen</code>。这句话很重要，它暗示了不能存在这样的情形，某个时刻<code>v</code>被决定为了<code>i</code>，而在另一时刻<code>v</code>又被决定成了<code>j</code>。</p>
+<blockquote>
+<p>P1. An acceptor must accept the ﬁrst proposal that it receives.</p>
+</blockquote>
+<p>乍一看此条件，让人有点不知所措。论文前一句提到，在没有故障的情况，我们希望当只有一个<code>proposer</code>的时候，并且其只提出一个<code>value</code>时，能够有一个<code>value</code>被选中，然后就引出了<code>P1</code>。这是理所当然的，因为此<code>acceptor</code>之前没有收到任何的<code>value</code>，或许后面也不会收到了，那它选择此<code>value</code>就无可厚非。换言之，此时<code>acceptor</code>并没有一个合适的拒绝策略，只能先选择这个值。但很明显，这个条件远不能达到我们的目的（比如，多个<code>acceptor</code>可能会接受到不同的<code>proposer</code>提出的不同的<code>value</code>，直接导致不同的<code>value</code>被选定，因此不可能只决定一个值）。而且仔细想想，作者提出的这个条件确实比较奇怪，因为你不知道此条件与最终协议的充要条件有什么联系，而且，你可能会想，既然已经选择了第一个值，若后面又有第二个<code>proposal</code>来了应该如何处理（才能保证最终只选择一个值）。直观上我们可能会推断出，每个<code>acceptor</code>只接受一个<code>proposal</code>是行不通的，即它可能会接受多个<code>proposal</code>，那既然会接受多个<code>proposal</code>，这些<code>proposal</code>肯定是不同的（至少是不同时间点收到的），因此需要进行区分衡量，这也正是提案编号<code>proposal id</code>的作用。另外还暗示了一点，正常情况下，对于<code>proposer</code>而言，一个<code>proposal</code>不能由只被一个<code>acceptor</code>接受了就认定其<code>value</code>被选定，必须要由大多数的（即法定集合<code>quorum</code>）选定才能说这个值被选定了。</p>
+<p>直观上理解，虽然我们允许了一个<code>acceptor</code>可以<code>accept</code>多个<code>proposal</code>，但为了保证最终只能决定一个<code>value</code>，因此很容易想到的办法是保证<code>acceptor</code>接受的多个<code>proposal</code>的<code>value</code>相同。这便引出了<code>P2</code>：</p>
+<blockquote>
+<p>P2. If a proposal with value v is chosen, then every higher-numbered proposal that is chosen has value v.</p>
+</blockquote>
+<p>为了保证每次只选定一个值，<code>P2</code>规定了如果在一个<code>value</code>已经被选定的情况下，若还有的<code>proposer</code>提交<code>value</code>，那么之后（拥有更高编号<code>higher-numbered</code>）被<code>accept</code>的<code>value</code>应该与之前已经被<code>accept</code>的保持一致。这是一个比较强的约束条件。显然，如果能够保证<code>P2</code>，那么也能够够保证<code>Paxos</code>算法的正确性。</p>
+<p>但从另一方面考虑，对比<code>P1</code>与<code>P2</code>，感觉它们有很大的不同，它们阐述的不是同一个问题。<code>P1</code>讨论的是如何选择<code>proposal</code>的问题，而<code>P2</code>则直接跳到了选出来后的问题：一旦<code>value</code>被选定了，后面的被选出来的<code>value</code>应该保持不变。从论文中后面的推断不断增强可以分析出，<code>P2</code>其实包含了<code>P1</code>，两个条件并不是相互独立的，因为<code>P2</code>其实也是一个如何选的过程，只不过它表示了一般情况下应该如何选的问题，而<code>P1</code>是针对第一个<code>proposal</code>应该如何选的问题。换言之，<code>P1</code>是任何后续的推论都需要保证的，后续作出的任何推断都不能与<code>P1</code>矛盾。</p>
+<p>注意到，后续若有其它的<code>proposal</code>被选定，前提肯定是有<code>acceptor</code>接受了这个<code>proposal</code>。自然而然，可以转换<code>P2</code>的论述方式，于是就有了<code>P2a</code>：</p>
+<blockquote>
+<p>P2a . If a proposal with value v is chosen, then every higher-numbered proposal accepted by any acceptor has value v.</p>
+</blockquote>
+<p><code>P2a</code>其实是在对<code>acceptor</code>做限制。事实上，<code>P2</code>与<code>P2a</code>是一致的，只要满足了<code>P2a</code>就能满足<code>P2</code>。但前面提到过<code>P1</code>是后续推断所必须满足的，而仔细考量<code>P2a</code>，它似乎违反了<code>P1</code>这个约束底线。可以考虑这样一个场景：若有 2 个<code>proposer</code>和 5 个<code>acceptor</code>。首先由<code>proposer-1</code>提出了<code>[id1, v1]</code>的提案，恰好<code>acceptor1~3</code>都顺利接受了此提案，即<code>quorum</code>个节点选定了该值<code>v1</code>，于是对于<code>proposer-1</code>及<code>acceptor1~3</code>而言，它们都选定了<code>v1</code>。而<code>acceptor4</code>在<code>proposer-1</code>提出提案的时候，刚好宕机了（事实上，只要其先接受<code>proposer-2</code>的提案即可，且<code>proposer-2</code>的编号大于<code>proposer-1</code>的编号）而后有<code>proposer-2</code>提出了提案<code>[id2, v2]</code>且<code>id2&gt;id1 &amp; v1!=v2</code>。那么由<code>P1</code>知，<code>acceptor-4</code>在宕机恢复后，必须接受提案<code>[id2, v2]</code>，即选定<code>v2</code>。很明显这不符合<code>P2a</code>的条件。因此，我们只有对<code>P2a</code>进行加强，才能让它继续满足<code>P1</code>所设定的底线。</p>
+<p>我们自己可以先直观思考，为了保证<code>acceptor</code>后续通过的<code>proposal</code>的值与之前已经认定的值是相同的。如果直接依据之前的简单流程：<code>proposer</code>直接将其提案发送给<code>acceptor</code>，这可能会产生冲突。所以，我们可以尝试限制后续的<code>proposer</code>发送的提案的<code>value</code>，以保证<code>proposer</code>发送的提案的``value<code>与之前已经通过的提案的value</code>相同，于是引出了<code>P2b</code>：</p>
+<blockquote>
+<p>P2b. If a proposal with value v is chosen, then every higher-numbered proposal issued by any proposer has value v.</p>
+</blockquote>
+<p><code>P2b</code>的叙述同<code>P2a</code>类似，但它强调（约束）的是<code>proposer</code>的<code>issue</code>提案的过程。因为，<code>issue</code>是发生在<code>accept</code>之前，那么<code>accept</code>的<code>proposal</code>一定已经被<code>issue</code>过的。因此，<code>P2a</code>可以由<code>P2b</code>来保证，而且，<code>P2b</code>的限制似乎更强。另外，<code>P1</code>也同时得到满足。</p>
+<p>对于<code>P2b</code>这个条件，其实是难以实现。因为直观上，你不能限定各个<code>proposer</code>该<code>issue</code>什么样的<code>proposal</code>，不能<code>issue</code>什么样的<code>proposal</code>。那么又该如何保证<code>P2b</code>呢？我们同样可以先自己主观思考，为了让<code>proposer</code>之后<code>issue</code>的<code>proposal</code>的<code>value</code>与之前已经被通过的<code>proposal</code>的<code>value</code>的值保持一致，我们是不是可以尝试让<code>proposer</code>提前与<code>acceptor</code>进行沟通，以获取之前已经通过的<code>proposal</code>的<code>value</code>呢？具体如何沟通，无非是相互通信，接收消息或者主动询问，接收消息未免显得过于消极，而主动询问显然是更好的策略。如果的确存在这样的<code>value</code>，那为了保证一致，我就不再指定新的<code>value</code>了，与先前的<code>value</code>保持一致即可。而原论文给出了<code>P2c</code>:</p>
+<blockquote>
+<p>P2c. For any v and n, if a proposal with value v and number n is issued, then there is a set S consisting of a majority of acceptors such that either </p>
+<p>(a) no acceptor in S has accepted any proposal numbered less than n, or </p>
+<p>(b) v is the value of the highest-numbered proposal among all proposals numbered less than n accepted by the acceptors in S.</p>
+</blockquote>
+<p>作者认为，<code>P2c</code>里面包含了<code>P2b</code>。<code>P2c</code>中的<code>(a)</code>容易理解，因为如果从来没有<code>accept</code>过编号小于<code>n</code>的提案，那由<code>P1</code>自然而然就可以接受。而对于<code>(b)</code>可以用法定集合的性质简单证明，即两个法定集合(<code>quorum</code>)必定存在一个公共元素。我们可以采用反证法结合归纳法来简单证明。假定编号为<code>m</code>且值为<code>v</code>的提案已经被选定，那么，存在一个法定集合<code>C</code>，<code>C</code>中每一个<code>acceptor</code>都选定了<code>v</code>。然后有编号为<code>n</code>的<code>proposal</code>被提出 ：那么，</p>
+<p>① 当<code>n=m+1</code> 时，假设编号为<code>n</code>的提案的<code>value</code>不为<code>v</code>而为<code>w</code>。则根据<code>P2c</code>，存在一个法定集合<code>S</code>，要么<code>S</code>中的<code>acceptor</code>从来没有批准过小于<code>n</code>的提案；要么在批准的所有编号小于<code>n</code>的提案中，编号最大的提案的值为<code>w</code>。但因为<code>S</code>和<code>C</code>至少存在一个公共<code>acceptor</code>，明显两个条件都不满足。所以假设不成立。因此<code>n</code>的值为<code>v</code>。② 当编号<code>m</code>属于<code>m ... (n-1)</code>，同样假设编号为<code>n</code>的提案的<code>value</code>不为<code>v</code>，而为<code>w’</code> 。则存在一个法定集合<code>S’</code>，要么在<code>S’</code>中没有一个<code>acceptor</code>批准过编号小于<code>n</code>的提案；要么在<code>S’</code>中批准过的所有的编号小于<code>n</code>的提案中，编号最大的提案的值为<code>w’</code>。根据假设条件，编号属于<code>m...(n-1)</code>的提案的值都为<code>v</code>，并且<code>S’</code>和<code>C</code>至少有一个公共<code>acceptor</code>，所以由<code>S’</code>中的<code>acceptor</code>批准的小于<code>n</code>的提案中编号最大的那个提案也属于<code>m...(n-1)</code>。从而必然有<code>w’=v</code>。</p>
+<p>若要满足<code>P2c</code>，其实也从侧面反映出若要使得<code>proposer</code>提交一个正确的<code>value</code>，必须同时对<code>proposer</code>和<code>acceptor</code>作出限制。我们现在回顾一下先前的推断的递推关系：<code>P2c=&gt;P2b=&gt;P2a=&gt;P2</code>。因此，<code>P2c</code>最终确保了<code>P2</code>，即当一个<code>value</code>被选定之后，后续的编号更大的被选定的<code>proposal</code>都具有先前已经被选定的<code>value</code>。整个过程，先是对整个结果提出要求形成<code>P2</code>，然后转为对<code>acceptor</code>提出要求<code>P2a</code>，进行转为对<code>proposer</code>提出要求<code>P2b</code>，最后，同时对<code>acceptor</code>及<code>proposer</code>作出要求<code>P2c</code>。</p>
+<h2 id="Paxos-算法步骤"><a href="#Paxos-算法步骤" class="headerlink" title="Paxos 算法步骤"></a>Paxos 算法步骤</h2><p>最后，我们简单阐述一下<code>Paxos</code>算法的步骤。其大致可以分为两个阶段。</p>
+<ol>
+<li>阶段一，<code>prepare</code>阶段。<ul>
+<li><code>proposer</code>选择一个新的编号<code>n</code>发送给<code>quorum</code>个<code>acceptor</code>，并等待回应。</li>
+<li>如果<code>acceptor</code>收到一个针对编号为<code>n</code>的<code>prepare</code>请求，则若此<code>prepare</code>请求的编号<code>n</code>大于它之前已经回复过的<code>proposal</code>的所有编号的值，那么它会 (1) 承诺不再接受编号小于<code>n</code>的<code>proposal</code>。(b) 向<code>proposer</code>回复之前已经接受过的<code>proposal</code>中编号最大的<code>proposal</code>（如果有的话）。否则，不予回应。或者，回复一个<code>error</code>给<code>proposer</code>以让<code>proposer</code>终止此轮决议，并重新生成编号。</li>
+</ul>
+</li>
+<li>阶段二，<code>accept</code>阶段。<ul>
+<li>如果<code>proposer</code>收到了<code>quorum</code>个<code>acceptor</code>对其编号为<code>n</code>的<code>prepare</code>请求的回复，那么它就发送一个针对<code>[n, v]</code>的<code>proposal</code>给<code>quorum</code>个<code>acceptor</code>（此<code>quorum</code>与<code>prepare</code>阶段的<code>quorum</code>不必相同）。其中，<code>v</code>是收到的<code>prepare</code>请求的响应的<code>proposal</code>集合中具有最大编号的<code>proposal</code>的<code>value</code>。如果收到的响应集合中不包含任何<code>proposal</code>，则由此<code>proposer</code>自己决定<code>v</code>的值。</li>
+<li>如果<code>acceptor</code>收到一个针对编号为<code>n</code>的<code>accept</code>请求，则若其没有对编号大于<code>n</code>的<code>prepare</code>请求做出过响应，就接受该<code>proposal</code>。</li>
+</ul>
+</li>
+</ol>
+<h2 id="Paxos-算法活性"><a href="#Paxos-算法活性" class="headerlink" title="Paxos 算法活性"></a>Paxos 算法活性</h2><p>前面提到，理论上<code>Paxos</code>可能永远不会终止（即永远无法达成一致），即使是在没有故障发生的情况。考虑这样一个场景，<code>proposer-1</code>发起了<code>prepare</code>阶段并获得了大多数<code>acceptor</code>的支持，然后<code>proposer-2</code>立刻带着更高的编号来了，发起了<code>prepare</code>阶段，同样获得了大多数的<code>acceptor</code>的支持（因为<code>proposer-2</code>的编号更高，<code>acceptor</code>只能对<code>prepare</code>请求回复成功）。紧接着<code>proposer-a</code>进入了<code>accept</code>阶段，从<code>acceptor</code>的回复中得知大家又都接受了一个更高的编程，因此不得不选择更大的编号并重新发起一轮<code>prepare</code>阶段。同样，<code>proposer-2</code>也会面临<code>proposer-1</code>同样的问题。于是，它们轮流更新编号，始终无法通过。这也就是所谓的活锁问题。<code>FLP</code>定理早就证明过即使允许一个进程失败，在异步环境下任何一致性算法都存在永不终止的可能性。论文后面提出为了避免活锁的问题，可以引入了一个<code>proposer leader</code>，由此<code>leader</code>来提出<code>proposal</code>。但事实上，<code>leader</code>的选举本身也是一个共识问题。而在工程实现上，存在一些手段可以用来减少两个提案冲突的概率（在<code>raft</code>中采用了随机定时器超时的方式来减小选票瓜分的可能性）。</p>
+<p>最后，为了更好地理解<code>Paxos</code>算法时，补充（明确）以下几点。</p>
+<ul>
+<li><p><code>Paxos</code>算法的目的是确定一个值，一轮完整的<code>paxos</code>交互过程值用于确定一个值。且为了确定一个值，各节点需要协同互助，不能”各自为政”。且一旦接受提案，提案的<code>value</code>就被选定。</p>
+</li>
+<li><p><code>Paxos</code>算法的强调的是值<code>value</code>，而不是提案<code>proposal</code>，更加不是编号。提案和编号都是为了确定一个值所采用的辅助手段。显然，当一个值被确定时，<code>acceptor</code>接受的提案可能是多个，编号当然也就不同，但是这些提案所对应的值一定是一样的。</p>
+</li>
+<li><p><code>Paxos</code>流程保证最终对选定的值达到一致，这需要一个投票决议过程，需要一定时间。</p>
+</li>
+<li><p>上面描述的大多流程都是正常情况，但毫无疑问，<code>acceptor</code>收到的消息有可能错位，比如 (1) <code>acceptor</code>还没收到<code>prepare</code>请求就直接收到了<code>accept</code>请求，此时要直接写入日志。(2) <code>acceptor</code>还未返回对<code>prepare</code>请求的确认，就收到了<code>accept</code>请求，此时直接写入日志，并拒绝后续的<code>prepare</code>请求。</p>
+</li>
+<li><p>因为节点任何时候都可能宕机，因此必须保证节点具备可靠的存储。具体而言，(1) 对于<code>proposer</code>需要持久化已提交的最大<code>proposal</code>编号、决议编号(<code>instance id</code>)（表示一轮<code>Paxos</code>的选举过程）。(2) 对于<code>acceptor</code>需要持久化已经<code>promise</code>的最大编号、已<code>accept</code>的最大编号和<code>value</code>以及决议编号。</p>
+</li>
+</ul>
+<p>参考资料</p>
+<p>[1]. Lamport L. Paxos made simple[J]. ACM Sigact News, 2001, 32(4): 18-25.<br>[2]. <a href="https://blog.csdn.net/chen77716/article/details/6166675" target="_blank" rel="noopener">https://blog.csdn.net/chen77716/article/details/6166675</a><br>[3]. <a href="https://www.zhihu.com/question/19787937" target="_blank" rel="noopener">如何浅显易懂地解说 Paxos 的算法</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E7%AE%97%E6%B3%95/" rel="tag"><i class="fa fa-tag"></i> 一致性算法</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/12/16/2018-12-16-SpringBoot%E4%B9%8BStarter%E7%BB%84%E4%BB%B6%E6%A6%82%E8%A7%88/" rel="next" title="SpringBoot之Starter组件概览">
+                  <i class="fa fa-chevron-left"></i> SpringBoot之Starter组件概览
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/12/30/2018-12-30-MyBatis%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/" rel="prev" title="MyBatis注解概览">
+                  MyBatis注解概览 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Paxos-应用场景"><span class="nav-number">1.</span> <span class="nav-text">Paxos 应用场景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#论文理解"><span class="nav-number">2.</span> <span class="nav-text">论文理解</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Paxos-算法步骤"><span class="nav-number">3.</span> <span class="nav-text">Paxos 算法步骤</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Paxos-算法活性"><span class="nav-number">4.</span> <span class="nav-text">Paxos 算法活性</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

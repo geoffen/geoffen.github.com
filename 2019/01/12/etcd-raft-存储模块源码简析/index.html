@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章简单分析了etcd-raft WAL日志管理模块相关的源码。文章集中在WAL库提供的相关接口的阐述，而未将其与raft协议核心库关联起来，即尚未阐述raft协议核心库如何使用WAL日志库，并且上一篇文章虽然是以应用程序使用WAL库为切入点分析，但并没有阐述清楚WAL、Storage以及unstable三者的关联，鉴于三者提供日志存储的功能。本文的重点是分析etcd-raft 存储模块，它">
+<meta name="keywords" content="分布式系统,分布式协调服务">
+<meta property="og:type" content="article">
+<meta property="og:title" content="etcd-raft 存储模块源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;12&#x2F;etcd-raft-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9D%97%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章简单分析了etcd-raft WAL日志管理模块相关的源码。文章集中在WAL库提供的相关接口的阐述，而未将其与raft协议核心库关联起来，即尚未阐述raft协议核心库如何使用WAL日志库，并且上一篇文章虽然是以应用程序使用WAL库为切入点分析，但并没有阐述清楚WAL、Storage以及unstable三者的关联，鉴于三者提供日志存储的功能。本文的重点是分析etcd-raft 存储模块，它">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.797Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/12/etcd-raft-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9D%97%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>etcd-raft 存储模块源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/12/etcd-raft-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9D%97%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          etcd-raft 存储模块源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-12 12:27:54" itemprop="dateCreated datePublished" datetime="2019-01-12T12:27:54+08:00">2019-01-12</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>28k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>26 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章简单分析了<code>etcd-raft WAL</code>日志管理模块相关的源码。文章集中在<code>WAL</code>库提供的相关接口的阐述，而未将其与<code>raft</code>协议核心库关联起来，即尚未阐述<code>raft</code>协议核心库如何使用<code>WAL</code>日志库，并且上一篇文章虽然是以应用程序使用<code>WAL</code>库为切入点分析，但并没有阐述清楚<code>WAL</code>、<code>Storage</code>以及<code>unstable</code>三者的关联，鉴于三者提供日志存储的功能。本文的重点是分析<code>etcd-raft</code> 存储模块，它包括<code>Storage</code>及其实现<code>memoryStorage</code>（<code>etcd</code>为应用程序提供的一个<code>Storage</code>实现的范例）、<code>unstable</code>以及<code>raftLog</code>三个核心数据结构。另外，阐述<code>Storage</code>同应用程序的交互的细节以及<code>raft</code>协议库与<code>raftLog</code>的交互相关的逻辑，后者包括<code>raftLog</code>重要接口的实现，以及<code>raft</code>协议库的一个典型的简单的日志追加流程（即从<code>leader</code>追加日志，然后广播给<code>follower</code>节点，然后<code>follower</code>节点同样进行日志项的追加，最后<code>leader</code>节点处理<code>follower</code>节点的响应各个环节中日志追加的具体逻辑）。</p>
+<a id="more"></a>
+
+<p>（<strong>需要提醒的是，整篇文章较长，因此读者可以选择部分小节进行针对性参考，每个小节的最开始都有概括该小节的内容，各小节的分析是独立进行的</strong>。）同样我们先重点了解几个数据结构，主要包括<code>raftLog</code>、<code>unstable</code>以及<code>Storage &amp; MemoryStorage</code>，读者可以深入源码文件仔细查看相关字段及逻辑（主要涉及的目录<code>/etcd/raft/</code>，也有示例应用的部分代码<code>/etcd/contrib/raftexample</code>）。通过了解相关数据结构，就能大概推测出其相关功能。</p>
+<h2 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h2><h3 id="raftLog"><a href="#raftLog" class="headerlink" title="raftLog"></a>raftLog</h3><p><code>raftLog</code>为<code>raft</code>协议核心处理日志复制提供接口，<code>raft</code>协议库对日志的操作都基于<code>raftLog</code>实施。换言之，协议核心库不会直接同<code>Storage</code>及<code>WAL</code>直接交互。<code>raftLog</code>的数据结构如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> raftLog <span class="keyword">struct</span> &#123;</span><br><span class="line">	<span class="comment">// 包含从上一次快照以来的所有已被持久化的日志项集合</span></span><br><span class="line">	storage Storage</span><br><span class="line">	<span class="comment">// 包含所有未被持久化（一旦宕机便丢失）的日志项集合及快照</span></span><br><span class="line">	<span class="comment">// 它们会被持久化到 storage</span></span><br><span class="line">	unstable unstable</span><br><span class="line">	<span class="comment">// 已被持久化的最高的日志项的索引编号</span></span><br><span class="line">	committed <span class="keyword">uint64</span></span><br><span class="line">	<span class="comment">// 已经被应用程序应用到状态机的最高手日志项索引编号</span></span><br><span class="line">	<span class="comment">// 必须保证： applied &lt;= committed</span></span><br><span class="line">	applied <span class="keyword">uint64</span></span><br><span class="line">	logger Logger</span><br><span class="line">	<span class="comment">// 调用 nextEnts 时，返回的日志项集合的最大的大小</span></span><br><span class="line">	<span class="comment">// nextEnts 函数返回应用程序已经可以应用到状态机的日志项集合</span></span><br><span class="line">	maxNextEntsSize <span class="keyword">uint64</span></span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br></pre></td></tr></table></figure>
+
+<p>关于<code>storage</code>及<code>unstable</code>两个数据我们暂时不知道其具体作用，比如它们是如何被<code>raftLog</code>使用的，它们的区别是什么？我们先继续了解这两个数据结构的内容。</p>
+<h3 id="unstable"><a href="#unstable" class="headerlink" title="unstable"></a>unstable</h3><p><code>unstable</code>顾名思义，表示非持久化的存储。其数据结构如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// unstable.entries[i] 存储的日志的索引为 i+unstable.offset</span></span><br><span class="line"><span class="comment">// 另外，unstable.offset 可能会小于 storage.entries 中的最大的索引</span></span><br><span class="line"><span class="comment">// 此时，当继续向 storage 同步日志时，需要先截断其大于 unstable.offset 的部分</span></span><br><span class="line"><span class="keyword">type</span> unstable <span class="keyword">struct</span> &#123;</span><br><span class="line">	<span class="comment">// the incoming unstable snapshot, if any.</span></span><br><span class="line">	<span class="comment">// unstable 包含的快照数据</span></span><br><span class="line">	snapshot *pb.Snapshot</span><br><span class="line">	<span class="comment">// 所有未被写入 storage 的日志</span></span><br><span class="line">	entries []pb.Entry</span><br><span class="line">	<span class="comment">// entries 日志集合中起始的日志项编号</span></span><br><span class="line">	offset  <span class="keyword">uint64</span></span><br><span class="line"></span><br><span class="line">	logger Logger</span><br><span class="line">&#125; <span class="comment">// log_unstable.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="Storage-amp-MemoryStorage"><a href="#Storage-amp-MemoryStorage" class="headerlink" title="Storage &amp; MemoryStorage"></a>Storage &amp; MemoryStorage</h3><p><code>Storage</code>表示<code>etcd-raft</code>提供的持久化存储的接口。应用程序负责实现此接口，以将日志信息落盘。并且，若在操作过程此持久化存储时出现错误，则应用程序应该停止对相应的 raft 实例的操作，并需要执行清理或恢复的操作。其数据结构如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Storage 接口需由应用程序来实现，以从存储中以出日志信息</span></span><br><span class="line"><span class="comment">// 如果在操作过程中出现错误，则应用程序应该停止对相应的 raft 实例的操作，并需要执行清理或恢复的操作</span></span><br><span class="line"><span class="keyword">type</span> Storage <span class="keyword">interface</span> &#123;</span><br><span class="line">	<span class="comment">// 返回 HardState 及 ConfState 数据</span></span><br><span class="line">	InitialState() (pb.HardState, pb.ConfState, error)</span><br><span class="line">	<span class="comment">// 返回 [lo, hi) 范围的日志项集合</span></span><br><span class="line">	Entries(lo, hi, maxSize <span class="keyword">uint64</span>) ([]pb.Entry, error)</span><br><span class="line">	<span class="comment">// 返回指定日志项索引的 term</span></span><br><span class="line">	Term(i <span class="keyword">uint64</span>) (<span class="keyword">uint64</span>, error)</span><br><span class="line">	<span class="comment">// 返回日志项中最后一条日志的索引编号</span></span><br><span class="line">	LastIndex() (<span class="keyword">uint64</span>, error)</span><br><span class="line">	<span class="comment">// 返回日志项中最后第一条日志的索引编号，注意在其被创建时，日志项集合会被填充一项 dummy entry</span></span><br><span class="line">	FirstIndex() (<span class="keyword">uint64</span>, error)</span><br><span class="line">	<span class="comment">// 返回最近一次的快照数据，如果快照不可用，则返回出错</span></span><br><span class="line">	Snapshot() (pb.Snapshot, error)</span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// MemoryStorage 实现了 Storage 接口，注意 MemoryStorage 也是基于内存的</span></span><br><span class="line"><span class="keyword">type</span> MemoryStorage <span class="keyword">struct</span> &#123;</span><br><span class="line">	sync.Mutex</span><br><span class="line">	hardState pb.HardState</span><br><span class="line">	snapshot  pb.Snapshot</span><br><span class="line">	<span class="comment">// ents[i] 存储的日志项的编号为 i+snapshot.Metadata.Index，即要把快照考虑在内</span></span><br><span class="line">	ents []pb.Entry</span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="关键流程"><a href="#关键流程" class="headerlink" title="关键流程"></a>关键流程</h2><p>从上述数据结构中发现<code>raftLog</code>封装了<code>storage</code>及<code>unstable</code>。而且大概看一下<code>raftLog</code>中各个接口，发现主要不是同<code>unstable</code>进行交互（也有利用<code>storage</code>的数据）。所以，我们决定从两个方面来明晰主几个数据结构的作用。包括应用程序与<code>Storage</code>交互，以及<code>raft</code>协议核心同<code>raftLog(unstable/storage)</code>交互。希望通过从具体功能实现切入来摸索梳理相关逻辑，并结合数据结构，以达到由外至里尽可能把握其设计原理的效果。</p>
+<h3 id="应用程序与-Storage-交互"><a href="#应用程序与-Storage-交互" class="headerlink" title="应用程序与  Storage 交互"></a>应用程序与  Storage 交互</h3><p>为了让读者有更好的理解，本文仍旧从<code>raftexample</code>中的<code>startRaft()</code>开始追溯与上述三个数据结构相关的逻辑，以明晰它们三者的作用。我们从两个方面来阐述交互的大致逻辑，包括应用程序启动（此时<code>raft</code>实例也会被初始化）以及上层应用收到底层<code>raft</code>协议核心的通知(<code>Ready</code>)时所执行的相关操作。</p>
+<h4 id="应用初始化"><a href="#应用初始化" class="headerlink" title="应用初始化"></a>应用初始化</h4><p>首先来看第一个：在<code>startRaft()</code>函数中，我们先深入日志重放代码<code>rc.wal = rc.replayWAL()</code>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 重放 WAL 日志到 raft 实例</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">replayWAL</span><span class="params">()</span> *<span class="title">wal</span>.<span class="title">WAL</span></span> &#123;</span><br><span class="line">	log.Printf(<span class="string">"replaying WAL of member %d"</span>, rc.id)</span><br><span class="line">	<span class="comment">// 1. 从持久化存储中加载 快照数据</span></span><br><span class="line">	snapshot := rc.loadSnapshot()</span><br><span class="line">	<span class="comment">// 2. 从指定日志索引位置打开 WAL 日志，以准备读取日志</span></span><br><span class="line">	w := rc.openWAL(snapshot)</span><br><span class="line">	<span class="comment">// 3. 读取指定索引位置后的所有日志</span></span><br><span class="line">	_, st, ents, err := w.ReadAll()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">"raftexample: failed to read WAL (%v)"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 应用程序创建一个 MemoryStorage 实例</span></span><br><span class="line">	rc.raftStorage = raft.NewMemoryStorage()</span><br><span class="line">	<span class="comment">// 5. 若快照数据不为空，则将快照数据应用到 memoryStorage 中</span></span><br><span class="line">	<span class="keyword">if</span> snapshot != <span class="literal">nil</span> &#123;</span><br><span class="line">		rc.raftStorage.ApplySnapshot(*snapshot)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 6. 设置 HardState 到 memoryStorage 实例</span></span><br><span class="line">	rc.raftStorage.SetHardState(st)</span><br><span class="line">	<span class="comment">// append to storage so raft starts at the right place in log</span></span><br><span class="line">	<span class="comment">// 7. 将日志项追加到 memoryStorage 实例，注意，此日志项不包含已经快照的日志项</span></span><br><span class="line">	rc.raftStorage.Append(ents)</span><br><span class="line">	<span class="comment">// send nil once lastIndex is published so client knows commit channel is current</span></span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(ents) &gt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="comment">// 8. 如果在快照后，仍存在日志项记录，则设置 lastIndex</span></span><br><span class="line">		rc.lastIndex = ents[<span class="built_in">len</span>(ents)<span class="number">-1</span>].Index</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="comment">// 9. 通知 kvstore，日志重放已经完毕</span></span><br><span class="line">		rc.commitC &lt;- <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> w</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>我们重点关注与<code>memoryStorage</code>相关的逻辑。步骤 4 创建了一个<code>memoryStorage</code>实例，创建逻辑也比较简单：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NewMemoryStorage creates an empty MemoryStorage.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewMemoryStorage</span><span class="params">()</span> *<span class="title">MemoryStorage</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> &amp;MemoryStorage&#123;</span><br><span class="line">		<span class="comment">// When starting from scratch populate the list with a dummy entry at term zero.</span></span><br><span class="line">		ents: <span class="built_in">make</span>([]pb.Entry, <span class="number">1</span>),</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br></pre></td></tr></table></figure>
+
+<p>而步骤 5 将快照数据应用到了<code>memoryStorage</code>实例，其逻辑也较为简单：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ApplySnapshot overwrites the contents of this Storage object with</span></span><br><span class="line"><span class="comment">// those of the given snapshot.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ms *MemoryStorage)</span> <span class="title">ApplySnapshot</span><span class="params">(snap pb.Snapshot)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	ms.Lock()</span><br><span class="line">	<span class="keyword">defer</span> ms.Unlock()</span><br><span class="line"></span><br><span class="line">	<span class="comment">//handle check for old snapshot being applied</span></span><br><span class="line">	msIndex := ms.snapshot.Metadata.Index</span><br><span class="line">	snapIndex := snap.Metadata.Index</span><br><span class="line">	<span class="keyword">if</span> msIndex &gt;= snapIndex &#123;</span><br><span class="line">		<span class="keyword">return</span> ErrSnapOutOfDate</span><br><span class="line">	&#125;</span><br><span class="line">	ms.snapshot = snap</span><br><span class="line">	ms.ents = []pb.Entry&#123;&#123;Term: snap.Metadata.Term, Index: snap.Metadata.Index&#125;&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br></pre></td></tr></table></figure>
+
+<p>从代码可以看出，其只是将快照直接进行替换，并将快照的当前索引及任期存入日志项集合。而步骤 6 较为简单，在此略过。简单了解一下步骤 7，它往<code>memoryStorage</code>的日志项集合中追加日志项集合，其代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 新追加的日志项必须是连续的，且 entries[0].Index &gt; ms.entries[0].Index</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ms *MemoryStorage)</span> <span class="title">Append</span><span class="params">(entries []pb.Entry)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(entries) == <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	ms.Lock()</span><br><span class="line">	<span class="keyword">defer</span> ms.Unlock()</span><br><span class="line">	first := ms.firstIndex()</span><br><span class="line">	last := entries[<span class="number">0</span>].Index + <span class="keyword">uint64</span>(<span class="built_in">len</span>(entries)) - <span class="number">1</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// shortcut if there is no new entry.</span></span><br><span class="line">	<span class="keyword">if</span> last &lt; first &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// truncate compacted entries</span></span><br><span class="line">	<span class="comment">// 若已有的 ms.ents 被 compact 了，则新追加的日志项集有可能为被 compact 掉中的一部分</span></span><br><span class="line">	<span class="comment">// 因此，需要将那一部进行移除，以免重复追加</span></span><br><span class="line">	<span class="keyword">if</span> first &gt; entries[<span class="number">0</span>].Index &#123;</span><br><span class="line">		entries = entries[first-entries[<span class="number">0</span>].Index:]</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 判断新追加日志与已有日志是否有重叠，若是，则需要覆盖已有日志，否则直接追加到已有日志后面</span></span><br><span class="line">	offset := entries[<span class="number">0</span>].Index - ms.ents[<span class="number">0</span>].Index</span><br><span class="line">	<span class="keyword">switch</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="keyword">uint64</span>(<span class="built_in">len</span>(ms.ents)) &gt; offset:</span><br><span class="line">		ms.ents = <span class="built_in">append</span>([]pb.Entry&#123;&#125;, ms.ents[:offset]...)</span><br><span class="line">		ms.ents = <span class="built_in">append</span>(ms.ents, entries...)</span><br><span class="line">	<span class="keyword">case</span> <span class="keyword">uint64</span>(<span class="built_in">len</span>(ms.ents)) == offset:</span><br><span class="line">		ms.ents = <span class="built_in">append</span>(ms.ents, entries...)</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		raftLogger.Panicf(<span class="string">"missing log entry [last: %d, append at: %d]"</span>,</span><br><span class="line">			ms.lastIndex(), entries[<span class="number">0</span>].Index)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br></pre></td></tr></table></figure>
+
+<p>日志追加流程基本符合逻辑，但需要注意如果已有日志项集合被<code>compact</code>，且追加的日志与已有日志重叠的情况。关于日志项被<code>compact</code>的相关逻辑，后面会叙述。现在作一个小结，上述逻辑发生在应用启动初始化时机，换言之，这包括两种情况，其一是整个集群刚启动，应用程序所在的节点没有任何持久化的快照记录；其二是此节点宕机，并且错过了部分日志的追加与快照操作，因此，应用程序需要恢复此节点对应的<code>raft</code>实例的<code>memoryStorge</code>信息以及增加快照数据（节点新加入时，也大致符合这种情况）。换言之，在有节点落后、刚重启、新加入的情况下，给这些节点的数据多数来自已落盘部分（持久化的快照及<code>WAL</code>日志）。</p>
+<h4 id="处理-raft-协议库-Ready-消息"><a href="#处理-raft-协议库-Ready-消息" class="headerlink" title="处理 raft 协议库 Ready 消息"></a>处理 raft 协议库 Ready 消息</h4><p>接下来，继续了解第二处交互逻辑：在<code>serverChannels()</code>函数中，应用等待接收底层<code>raft</code>协议库的通知：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 应用程序状态机更新的事件循环，即循环等待底层协议库的 Ready 通知</span></span><br><span class="line"><span class="keyword">for</span> &#123;</span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">		rc.node.Tick()</span><br><span class="line"></span><br><span class="line">	<span class="comment">// store raft entries to wal, then publish over commit channel</span></span><br><span class="line">	<span class="comment">// 1. 收到底层协议库的 Ready 通知，关于 Ready 结构已经在介绍 raftexample 文章中简要介绍</span></span><br><span class="line">	<span class="keyword">case</span> rd := &lt;-rc.node.Ready():</span><br><span class="line">		<span class="comment">// 2. 先将 Ready 中需要被持久化的数据保存到 WAL 日志文件（在消息转发前）</span></span><br><span class="line">		rc.wal.Save(rd.HardState, rd.Entries)</span><br><span class="line">		<span class="comment">// 3. 如果 Ready 中的需要被持久化的快照不为空</span></span><br><span class="line">		<span class="keyword">if</span> !raft.IsEmptySnap(rd.Snapshot) &#123;</span><br><span class="line">               <span class="comment">// 3.1 保存快照到 WAL 日志（快照索引/元数据信息）以及到 snap (后面文章会介绍)中</span></span><br><span class="line">			rc.saveSnap(rd.Snapshot)</span><br><span class="line">			<span class="comment">// 3.2 将快照应用到 memoryStorage 实例</span></span><br><span class="line">			rc.raftStorage.ApplySnapshot(rd.Snapshot)</span><br><span class="line">			<span class="comment">// 3.3 更新应用程序保存的快照信息</span></span><br><span class="line">			rc.publishSnapshot(rd.Snapshot)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 4. 追加 Ready 结构中需要被持久化的信息（在消息转发前）</span></span><br><span class="line">		rc.raftStorage.Append(rd.Entries)</span><br><span class="line">		<span class="comment">// 5. 转发 Ready 结构中的消息</span></span><br><span class="line">		rc.transport.Send(rd.Messages)</span><br><span class="line">		<span class="comment">// 6. 将日志应用到状态机（如果存在已经提交，即准备应用的日志项）</span></span><br><span class="line">		<span class="keyword">if</span> ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok &#123;</span><br><span class="line">			rc.stop()</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 7. 触发快照操作（如果满足条件）</span></span><br><span class="line">		rc.maybeTriggerSnapshot()</span><br><span class="line">		<span class="comment">// 8. 通知底层 raft 协议库实例 node，即告知当前 Ready 已经处理完毕，可以准备下一个</span></span><br><span class="line">		rc.node.Advance()</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>同样，重点关注与<code>memoryStorage</code>相关的逻辑（其余的逻辑在【<a href="https://qqzeng.top/2019/01/09/etcd-raftexample-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" target="_blank" rel="noopener">etcd raftexample 源码简析</a>】中已阐述）。在步骤 3 中，当<code>Ready</code>结构中的快照不为空时，需要保存快照至一系列地方。其中步骤 3.1 的调用代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">saveSnap</span><span class="params">(snap raftpb.Snapshot)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// must save the snapshot index to the WAL before saving the</span></span><br><span class="line">	<span class="comment">// snapshot to maintain the invariant that we only Open the</span></span><br><span class="line">	<span class="comment">// wal at previously-saved snapshot indexes.</span></span><br><span class="line">	walSnap := walpb.Snapshot&#123; <span class="comment">// 1. 构建快照索引（在【WAL 日志管理源码解析】文章有阐述）信息</span></span><br><span class="line">		Index: snap.Metadata.Index,</span><br><span class="line">		Term:  snap.Metadata.Term,</span><br><span class="line">	&#125;</span><br><span class="line">    <span class="comment">// 2. 保存快照索引信息到 WAL 日志</span></span><br><span class="line">	<span class="keyword">if</span> err := rc.wal.SaveSnapshot(walSnap); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125; <span class="comment">// 3. 保存快照完整数据到 snap（后面文章阐述）</span></span><br><span class="line">	<span class="keyword">if</span> err := rc.snapshotter.SaveSnap(snap); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125; <span class="comment">// 4. 更新 WAL 日志文件锁范围</span></span><br><span class="line">	<span class="keyword">return</span> rc.wal.ReleaseLockTo(snap.Metadata.Index)</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>而步骤  3.2 在上文已阐述过，即将快照替换到<code>memoryStorage</code>关联的快照实例。而最后 3.3 的相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 更新应用程序保存的快照位置信息，并且通知上层应用(kvstore)可以重新加载快照</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">publishSnapshot</span><span class="params">(snapshotToSave raftpb.Snapshot)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> raft.IsEmptySnap(snapshotToSave) &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	log.Printf(<span class="string">"publishing snapshot at index %d"</span>, rc.snapshotIndex)</span><br><span class="line">	<span class="keyword">defer</span> log.Printf(<span class="string">"finished publishing snapshot at index %d"</span>, rc.snapshotIndex)</span><br><span class="line">	<span class="comment">// 1. 检验快照数据</span></span><br><span class="line">	<span class="keyword">if</span> snapshotToSave.Metadata.Index &lt;= rc.appliedIndex &#123;</span><br><span class="line">		log.Fatalf(<span class="string">"snapshot index [%d] should &gt; progress.appliedIndex [%d]"</span>, snapshotToSave.Metadata.Index, rc.appliedIndex)</span><br><span class="line">	&#125; <span class="comment">// 2. 通知上层应用(kvstore)可以重新加载快照</span></span><br><span class="line">	rc.commitC &lt;- <span class="literal">nil</span> <span class="comment">// trigger kvstore to load snapshot</span></span><br><span class="line">	<span class="comment">// 3. 更新应用程序(raftNode)保存的快照位置信息，以及当前已应用到状态机的日志的索引信息</span></span><br><span class="line">	rc.confState = snapshotToSave.Metadata.ConfState</span><br><span class="line">	rc.snapshotIndex = snapshotToSave.Metadata.Index</span><br><span class="line">	rc.appliedIndex = snapshotToSave.Metadata.Index</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>小结步骤 3 逻辑（包括 3.1-3.3）：若底层协议传来的<code>Ready</code>结构中包含的快照不为空，则首先将快照保存到<code>WAL</code>日志（索引信息），并保存完整快照信息到<code>snap</code>，然后将快照替换掉内存(<code>memoryStorage</code>)关联的快照实例，最后更新应用保存的快照位置信息及当前已应用日志位置信息，并触发应用（状态机）重新加载快照。</p>
+<p>同样，步骤 4 已在上文阐述过。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 针对 memoryStorage 触发快照操作（如果满足条件）</span></span><br><span class="line"><span class="comment">//（注意这是对 memoryStorage 中保存的日志信息作快照）</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">maybeTriggerSnapshot</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> rc.appliedIndex-rc.snapshotIndex &lt;= rc.snapCount &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	log.Printf(<span class="string">"start snapshot [applied index: %d | last snapshot index: %d]"</span>, rc.appliedIndex, rc.snapshotIndex)</span><br><span class="line">	<span class="comment">// 1. 加载状态机中当前的信息（此方法由应用程序提供，在 kvstore 中）</span></span><br><span class="line">	data, err := rc.getSnapshot()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Panic(err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 利用上述快照数据、以及 appliedIndex 等为 memoryStorage 实例创建快照（它会覆盖/更新 memoryStorage 已有的快照信息）</span></span><br><span class="line">	snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &amp;rc.confState, data)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 保存快照到 WAL 日志（快照的索引/元数据信息）以及到 snap（后面文章会介绍）中</span></span><br><span class="line">	<span class="keyword">if</span> err := rc.saveSnap(snap); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 若满足日志被 compact 的条件（防止内存中日志项过多），则对内存中日志项集合作 compact 操作</span></span><br><span class="line">	<span class="comment">// compact 操作会丢弃 memoryStorage 日志项中 compactIndex 之前的日志</span></span><br><span class="line">	compactIndex := <span class="keyword">uint64</span>(<span class="number">1</span>)</span><br><span class="line">	<span class="keyword">if</span> rc.appliedIndex &gt; snapshotCatchUpEntriesN &#123;</span><br><span class="line">		compactIndex = rc.appliedIndex - snapshotCatchUpEntriesN</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> err := rc.raftStorage.Compact(compactIndex); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line">	log.Printf(<span class="string">"compacted log at index %d"</span>, compactIndex)</span><br><span class="line">	<span class="comment">// 5. 更新应用程序的快照位置信息</span></span><br><span class="line">	rc.snapshotIndex = rc.appliedIndex</span><br><span class="line">&#125; <span class="comment">// raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>上述代码逻辑比较简单，简单而言，它会从状态机中加载快照，然后覆盖<code>raft</code>实例关联的<code>memoryStorage</code>中的快照实例，而且，还会保存快照信息（上文已阐述），最后检查<code>memoryStorage</code>是否可以执行<code>compact</code>操作。其中<code>memoryStorage</code>的<code>compact</code>操作的逻辑也比较简单，即丢弃<code>compactIndex</code>之前的日志（注意：并不是丢弃 <code>appliedIndex</code>之前的日志，也不是丢弃<code>snapshotIndex</code>之前的日志）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// compact 操作会丢弃 compactIndex 之前的日志，</span></span><br><span class="line"><span class="comment">// 应用程序应该检查 compactIndex 应该在 appliedIndex 之前，因为，只允许 compact 掉已经 apply</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ms *MemoryStorage)</span> <span class="title">Compact</span><span class="params">(compactIndex <span class="keyword">uint64</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	ms.Lock()</span><br><span class="line">	<span class="keyword">defer</span> ms.Unlock()</span><br><span class="line">	offset := ms.ents[<span class="number">0</span>].Index</span><br><span class="line">	<span class="keyword">if</span> compactIndex &lt;= offset &#123;</span><br><span class="line">		<span class="keyword">return</span> ErrCompacted</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> compactIndex &gt; ms.lastIndex() &#123;</span><br><span class="line">		raftLogger.Panicf(<span class="string">"compact %d is out of bound lastindex(%d)"</span>, compactIndex, ms.lastIndex())</span><br><span class="line">	&#125;</span><br><span class="line">	i := compactIndex - offset</span><br><span class="line">	ents := <span class="built_in">make</span>([]pb.Entry, <span class="number">1</span>, <span class="number">1</span>+<span class="keyword">uint64</span>(<span class="built_in">len</span>(ms.ents))-i)</span><br><span class="line">	ents[<span class="number">0</span>].Index = ms.ents[i].Index</span><br><span class="line">	ents[<span class="number">0</span>].Term = ms.ents[i].Term</span><br><span class="line">	ents = <span class="built_in">append</span>(ents, ms.ents[i+<span class="number">1</span>:]...)</span><br><span class="line">	ms.ents = ents</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// storage.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于应用程序与<code>memoryStorage/Storage</code>的简单交互过程已经阐述完毕。作个简单小结：通过上述的分析，我们仔细关联各个流程，可以发现<code>WAL</code>中的日志项是已落盘的，而<code>Storage</code>则是<code>etcd-raft</code>提供的被应用程序访问已落盘数据的接口，<code>memoryStorage</code>实现了这个接口(<code>Storage</code>)（而且，从它的各个操作逻辑来看，它只是简单地将<code>WAL</code>已落盘的数据进行了拷贝，当然还有一个<code>compact</code>过程，如果满足条件的话），个人感觉似乎有一点多余（从网上查找资料发现，一般而言，<code>Storage</code>的实现应该是<code>WAL</code>与<code>cache</code>算法的组合，那显然，在这里的<code>memoryStorage</code>并没有实现某种<code>cache</code>算法）。另外值得注意的是，在<code>etcd-raft</code>的实现中，协议核心并不与<code>memoryStorage</code>直接交互，都是应用程序与<code>memoryStorage</code>交互。</p>
+<h3 id="raft-协议库与-raftLog-交互"><a href="#raft-协议库与-raftLog-交互" class="headerlink" title="raft 协议库与  raftLog  交互"></a>raft 协议库与  raftLog  交互</h3><p>这部分内容包括两个部分：其一是先继续了解<code>raftLog</code>内部一些重要接口的实现，以更进一步理解直接与<code>raft</code>协议库交互的<code>raftLog</code>的实现原理。其二挑选一个简单的<code>raft</code>协议库的逻辑——日志追加操作以查看协议库使用<code>raftLog</code>的细节。</p>
+<h4 id="raftLog-接口实现逻辑"><a href="#raftLog-接口实现逻辑" class="headerlink" title="raftLog 接口实现逻辑"></a>raftLog 接口实现逻辑</h4><p>首先了解<code>raftLog</code>相关接口的实现细则。在上文已经初步了解过<code>raftLog</code>的数据结构。其构造函数如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newLog</span><span class="params">(storage Storage, logger Logger)</span> *<span class="title">raftLog</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> newLogWithSize(storage, logger, noLimit)</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// newLogWithSize returns a log using the given storage and max</span></span><br><span class="line"><span class="comment">// message size.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newLogWithSize</span><span class="params">(storage Storage, logger Logger, maxNextEntsSize <span class="keyword">uint64</span>)</span> *<span class="title">raftLog</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> storage == <span class="literal">nil</span> &#123; <span class="comment">// storage 不能为空！</span></span><br><span class="line">		log.Panic(<span class="string">"storage must not be nil"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 利用应用传入的 storage 及 logger 以及 maxNextEntsSize（如果有的话）构建 raftLog 实例</span></span><br><span class="line">	log := &amp;raftLog&#123;</span><br><span class="line">		storage:         storage,</span><br><span class="line">		logger:          logger,</span><br><span class="line">		maxNextEntsSize: maxNextEntsSize,</span><br><span class="line">	&#125;</span><br><span class="line">	firstIndex, err := storage.FirstIndex()</span><br><span class="line">	lastIndex, err := storage.LastIndex()</span><br><span class="line">	<span class="comment">// 将 unstable 的 offset 初始化为 storage 的 lastIndex+1</span></span><br><span class="line">	log.unstable.offset = lastIndex + <span class="number">1</span></span><br><span class="line">	log.unstable.logger = logger</span><br><span class="line">	<span class="comment">// Initialize our committed and applied pointers to the time of the last compaction.</span></span><br><span class="line">	<span class="comment">// 将 raftLog 的 commited 及 applied 初始化为 firstIndex-1，即 storage 中第一项日志的索引号，</span></span><br><span class="line">	<span class="comment">// 因为第一项日志为已经被提交的（也是已经被快照的），可以仔细察看 storage 的 ApplySnapshot 逻辑</span></span><br><span class="line">	log.committed = firstIndex - <span class="number">1</span></span><br><span class="line">	log.applied = firstIndex - <span class="number">1</span></span><br><span class="line">	<span class="keyword">return</span> log</span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br></pre></td></tr></table></figure>
+
+<p>此构造函数在初始化<code>raft</code>结构时会被调用（具体可以查看代码）。从上述构造函数逻辑来看，<code>unstable</code>似乎是从<code>storage</code>最后一条日志后开始存储，换言之，从<code>raft</code>协议库的角度，<code>unstable</code>存储更新的日志。。我们可以从下面的几个函数来进一步证实这一点：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">snapshot</span><span class="params">()</span> <span class="params">(pb.Snapshot, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> l.unstable.snapshot != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> *l.unstable.snapshot, <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> l.storage.Snapshot()</span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">firstIndex</span><span class="params">()</span> <span class="title">uint64</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> i, ok := l.unstable.maybeFirstIndex(); ok &#123;</span><br><span class="line">		<span class="keyword">return</span> i</span><br><span class="line">	&#125;</span><br><span class="line">	index, err := l.storage.FirstIndex()</span><br><span class="line">	<span class="keyword">return</span> index</span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">lastIndex</span><span class="params">()</span> <span class="title">uint64</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> i, ok := l.unstable.maybeLastIndex(); ok &#123;</span><br><span class="line">		<span class="keyword">return</span> i</span><br><span class="line">	&#125;</span><br><span class="line">	i, err := l.storage.LastIndex()</span><br><span class="line">	<span class="keyword">return</span> i</span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br></pre></td></tr></table></figure>
+
+<p>当<code>raftLog</code>都是先将<code>unstable</code>关联的数据返回给<code>raft</code>核心库。我们后面会来仔细了解这些函数如何被调用。我们继续了解两个较为重要的接口：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 日志追加，返回(0, false)若日志项不能被追加，否则返回 (最后一条日志索引, true)</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">maybeAppend</span><span class="params">(index, logTerm, committed <span class="keyword">uint64</span>, ents ...pb.Entry)</span> <span class="params">(lastnewi <span class="keyword">uint64</span>, ok <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> l.matchTerm(index, logTerm) &#123; <span class="comment">// 1. 检验 index 与 term 是否匹配</span></span><br><span class="line">		lastnewi = index + <span class="keyword">uint64</span>(<span class="built_in">len</span>(ents)) <span class="comment">// 2. 最后一条日志索引</span></span><br><span class="line">		ci := l.findConflict(ents) <span class="comment">// 3. 检查此次追加的日志项是否与已有的存在冲突（论文中有详述冲突情况）</span></span><br><span class="line">		<span class="keyword">switch</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> ci == <span class="number">0</span>: <span class="comment">// 3.1 没有冲突，则直接提交（如果可以提交的话）</span></span><br><span class="line">		<span class="keyword">case</span> ci &lt;= l.committed: <span class="comment">// 3.2 冲突的索引不能比已经提交的索引还要小！</span></span><br><span class="line">			l.logger.Panicf(<span class="string">"entry %d conflict with committed entry [committed(%d)]"</span>, ci, l.committed)</span><br><span class="line">		<span class="keyword">default</span>: <span class="comment">// 3.3 否则，与已有日志（未提交的）有冲突</span></span><br><span class="line">            <span class="comment">//（也有可能没有冲突，详情在 findConflict 函数中说明），并追加日志，最后提交</span></span><br><span class="line">			offset := index + <span class="number">1</span></span><br><span class="line">			l.<span class="built_in">append</span>(ents[ci-offset:]...)</span><br><span class="line">		&#125;</span><br><span class="line">		l.commitTo(min(committed, lastnewi))</span><br><span class="line">		<span class="keyword">return</span> lastnewi, <span class="literal">true</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span>, <span class="literal">false</span></span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 即检查追加的日志项集合与已有的日志项（包括已提交与未提交）是否存在冲突，返回第一次冲突的日志索引（如果有的话）</span></span><br><span class="line"><span class="comment">// 另外，需要注意的是，要追加的日志必须要连续</span></span><br><span class="line"><span class="comment">// 如果没有冲突，并且已有的日志包含了要追加的所有日志项，则返回 0</span></span><br><span class="line"><span class="comment">// 如果没有冲突，并且要追加的日志包含有新日志项，则返回第一次新的日志项</span></span><br><span class="line"><span class="comment">// 日志项冲突判定的条件是: 相同的 index 不同的 term</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">findConflict</span><span class="params">(ents []pb.Entry)</span> <span class="title">uint64</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> _, ne := <span class="keyword">range</span> ents &#123;</span><br><span class="line">		<span class="keyword">if</span> !l.matchTerm(ne.Index, ne.Term) &#123;</span><br><span class="line">			<span class="keyword">if</span> ne.Index &lt;= l.lastIndex() &#123;</span><br><span class="line">				l.logger.Infof(<span class="string">"found conflict at index %d [existing term: %d, conflicting term: %d]"</span>,</span><br><span class="line">					ne.Index, l.zeroTermOnErrCompacted(l.term(ne.Index)), ne.Term)</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">return</span> ne.Index</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="number">0</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="raft-协议库追加日志"><a href="#raft-协议库追加日志" class="headerlink" title="raft 协议库追加日志"></a>raft 协议库追加日志</h4><p>接下来，我们把重点放在<code>/etcd/raft.log</code>文件中，并梳理日志追加的整体逻辑（关于文件中的数据结构以及一些细节我们暂且忽略，重点关注其逻辑流程）。为了让读者更容易理解整个过程的来龙去脉，我们仍然从应用程序提交日志开始切入，以将整个流程梳理一遍（同时，下文所展示的代码大部分只包含关键的逻辑）。下面的逻辑分析会大致依据实际逻辑顺利展开，即从应用程序提交日志开始，到<code>leader</code>节点在本地追加日志（若是<code>follower</code>节点收到请求消息，则一般是转发给<code>leader</code>节点），然后到<code>leader</code>节点广播日志给<code>follower</code>节点，最后到<code>follower</code>节点的日志追加，以及<code>leader</code>如何处理<code>follower</code>节点日志追加的响应消息。</p>
+<h5 id="leader-节点追加日志"><a href="#leader-节点追加日志" class="headerlink" title="leader 节点追加日志"></a>leader 节点追加日志</h5><p>我们从应用程序向<code>raft</code>协议库提交日志请求开始，当然，在应用启动初始化时，其实也涉及到<code>raft</code>协议库的初始化启动，如下代码所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">startRaft</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	rpeers := <span class="built_in">make</span>([]raft.Peer, <span class="built_in">len</span>(rc.peers))</span><br><span class="line">	<span class="keyword">for</span> i := <span class="keyword">range</span> rpeers &#123;</span><br><span class="line">		rpeers[i] = raft.Peer&#123;ID: <span class="keyword">uint64</span>(i + <span class="number">1</span>)&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	c := &amp;raft.Config&#123;</span><br><span class="line">		ID:                        <span class="keyword">uint64</span>(rc.id),</span><br><span class="line">		ElectionTick:              <span class="number">10</span>,</span><br><span class="line">		HeartbeatTick:             <span class="number">1</span>,</span><br><span class="line">		Storage:                   rc.raftStorage,</span><br><span class="line">		MaxSizePerMsg:             <span class="number">1024</span> * <span class="number">1024</span>,</span><br><span class="line">		MaxInflightMsgs:           <span class="number">256</span>,</span><br><span class="line">		MaxUncommittedEntriesSize: <span class="number">1</span> &lt;&lt; <span class="number">30</span>,</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> oldwal &#123;</span><br><span class="line">		rc.node = raft.RestartNode(c)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		startPeers := rpeers</span><br><span class="line">		<span class="keyword">if</span> rc.join &#123;</span><br><span class="line">			startPeers = <span class="literal">nil</span></span><br><span class="line">		&#125;</span><br><span class="line">        <span class="comment">// 启动底层 raft 协议核心库，并将 Config 及集群中节点信息传入</span></span><br><span class="line">		rc.node = raft.StartNode(c, startPeers)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">go</span> rc.serveRaft()</span><br><span class="line">	<span class="keyword">go</span> rc.serveChannels()</span><br><span class="line">&#125; <span class="comment">// /etcd/contrib/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>raft.StartNode()</code>函数中，创建<code>node</code>，它表示底层<code>raft</code>协议的实例，构建了<code>raft</code>实例（封装协议实现的核心逻辑），并且调用了<code>n.run()</code>以等待上层应用程序向<code>node</code>提交请求，关键代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">StartNode</span><span class="params">(c *Config, peers []Peer)</span> <span class="title">Node</span></span> &#123;</span><br><span class="line">	r := newRaft(c)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	n := newNode()</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">go</span> n.run(r)</span><br><span class="line">	<span class="keyword">return</span> &amp;n</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">run</span><span class="params">(r *raft)</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">if</span> advancec != <span class="literal">nil</span> &#123;</span><br><span class="line">			readyc = <span class="literal">nil</span></span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			rd = newReady(r, prevSoftSt, prevHardSt)</span><br><span class="line">			<span class="keyword">if</span> rd.containsUpdates() &#123;</span><br><span class="line">				readyc = n.readyc</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				readyc = <span class="literal">nil</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> pm := &lt;-propc:</span><br><span class="line">			m := pm.m</span><br><span class="line">			m.From = r.id</span><br><span class="line">			err := r.Step(m) <span class="comment">// 调用 Step 函数来进行处理</span></span><br><span class="line">			<span class="keyword">if</span> pm.result != <span class="literal">nil</span> &#123;</span><br><span class="line">				pm.result &lt;- err</span><br><span class="line">				<span class="built_in">close</span>(pm.result)</span><br><span class="line">			&#125;</span><br><span class="line">        <span class="keyword">case</span> m := &lt;-n.recvc: <span class="comment">// 此处的逻辑会在 follower 节点接收 leader 节点广播的消息时调用</span></span><br><span class="line">            <span class="comment">// 具体地，会在下文的 【follower 节点追加日志】 小节涉及到</span></span><br><span class="line">			<span class="comment">// filter out response message from unknown From.</span></span><br><span class="line">			<span class="keyword">if</span> pr := r.getProgress(m.From); pr != <span class="literal">nil</span> || !IsResponseMsg(m.Type) &#123;</span><br><span class="line">				r.Step(m)</span><br><span class="line">			&#125;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">case</span> readyc &lt;- rd:</span><br><span class="line">			<span class="keyword">if</span> rd.SoftState != <span class="literal">nil</span> &#123;</span><br><span class="line">				prevSoftSt = rd.SoftState</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> <span class="built_in">len</span>(rd.Entries) &gt; <span class="number">0</span> &#123;</span><br><span class="line">				prevLastUnstablei = rd.Entries[<span class="built_in">len</span>(rd.Entries)<span class="number">-1</span>].Index</span><br><span class="line">				prevLastUnstablet = rd.Entries[<span class="built_in">len</span>(rd.Entries)<span class="number">-1</span>].Term</span><br><span class="line">				havePrevLastUnstablei = <span class="literal">true</span></span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> !IsEmptyHardState(rd.HardState) &#123;</span><br><span class="line">				prevHardSt = rd.HardState</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> !IsEmptySnap(rd.Snapshot) &#123;</span><br><span class="line">				prevSnapi = rd.Snapshot.Metadata.Index</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">if</span> index := rd.appliedCursor(); index != <span class="number">0</span> &#123;</span><br><span class="line">				applyingToI = index</span><br><span class="line">			&#125;</span><br><span class="line"></span><br><span class="line">			r.msgs = <span class="literal">nil</span></span><br><span class="line">			r.readStates = <span class="literal">nil</span></span><br><span class="line">			r.reduceUncommittedSize(rd.CommittedEntries)</span><br><span class="line">			advancec = n.advancec</span><br><span class="line">		<span class="keyword">case</span> &lt;-advancec:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newReady</span><span class="params">(r *raft, prevSoftSt *SoftState, prevHardSt pb.HardState)</span> <span class="title">Ready</span></span> &#123;</span><br><span class="line">	rd := Ready&#123;</span><br><span class="line">		Entries:          r.raftLog.unstableEntries(),</span><br><span class="line">		CommittedEntries: r.raftLog.nextEnts(),</span><br><span class="line">		Messages:         r.msgs, <span class="comment">// Step 函数将消息进行广播实际上会发送到此 msg 结构中</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> softSt := r.softState(); !softSt.equal(prevSoftSt) &#123;</span><br><span class="line">		rd.SoftState = softSt</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> hardSt := r.hardState(); !isHardStateEqual(hardSt, prevHardSt) &#123;</span><br><span class="line">		rd.HardState = hardSt</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> r.raftLog.unstable.snapshot != <span class="literal">nil</span> &#123;</span><br><span class="line">		rd.Snapshot = *r.raftLog.unstable.snapshot</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(r.readStates) != <span class="number">0</span> &#123;</span><br><span class="line">		rd.ReadStates = r.readStates</span><br><span class="line">	&#125;</span><br><span class="line">	rd.MustSync = MustSync(r.hardState(), prevHardSt, <span class="built_in">len</span>(rd.Entries))</span><br><span class="line">	<span class="keyword">return</span> rd</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br></pre></td></tr></table></figure>
+
+<p>从上面展示的三个函数，可以发现程序会开一个<code>go routine</code>通过<code>channel</code>来处理所有现应用程序（当然也有内部的一些逻辑）的交互。当<code>node</code>从<code>propc</code>管道中收到应用程序提交的请求后，它会将此请求交给<code>Step</code>函数处理，<code>Step</code>函数在经过一系列检查之后（比如检查<code>term</code>），会调用<code>step</code>函数（这里只考虑正常的<code>MsgProp</code>消息），<code>step</code>函数对于不同的角色的节点其实现不同，典型的，对于<code>leader</code>节点，其实现为<code>stepLeader</code>。另外，在循环中，程序会将打包好<code>Ready</code>结构通过<code>readc</code>的管道发送给应用程序，然后等待从<code>advancec</code>管道中接收应用程序的返回消息。下面，我们从<code>stepLeader</code>函数开始来一步步梳理<code>leader</code>的日志追加逻辑：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepLeader</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// These message types do not require any progress for m.From.</span></span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">	<span class="keyword">case</span> pb.MsgBeat:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgProp:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">        <span class="comment">// 1. 追加日志</span></span><br><span class="line">		<span class="keyword">if</span> !r.appendEntry(m.Entries...) &#123;</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125;</span><br><span class="line">        <span class="comment">// 2. 广播日志追加</span></span><br><span class="line">		r.bcastAppend()</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgReadIndex:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">appendEntry</span><span class="params">(es ...pb.Entry)</span> <span class="params">(accepted <span class="keyword">bool</span>)</span></span> &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// use latest "last" index after truncate/append</span></span><br><span class="line">	li = r.raftLog.<span class="built_in">append</span>(es...)</span><br><span class="line">	r.getProgress(r.id).maybeUpdate(li)</span><br><span class="line">	<span class="comment">// Regardless of maybeCommit's return, our caller will call bcastAppend.</span></span><br><span class="line">	r.maybeCommit()</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *raftLog)</span> <span class="title">append</span><span class="params">(ents ...pb.Entry)</span> <span class="title">uint64</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	l.unstable.truncateAndAppend(ents)</span><br><span class="line">	<span class="keyword">return</span> l.lastIndex()</span><br><span class="line">&#125; <span class="comment">// log.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(u *unstable)</span> <span class="title">truncateAndAppend</span><span class="params">(ents []pb.Entry)</span></span> &#123;</span><br><span class="line">	after := ents[<span class="number">0</span>].Index</span><br><span class="line">	<span class="keyword">switch</span> &#123;</span><br><span class="line">	<span class="comment">// 若需要追加的日志项集合中的第一条日志恰好是已有的日志的最后一条日志的后一条日志，则直接追加</span></span><br><span class="line">	<span class="keyword">case</span> after == u.offset+<span class="keyword">uint64</span>(<span class="built_in">len</span>(u.entries)):</span><br><span class="line">		<span class="comment">// after is the next index in the u.entries</span></span><br><span class="line">		<span class="comment">// directly append</span></span><br><span class="line">		u.entries = <span class="built_in">append</span>(u.entries, ents...)</span><br><span class="line">	<span class="comment">// 若需要追加的日志项集合中的第一条日志，要比 unstable 中的 offset 还要小</span></span><br><span class="line">        <span class="comment">//（即比 unstable 中日志项集合的开始日志的索引要小）</span></span><br><span class="line">	<span class="comment">// 则需要把重新设置 offset 索引，并且将 unstable 的日志项集合中的日志覆盖</span></span><br><span class="line">	<span class="keyword">case</span> after &lt;= u.offset:</span><br><span class="line">		u.logger.Infof(<span class="string">"replace the unstable entries from index %d"</span>, after)</span><br><span class="line">		<span class="comment">// The log is being truncated to before our current offset</span></span><br><span class="line">		<span class="comment">// portion, so set the offset and replace the entries</span></span><br><span class="line">		u.offset = after</span><br><span class="line">		u.entries = ents</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		<span class="comment">// 否则，分段次进行日志追加</span></span><br><span class="line">        <span class="comment">//（包含两种情况，u.offset &lt; after &lt; u.offset+len(u.entries) 或者 after &gt; u.offset+len(u.entries)）</span></span><br><span class="line">		<span class="comment">// 此种情况也可能涉及到 unstable 中已有日志的截断（前一种情况）</span></span><br><span class="line">		<span class="comment">// truncate to after and copy to u.entries</span></span><br><span class="line">		<span class="comment">// then append</span></span><br><span class="line">		u.logger.Infof(<span class="string">"truncate the unstable entries before index %d"</span>, after)</span><br><span class="line">		u.entries = <span class="built_in">append</span>([]pb.Entry&#123;&#125;, u.slice(u.offset, after)...)</span><br><span class="line">		u.entries = <span class="built_in">append</span>(u.entries, ents...)</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// log_unstable.go</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>stepLeader</code>函数中，首先调用 了<code>appendEntry()</code>函数，它会将日志项集合追加到<code>raftLog</code>中（实际上是调用了<code>r.raftLog.append(es...)</code>追加到<code>unstable</code>日志项集合），并且提交本地的日志项（如果满足条件的话）。</p>
+<h5 id="leader-节点向-follower-节点广播日志"><a href="#leader-节点向-follower-节点广播日志" class="headerlink" title="leader 节点向 follower 节点广播日志"></a>leader 节点向 follower 节点广播日志</h5><p>并且，在<code>stepLeader()</code>上会继续调用<code>r.bcastAppend()</code>函数向集群中其它节点广播日志，具体代码如下所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">bcastAppend</span><span class="params">()</span></span> &#123;</span><br><span class="line">	r.forEachProgress(<span class="function"><span class="keyword">func</span><span class="params">(id <span class="keyword">uint64</span>, _ *Progress)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> id == r.id &#123;</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		r.sendAppend(id)</span><br><span class="line">	&#125;)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">sendAppend</span><span class="params">(to <span class="keyword">uint64</span>)</span></span> &#123;</span><br><span class="line">	r.maybeSendAppend(to, <span class="literal">true</span>)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>而<code>sendAppend()</code>函数又会调用<code>maybeSendAppend()</code>函数来向特定的节点发送日志同步命令。代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">maybeSendAppend</span><span class="params">(to <span class="keyword">uint64</span>, sendIfEmpty <span class="keyword">bool</span>)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	pr := r.getProgress(to)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	m := pb.Message&#123;&#125;</span><br><span class="line">	m.To = to</span><br><span class="line">	term, errt := r.raftLog.term(pr.Next - <span class="number">1</span>)</span><br><span class="line">	ents, erre := r.raftLog.entries(pr.Next, r.maxMsgSize)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(ents) == <span class="number">0</span> &amp;&amp; !sendIfEmpty &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125; <span class="comment">// sendIfEmpty 可以用作控制空消息是否可以被发送（消息过多时，肯定不建议发送）</span></span><br><span class="line">    <span class="comment">// 如果获取 term 或者 ents 失败，则发送 snap 消息</span></span><br><span class="line">	<span class="keyword">if</span> errt != <span class="literal">nil</span> || erre != <span class="literal">nil</span> &#123; <span class="comment">// 此处主要是构建 snap 消息的相关操作</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		m.Type = pb.MsgSnap</span><br><span class="line">		snapshot, err := r.raftLog.snapshot()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		m.Snapshot = snapshot</span><br><span class="line">		sindex, sterm := snapshot.Metadata.Index, snapshot.Metadata.Term</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		pr.becomeSnapshot(sindex)</span><br><span class="line">		r.logger.Debugf(<span class="string">"%x paused sending replication messages to %x [%s]"</span>, r.id, to, pr)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123; <span class="comment">// 先设置消息的相关属性</span></span><br><span class="line">		m.Type = pb.MsgApp</span><br><span class="line">		m.Index = pr.Next - <span class="number">1</span></span><br><span class="line">		m.LogTerm = term</span><br><span class="line">		m.Entries = ents</span><br><span class="line">		m.Commit = r.raftLog.committed</span><br><span class="line">        <span class="comment">// 此处针对节点不同的状态（定义在 progress.go 文件中），来控制一次性给节点发送的消息数量，是批量发送，还是一次只发一条，还是要先暂停探测一下</span></span><br><span class="line">		<span class="keyword">if</span> n := <span class="built_in">len</span>(m.Entries); n != <span class="number">0</span> &#123;</span><br><span class="line">			<span class="keyword">switch</span> pr.State &#123;</span><br><span class="line">			<span class="comment">// optimistically increase the next when in ProgressStateReplicate</span></span><br><span class="line">			<span class="keyword">case</span> ProgressStateReplicate:</span><br><span class="line">				last := m.Entries[n<span class="number">-1</span>].Index</span><br><span class="line">				pr.optimisticUpdate(last)</span><br><span class="line">				pr.ins.add(last)</span><br><span class="line">			<span class="keyword">case</span> ProgressStateProbe:</span><br><span class="line">				pr.pause()</span><br><span class="line">			<span class="keyword">default</span>:</span><br><span class="line">				r.logger.Panicf(<span class="string">"%x is sending append in unhandled state %s"</span>, r.id, pr.State)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">    <span class="comment">// send 函数会将消息保存到 raft.msgs 字段，最后用于构建 Ready 实例结构，以发送给应用程序，</span></span><br><span class="line">    <span class="comment">// 事实上，此步骤才是真正执行消息发送的步骤（raft 协议库向应用程序发送消息，然后应用程序来控制并执行具体的日志消息网络传输的操作）</span></span><br><span class="line">	r.send(m)</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>简单而言，上述函数的逻辑为：首先根据该节点上一次已同步的日志位置<code>pr.Next-1</code>，从<code>raftLog</code>中获取该位置之后的日志项，并且日志同步的数量会受到<code>maxMsgSize</code>控制。并且若果无法从<code>raftLog</code>获取到想要的日志项，此时需要只能发送<code>snap</code>（即<code>MsgSnap</code>消息），因为对应日志项可能由于已经被<code>commit</code>而丢弃了。另外，真正的发送消息的操作其实是向<code>r.msgs</code>字段中追加实际需要发送的消息，后面会由<code>node</code>将其打包入<code>Ready</code>结构中，转而发送给应用程序，由应用程序执行真正消息的网络传输操作。</p>
+<p>至此，<code>leader</code>节点广播日志项给<code>follower</code>相关流程已经分析完毕。</p>
+<h5 id="follower-节点追加日志"><a href="#follower-节点追加日志" class="headerlink" title="follower 节点追加日志"></a>follower 节点追加日志</h5><p>在分析具体的<code>follower</code>节点追加<code>leader</code>节点给它发送的消息中的日志之前，我们把这个过程阐述得更完整一些。当应用程序调用<code>transport</code>网络传输组件将<code>MsgApp</code>类型的消息由传至<code>follower</code>节点时，更准确而言，<code>transport</code>组件的接收器在接收到消息后，会调用其<code>Raft</code>组件的<code>Process()</code>方法（此部分逻辑不再展示相关代码，在上上篇文章【<a href="https://qqzeng.top/2019/01/10/etcd-raft-%E7%BD%91%E7%BB%9C%E4%BC%A0%E8%BE%93%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" target="_blank" rel="noopener">etcd-raft 网络传输源码简析</a>】中包含了此部分逻辑）。而应用程序会实现此<code>Process()</code>接口，在<code>raftexample</code>示例程序中，其实现逻辑也较为简单：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">Process</span><span class="params">(ctx context.Context, m raftpb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> rc.node.Step(ctx, m) <span class="comment">// 直接调用底层协议核心结构 node 的 Step 函数来处理消息</span></span><br><span class="line">&#125; <span class="comment">// /etcd/contrib/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>调用<code>Step()</code>函数后，类似于<code>leader</code>节点，会进入到<code>node</code>实例的<code>Step()</code>函数中，它会调用<code>node</code>的一系列函数，包括<code>step()</code>、<code>stepWithWaitOption()</code>函数，然后将消息传入<code>recvc</code>通道，然后在<code>node</code>节点的主循环函数<code>run()</code>中，会一直监视着各通道，因此会从<code>recvc</code>通道中取出消息，最后调用<code>raft.Step()</code>，接下来经过一系列的检查，会调用<code>step()</code>函数即，同样，这里是<code>follower</code>节点，因此最后会调用<code>stepFollower()</code>函数（后面这一个阶段的函数调用栈同<code>leader</code>节点接收到应用程序的请求的流程是一样的）。下面简要贴出在<code>recv</code>通道放入消息之前流程的相关代码：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">Step</span><span class="params">(ctx context.Context, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// ignore unexpected local messages receiving over network</span></span><br><span class="line">	<span class="keyword">if</span> IsLocalMsg(m.Type) &#123;</span><br><span class="line">		<span class="comment">// <span class="doctag">TODO:</span> return an error?</span></span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> n.step(ctx, m)</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">step</span><span class="params">(ctx context.Context, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> n.stepWithWaitOption(ctx, m, <span class="literal">false</span>)</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">stepWait</span><span class="params">(ctx context.Context, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> n.stepWithWaitOption(ctx, m, <span class="literal">true</span>)</span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br><span class="line"><span class="comment">// Step advances the state machine using msgs. The ctx.Err() will be returned,</span></span><br><span class="line"><span class="comment">// if any.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">stepWithWaitOption</span><span class="params">(ctx context.Context, m pb.Message, wait <span class="keyword">bool</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> m.Type != pb.MsgProp &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> n.recvc &lt;- m:</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-ctx.Done():</span><br><span class="line">			<span class="keyword">return</span> ctx.Err()</span><br><span class="line">		<span class="keyword">case</span> &lt;-n.done:</span><br><span class="line">			<span class="keyword">return</span> ErrStopped</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// node.go</span></span><br></pre></td></tr></table></figure>
+
+<p>下面来重点看一下<code>stepFolower()</code>函数的逻辑，具体是接收到<code>MsgApp</code>类型的消息的处理逻辑。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepFollower</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">	<span class="keyword">case</span> pb.MsgProp: <span class="comment">// 如果应用程序将请求直接发到了 follower 节点，则可能会将消息转发给 leader</span></span><br><span class="line">		<span class="keyword">if</span> r.lead == None &#123;</span><br><span class="line">			r.logger.Infof(<span class="string">"%x no leader at term %d; dropping proposal"</span>, r.id, r.Term)</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125; <span class="keyword">else</span> <span class="keyword">if</span> r.disableProposalForwarding &#123;</span><br><span class="line">			r.logger.Infof(<span class="string">"%x not forwarding to leader %x at term %d; dropping proposal"</span>, r.id, r.lead, r.Term)</span><br><span class="line">			<span class="keyword">return</span> ErrProposalDropped</span><br><span class="line">		&#125;</span><br><span class="line">		m.To = r.lead</span><br><span class="line">		r.send(m) <span class="comment">// 转发给 leader</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgApp: <span class="comment">// 接收到 leader 发送的日志同步消息</span></span><br><span class="line">		r.electionElapsed = <span class="number">0</span></span><br><span class="line">		r.lead = m.From</span><br><span class="line">		r.handleAppendEntries(m) <span class="comment">// 追加日志操作</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgHeartbeat:</span><br><span class="line">		r.electionElapsed = <span class="number">0</span></span><br><span class="line">		r.lead = m.From</span><br><span class="line">		r.handleHeartbeat(m)</span><br><span class="line">	<span class="keyword">case</span> pb.MsgSnap:<span class="comment">// 接收到 leader 发送的 snap 同步消息</span></span><br><span class="line">		r.electionElapsed = <span class="number">0</span></span><br><span class="line">		r.lead = m.From</span><br><span class="line">		r.handleSnapshot(m) <span class="comment">// 处理快照同步的操作</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgTransferLeader:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgTimeoutNow:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgReadIndex:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgReadIndexResp:</span><br><span class="line">		<span class="comment">// ..</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>上面的逻辑很清晰。我们紧接着查看<code>handleAppendEntries()</code>函数：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">handleAppendEntries</span><span class="params">(m pb.Message)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 消息中的索引不能小于节点已经提交的消息的索引，否则不追加消息，以已提交的索引作为参数直接回复</span></span><br><span class="line">	<span class="keyword">if</span> m.Index &lt; r.raftLog.committed &#123;</span><br><span class="line">		<span class="comment">// 此处的 send 函数同 前面 leader 节点在广播日志最终调用的 send 函数为同一个函数</span></span><br><span class="line">		<span class="comment">// 即将此消息放到 raft.msgs 结构中，此结构最后会作为 node 打包 Ready 结构的参数</span></span><br><span class="line">		<span class="comment">// 最后发送给应用程序，然后由应用程序通过网络转发给对应的节点（此处为 leader）</span></span><br><span class="line">		r.send(pb.Message&#123;To: m.From, Type: pb.MsgAppResp, Index: r.raftLog.committed&#125;)</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 调用 maybeAppend 函数进行日志追加，若追加成功，则以追加后的日志项集合作为参数回复</span></span><br><span class="line">	<span class="keyword">if</span> mlastIndex, ok := r.raftLog.maybeAppend(m.Index, m.LogTerm, m.Commit, m.Entries...); ok &#123;</span><br><span class="line">		r.send(pb.Message&#123;To: m.From, Type: pb.MsgAppResp, Index: mlastIndex&#125;)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123; <span class="comment">// 否则表示日志追加失败，则是日志索引不匹配造成</span></span><br><span class="line">        <span class="comment">//（详情可查看 maybeAppedn函数，简而言之，最后会通过调用 append、truncateAndAppend函数以将消息追加到 raftLog 的 unstable 结构中。</span></span><br><span class="line">        <span class="comment">// 此函数在之前的 raftLog 接口实现分析中有涉及，因此不再阐述），</span></span><br><span class="line">			<span class="comment">// 则设置冲突的提示，以及本节点的最后的日志项索引作为参数进行回复</span></span><br><span class="line">		r.logger.Debugf(<span class="string">"%x [logterm: %d, index: %d] rejected msgApp [logterm: %d, index: %d] from %x"</span>,</span><br><span class="line">			r.id, r.raftLog.zeroTermOnErrCompacted(r.raftLog.term(m.Index)), m.Index, m.LogTerm, m.Index, m.From)</span><br><span class="line">		r.send(pb.Message&#123;To: m.From, Type: pb.MsgAppResp, Index: m.Index, Reject: <span class="literal">true</span>, RejectHint: r.raftLog.lastIndex()&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>作个简单小结，从上面分析的逻辑可以发现，同<code>leader</code>类似，<code>follower</code>节点的数据最终也是被写入了日志模块<code>raftLog</code>的<code>unstable</code>结构中，同样，<code>follower</code>节点的回复消息也是加入到<code>raft.msgs</code>结构中，最后会成为<code>Ready</code>的成员，以传递给应用程序，由应用程序进行实际的网络转发操作。</p>
+<h5 id="leader-节点处理-follower-节点日志追加响应"><a href="#leader-节点处理-follower-节点日志追加响应" class="headerlink" title="leader 节点处理 follower 节点日志追加响应"></a>leader 节点处理 follower 节点日志追加响应</h5><p>最后，同样，当<code>follower</code>将回复消息发送之后，再由网络传输组件<code>transport</code>调用<code>node.Process()</code>函数以处理此消息（此逻辑已在上面的【<code>folower</code>节点追加日志】小节中最开始阐述）。因此，最后同样会进入<code>leader</code>的<code>stepLeader()</code>函数，而且会进入消息类型为<code>MsgAppResp</code>分支处理逻辑中，关键代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepLeader</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">	<span class="keyword">case</span> pb.MsgAppResp:</span><br><span class="line">		pr.RecentActive = <span class="literal">true</span></span><br><span class="line">		<span class="keyword">if</span> m.Reject &#123; <span class="comment">// 若 follower回复拒绝消息</span></span><br><span class="line">			r.logger.Debugf(<span class="string">"%x received msgApp rejection(lastindex: %d) from %x for index %d"</span>,</span><br><span class="line">				r.id, m.RejectHint, m.From, m.Index)</span><br><span class="line">            <span class="comment">// 则需要减小消息的索引，即往前挑选消息（raft 论文中关于日志冲突已经详细介绍），</span></span><br><span class="line">            <span class="comment">// 即</span></span><br><span class="line">			<span class="keyword">if</span> pr.maybeDecrTo(m.Index, m.RejectHint) &#123;</span><br><span class="line">				r.logger.Debugf(<span class="string">"%x decreased progress of %x to [%s]"</span>, r.id, m.From, pr)</span><br><span class="line">				<span class="keyword">if</span> pr.State == ProgressStateReplicate &#123;</span><br><span class="line">					pr.becomeProbe()</span><br><span class="line">				&#125; <span class="comment">// 再次将消息发送给 follower</span></span><br><span class="line">				r.sendAppend(m.From)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123; <span class="comment">// 否则 follower 回复成功追加日志</span></span><br><span class="line">			oldPaused := pr.IsPaused()</span><br><span class="line">            <span class="comment">// 此处为更新 leader 维护的对各 follower 节点的进度详情（具体在 progress.go中描述）</span></span><br><span class="line">            <span class="comment">// 比较简单，因此为了节约篇幅，此处不展开叙述。</span></span><br><span class="line">            <span class="comment">// 事实上，这也是 etcd-raft 针对 原始的 raft 论文作的一些优化。</span></span><br><span class="line">			<span class="keyword">if</span> pr.maybeUpdate(m.Index) &#123;</span><br><span class="line">				<span class="keyword">switch</span> &#123;</span><br><span class="line">				<span class="keyword">case</span> pr.State == ProgressStateProbe:</span><br><span class="line">					pr.becomeReplicate()</span><br><span class="line">				<span class="keyword">case</span> pr.State == ProgressStateSnapshot &amp;&amp; pr.needSnapshotAbort():</span><br><span class="line">					r.logger.Debugf(<span class="string">"%x snapshot aborted, resumed sending replication messages to %x [%s]"</span>, r.id, m.From, pr)</span><br><span class="line">					pr.becomeProbe()</span><br><span class="line">					pr.becomeReplicate()</span><br><span class="line">				<span class="keyword">case</span> pr.State == ProgressStateReplicate:</span><br><span class="line">					pr.ins.freeTo(m.Index)</span><br><span class="line">				&#125;</span><br><span class="line">				<span class="comment">// 检查是否需要提交，若的确可以提交，则同样将此消息进行广播</span></span><br><span class="line">				<span class="keyword">if</span> r.maybeCommit() &#123;</span><br><span class="line">					r.bcastAppend()</span><br><span class="line">				&#125; <span class="keyword">else</span> <span class="keyword">if</span> oldPaused &#123;</span><br><span class="line">					r.sendAppend(m.From)</span><br><span class="line">				&#125;</span><br><span class="line">				<span class="comment">// We've updated flow control information above, which may</span></span><br><span class="line">				<span class="comment">// allow us to send multiple (size-limited) in-flight messages</span></span><br><span class="line">				<span class="comment">// at once (such as when transitioning from probe to</span></span><br><span class="line">				<span class="comment">// replicate, or when freeTo() covers multiple messages). If</span></span><br><span class="line">				<span class="comment">// we have more entries to send, send as many messages as we</span></span><br><span class="line">				<span class="comment">// can (without sending empty messages for the commit index)</span></span><br><span class="line">				<span class="keyword">for</span> r.maybeSendAppend(m.From, <span class="literal">false</span>) &#123;</span><br><span class="line">				&#125;</span><br><span class="line">				<span class="comment">// Transfer leadership is in progress.</span></span><br><span class="line">				<span class="keyword">if</span> m.From == r.leadTransferee &amp;&amp; pr.Match == r.raftLog.lastIndex() &#123;</span><br><span class="line">					r.logger.Infof(<span class="string">"%x sent MsgTimeoutNow to %x after received MsgAppResp"</span>, r.id, m.From)</span><br><span class="line">					r.sendTimeoutNow(m.From)</span><br><span class="line">				&#125;</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	<span class="keyword">case</span> pb.MsgHeartbeatResp:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgSnapStatus:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">case</span> pb.MsgTransferLeader:</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，<code>leader</code>节点处理<code>follower</code>节点对日志追加消息的回复也已经分析完毕。</p>
+<p>因此，整个完整的流程也已经结束。我们也对<code>unstabel</code>以及<code>raftLog</code>的流程，即<code>raft</code>协议库与<code>raftLog</code>的交互作一个简单小结：可以发现，<code>unstable</code>或者说<code>raftLog</code>只是协议存储管理日志的组件，没有其它作用，即它没有用作诸如节点宕机后重启、新节点加入过程的日志来源。<code>unstable</code>是未落盘的日志项集合，即可能会丢失，因此<code>unstable</code>日志最终会持久化到<code>storage</code>中，即持久化到<code>snap</code>以及<code>WAL</code>日志。</p>
+<p>最后，需要提醒读者的是，文章比较长，若读者没有时间，也可以挑选部分小节进行参考（各小节是独立分析阐述的）。最重要的是，读者自己能够进入到源码文件进行查看，那比本文所贴出的代码逻辑会更容易理解，读者也会获取得更多。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://github.com/etcd-io/etcd/tree/master/raft" target="_blank" rel="noopener">https://github.com/etcd-io/etcd/tree/master/raft</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" rel="tag"><i class="fa fa-tag"></i> 分布式协调服务</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/11/etcd-raft-WAL%E6%97%A5%E5%BF%97%E7%AE%A1%E7%90%86%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="etcd-raft WAL日志管理源码简析">
+                  <i class="fa fa-chevron-left"></i> etcd-raft WAL日志管理源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/14/etcd-raft-snapshot%E5%AE%9E%E7%8E%B0%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd-raft snapshot实现源码简析">
+                  etcd-raft snapshot实现源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#数据结构"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#raftLog"><span class="nav-number">1.1.</span> <span class="nav-text">raftLog</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#unstable"><span class="nav-number">1.2.</span> <span class="nav-text">unstable</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Storage-amp-MemoryStorage"><span class="nav-number">1.3.</span> <span class="nav-text">Storage &amp; MemoryStorage</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键流程"><span class="nav-number">2.</span> <span class="nav-text">关键流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#应用程序与-Storage-交互"><span class="nav-number">2.1.</span> <span class="nav-text">应用程序与  Storage 交互</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#应用初始化"><span class="nav-number">2.1.1.</span> <span class="nav-text">应用初始化</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#处理-raft-协议库-Ready-消息"><span class="nav-number">2.1.2.</span> <span class="nav-text">处理 raft 协议库 Ready 消息</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#raft-协议库与-raftLog-交互"><span class="nav-number">2.2.</span> <span class="nav-text">raft 协议库与  raftLog  交互</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#raftLog-接口实现逻辑"><span class="nav-number">2.2.1.</span> <span class="nav-text">raftLog 接口实现逻辑</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#raft-协议库追加日志"><span class="nav-number">2.2.2.</span> <span class="nav-text">raft 协议库追加日志</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#leader-节点追加日志"><span class="nav-number">2.2.2.1.</span> <span class="nav-text">leader 节点追加日志</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#leader-节点向-follower-节点广播日志"><span class="nav-number">2.2.2.2.</span> <span class="nav-text">leader 节点向 follower 节点广播日志</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#follower-节点追加日志"><span class="nav-number">2.2.2.3.</span> <span class="nav-text">follower 节点追加日志</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#leader-节点处理-follower-节点日志追加响应"><span class="nav-number">2.2.2.4.</span> <span class="nav-text">leader 节点处理 follower 节点日志追加响应</span></a></li></ol></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

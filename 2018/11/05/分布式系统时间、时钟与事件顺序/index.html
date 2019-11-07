@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="如何确定分布式系统各节点（进程）中事件发生的先后顺序至关重要。时钟不一致会导致系统发生不可预料的逻辑错误。然而绝大部分情况下，不能依赖于物理时钟，因为不同的系统的物理时钟总会存在不同程度的时钟漂移（多处理器机器中也类似），即便各节点定期通过网络从时钟源进行时钟同步，也无法确保各节点时钟完全一致。因此，早在1978年，Leslie Lamport 便提出了逻辑时钟的概念，并描述了如何利用逻辑时钟来定">
+<meta name="keywords" content="分布式系统,逻辑时钟,时钟同步,物理时钟">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分布式系统时间、时钟与事件顺序">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;11&#x2F;05&#x2F;%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%97%B6%E9%97%B4%E3%80%81%E6%97%B6%E9%92%9F%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A1%BA%E5%BA%8F&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="如何确定分布式系统各节点（进程）中事件发生的先后顺序至关重要。时钟不一致会导致系统发生不可预料的逻辑错误。然而绝大部分情况下，不能依赖于物理时钟，因为不同的系统的物理时钟总会存在不同程度的时钟漂移（多处理器机器中也类似），即便各节点定期通过网络从时钟源进行时钟同步，也无法确保各节点时钟完全一致。因此，早在1978年，Leslie Lamport 便提出了逻辑时钟的概念，并描述了如何利用逻辑时钟来定">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;eb415390449c57ea8f6c9e33c82a7e9.png?raw=true">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;lamport%20clock-2.png?raw=true">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;vector%20clock-1.png?raw=true">
+<meta property="og:updated_time" content="2019-10-24T05:39:28.081Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;eb415390449c57ea8f6c9e33c82a7e9.png?raw=true">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/11/05/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%97%B6%E9%97%B4%E3%80%81%E6%97%B6%E9%92%9F%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A1%BA%E5%BA%8F/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>分布式系统时间、时钟与事件顺序 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/11/05/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E6%97%B6%E9%97%B4%E3%80%81%E6%97%B6%E9%92%9F%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A1%BA%E5%BA%8F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          分布式系统时间、时钟与事件顺序
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-05 20:59:41" itemprop="dateCreated datePublished" datetime="2018-11-05T20:59:41+08:00">2018-11-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:39:28" itemprop="dateModified" datetime="2019-10-24T13:39:28+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.3k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>如何确定分布式系统各节点（进程）中事件发生的先后顺序至关重要。时钟不一致会导致系统发生不可预料的逻辑错误。然而绝大部分情况下，不能依赖于物理时钟，因为不同的系统的物理时钟总会存在不同程度的时钟漂移（多处理器机器中也类似），即便各节点定期通过网络从时钟源进行时钟同步，也无法确保各节点时钟完全一致。因此，早在1978年，Leslie Lamport 便提出了逻辑时钟的概念，并描述了如何利用逻辑时钟来定义分布式系统中事件的发生顺序。它大致基于事件发生的因果关系，并保证能够正确排列系统中具有因果关系的事件，这使得分布式系统在逻辑上不会将具有因果关系事件的发生顺序倒置。</p>
+<a id="more"></a>
+
+<h2 id="时钟同步"><a href="#时钟同步" class="headerlink" title="时钟同步"></a>时钟同步</h2><p>事实上，计算机的时钟会以不同速率来计时，普通的石英钟漂移(<code>skew drift</code>)1秒所需的时间大概为11-12天。因此如果使用物理时钟<code>physical clock</code>所定义的时间戳来确定系统中事件发生顺序，需要对物理时钟进行定期同步(<code>clock synchronization</code>)。在理想网络环境下，通过网络将带有时间戳的消息在时钟源（<code>UTC</code>,<code>Coordinated Universal Time</code>）与本地机器之间传输，能够保证本地时间与时钟源基本一致。但事实上，网络是异步的且有延时，因此无法保证不同节点之间的时钟完全同步。尽管如此，我们可以通过算法来尽可能提高时钟同步精度。著名的时钟同步算法如<a href="https://en.wikipedia.org/wiki/Cristian%27s_algorithm" target="_blank" rel="noopener"><code>Cristian&#39;s Time Sync</code></a>和<a href="https://en.wikipedia.org/wiki/Berkeley_algorithm" target="_blank" rel="noopener"><code>Berkeley algorithm</code></a>。</p>
+<h2 id="Lamport-Clock"><a href="#Lamport-Clock" class="headerlink" title="Lamport Clock"></a>Lamport Clock</h2><p>相比于通过同步物理时钟的方式来协调各节点的时间，在分布式系统中，更为普遍且合理的方式是使用逻辑时钟(<code>logical clock</code>)。Lamport 提出的逻辑时钟舍弃了物理时钟固有的无限粒度的性质，它基于事件发生的因果关系(<code>causality</code>)。换言之，所有的事件通过<code>happened before</code>来关联，以<code>-&gt;</code>表示。对于事件<code>a</code>与<code>b</code>，<code>a-&gt;b</code>表示<code>a happened before b</code>，它是一种偏序关系(<code>partial order</code>)，分布式系统中所阐述的事件发生的先后顺序一般为偏序。Lamport 在分布式系统内定义了三种类型的事件，包括进程（节点）内事件、进程发送消息事件以及进程接收消息事件。<code>a happened before b</code>由以下三个条件中任一一个触发：</p>
+<ol>
+<li>若<code>a</code>与<code>b</code>表示同一进程内的事件，并且<code>a</code>发生在<code>b</code>之前，则有<code>a-&gt;b</code>。</li>
+<li>若<code>a</code>代表某一进程发送消息的事件，<code>b</code>代表另一进程接收此消息的事件，则有<code>a-&gt;b</code>。</li>
+<li><code>happened before</code>关系满足传递性。</li>
+</ol>
+<p>如下图（水平方向表示物理时钟增加方向，垂直方向表示不同进程），由规则(1): <code>a-&gt;b</code>及<code>c-&gt;d</code>; 由规则(2): <code>b-&gt;c</code>和<code>d-&gt;f</code>; 由规则(3): <code>b-&gt;f</code>。但并非所有的事件都能通过<code>-&gt;</code>关联，比如<code>a</code>与<code>e</code>为不同进程不同消息链上的事件，则只能被定义为并发的两个事件，记作<code>a||e</code>。事实上，事件<code>a</code>与<code>e</code>没有因果关系，因此，从系统正确性的角度而言，它们之间真正的发生顺序不会影响到系统的正确性，所以我们不需要关注它们发生的先后顺序。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/blob/hexo/static/eb415390449c57ea8f6c9e33c82a7e9.png?raw=true" alt="lamport clock"></p>
+<p>如果将系统中所有发生的事件<code>e</code>标记一个单调递增的时间戳(<code>L(e)</code>)（与物理时钟没有关系），也称为<code>lamport timestamp/clock</code>，每一个进程都会维护自己的逻辑时钟，时间戳标记原理如下：</p>
+<ol>
+<li>每个事件对应一个初始的时间戳，初始值为0。</li>
+<li>如果发生的事件为进程内事件，则时间戳加1。</li>
+<li>如果事件为发送事件，则将时间戳加1，并在消息中带上该时间戳。</li>
+<li>如果事件为接收事件，则其时间戳为max(进程时间戳，消息中附带的时间戳)+1。</li>
+</ol>
+<p>如下图，<code>p1</code>、<code>p2</code>以及<code>p3</code>都有自己的初始的逻辑时钟0；进程的全局（当前）逻辑时钟即为当某一事件发生之后的逻辑时钟值，如事件<code>a</code>与<code>b</code>的逻辑时钟值分别为<code>0+1=1</code>和<code>1+1=2</code>。而发<code>p1</code>发送消息<code>m1</code>给<code>p2</code>后，<code>c</code>的逻辑时钟值为<code>max(0, 2)+1=3</code>。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/blob/hexo/static/lamport%20clock-2.png?raw=true" alt="lamport clock-2"></p>
+<p>在<code>lamport clock</code>表示法中，对于事件<code>e1</code>与<code>e2</code>，<code>e1-&gt;e2</code>能推断出<code>L(e1)&lt;L(e2)</code>，但反之不成立，即<code>L(e1)&lt;L(e2)</code>不能推断出<code>e1-&gt;e2</code>，如在图(2)中，<code>L(b)&gt;L(e)</code>，但实际上有<code>b||e</code>。另外，并发事件也是类似的，即若<code>L(e1)=L(e2)</code>可以推断出<code>e1||e2</code>，但反之不成立。对于<code>lamport clock</code>，并发事件没有可比性，正如上文所述，并发事件发生的先后顺序并不影响系统逻辑正确性。</p>
+<p>在<code>lamport clock</code>表示法中，无法确定没有因果关系的事件的先后顺序，而大多数分布式系统确实需要对所有的事件进行全局排序(<code>total order</code>)，而不仅仅得到影响系统正确性的事件之间的偏序关系(<code>partial order</code>)。换言之，为了得到一个全局的事件发生顺序，必须对并发事件进行先后发生顺序的判定。因为并发事件真正发生的先后顺序不影响系统的准确性，因此可以为它们统一制定一个任意顺序规则（事实上，<code>lamport clock</code>就是这么考虑的）。比如同其它因果关系事件类似，以逻辑时钟(<code>L(e)</code>)的大小来判定，逻辑时钟小的发生在前，反之则发生在后。而对于逻辑时钟相同的并发事件，在<code>lamport clock</code>算法当中，给出的解释是根据进程号(<code>PID</code>)的大小来确定，进程编号更小的发生在前。其实，Lamport 在论文中提到过，也可以采用其它方式来确定并发事件的先后顺序，这似乎没有理论依据，但是正如前面所述，通过引入<code>lamport clock</code>，可以在逻辑上保证系统的正确性，我们不关心那些不影响系统正确运行的事件之间的顺序。但以进程编号作为依据，似乎影响到了系统的公平性，比如当两个进程竞争同一物理资源，物理时间上先发出请求的进程不一定能先锁定资源，但这并不会造成系统逻辑错误。在<code>lamport clock</code>原论文中，给出的实例便是分布式系统资源竞争或者互斥占用，大家可以参考原论文。</p>
+<h2 id="Vector-Clock"><a href="#Vector-Clock" class="headerlink" title="Vector Clock"></a>Vector Clock</h2><p>前文提到<code>lamport clock</code>存在一个缺点，即对于事件<code>e1</code>与<code>e2</code>，<code>L(e1)&lt;L(e2)</code>并不能推导出<code>e1 happened before e2</code>，换言之，其只能确定单方的因果关系关联。<code>vector clock</code>是在<code>lamport clock</code>上演进的一种逻辑时钟表示法，它完善了<code>lamport clock</code>这一缺陷，能提供完整的因果关系关联。在<code>vector clock</code>表示法中，每个进程维护的不仅仅是本进程的时间戳，而是通过一个向量(<code>vector</code>)来记录所有进程的<code>lamport clock</code>以此作为进程的逻辑时钟，即进程事件的逻辑时钟被表示为：<code>v(e)[c1, c2..., cn]</code>，其中<code>ci</code>为进程<code>i</code>中先于事件<code>e</code>发生的事件。<code>vector clock</code>的逻辑时钟标记原理同<code>lamport clock</code>原理类似。</p>
+<p>如下图，在进程<code>p1</code>中，事件<code>a</code>的逻辑时钟为<code>(1,0,0)</code>，发送消息<code>m</code>的事件<code>b</code>的逻辑时钟为<code>(2,0,0)</code>。在进程<code>p2</code>中，其接收消息<code>m1</code>的事件<code>c</code>的逻辑时钟为<code>max((0,0,0),(2,0,0))+1=(2,1,0)</code>。此时，对于事件<code>e1</code>与<code>e2</code>，由<code>e1 happened before e2</code>推断出<code>v(e1)&lt;v(e2)</code>，反之亦然。在<code>vector clock</code>表示法中，事件<code>c</code>与<code>e</code>是并行事件，记作<code>c&lt;-&gt;e</code>，因为我们不能推导出<code>v(c)&lt;=v(e)</code>，也不能推导出<code>V(e)&lt;=v(c)</code>。注意，此时逻辑时钟值的比较(<code>&lt;|&gt;|&lt;=|&gt;=</code>)是对向量的分量逐一比较。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/blob/hexo/static/vector%20clock-1.png?raw=true" alt="vector clock"></p>
+<p>参考资料：（插图出自 CMU Lecture）<br>[1] <a href="https://en.wikipedia.org/wiki/Cristian%27s_algorithm" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/Cristian%27s_algorithm</a><br>[2] <a href="https://en.wikipedia.org/wiki/Berkeley_algorithm" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/Berkeley_algorithm</a><br>[3] Lamport L. Time, clocks, and the ordering of events in a distributed system[J]. Communications of the ACM, 1978, 21(7): 558-565.<br>[4].<a href="https://www.cs.cmu.edu/~dga/15-440/S14/index.html" target="_blank" rel="noopener">CMU 15-440 Distributed System Lecutre 9</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E9%80%BB%E8%BE%91%E6%97%B6%E9%92%9F/" rel="tag"><i class="fa fa-tag"></i> 逻辑时钟</a>
+              <a href="/tags/%E6%97%B6%E9%92%9F%E5%90%8C%E6%AD%A5/" rel="tag"><i class="fa fa-tag"></i> 时钟同步</a>
+              <a href="/tags/%E7%89%A9%E7%90%86%E6%97%B6%E9%92%9F/" rel="tag"><i class="fa fa-tag"></i> 物理时钟</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/10/29/2018-10-29-Java%E5%90%8E%E7%AB%AF%E5%B7%A5%E7%A8%8B%E5%B8%88%E6%8A%80%E8%83%BD%E6%A0%91/" rel="next" title="Java后端工程师技能树">
+                  <i class="fa fa-chevron-left"></i> Java后端工程师技能树
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/11/09/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%92%E6%96%A5%E7%AE%97%E6%B3%95%E8%A7%A3%E6%9E%90%E4%B8%8E%E5%AE%9E%E7%8E%B0/" rel="prev" title="分布式互斥算法解析与实现">
+                  分布式互斥算法解析与实现 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#时钟同步"><span class="nav-number">1.</span> <span class="nav-text">时钟同步</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Lamport-Clock"><span class="nav-number">2.</span> <span class="nav-text">Lamport Clock</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Vector-Clock"><span class="nav-number">3.</span> <span class="nav-text">Vector Clock</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

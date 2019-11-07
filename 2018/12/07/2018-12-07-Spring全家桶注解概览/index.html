@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="Java元注解   注解 解释    @Documented javadoc文档中列出被此注解注解的元素   @Target 注解能被应用的目标元素，比如类、方法、属性、参数等等   @Retention 仅在源码保留，还是保留到编译后的字节码，还是到运行时也去加载   @Inherited 如果子类没有定义注解的话，能自动从父类获取定义了继承属性的注解   @Repeatable 通过关联注解容">
+<meta name="keywords" content="Spring">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Spring全家桶注解概览">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;12&#x2F;07&#x2F;2018-12-07-Spring%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="Java元注解   注解 解释    @Documented javadoc文档中列出被此注解注解的元素   @Target 注解能被应用的目标元素，比如类、方法、属性、参数等等   @Retention 仅在源码保留，还是保留到编译后的字节码，还是到运行时也去加载   @Inherited 如果子类没有定义注解的话，能自动从父类获取定义了继承属性的注解   @Repeatable 通过关联注解容">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.678Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/12/07/2018-12-07-Spring%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Spring全家桶注解概览 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/12/07/2018-12-07-Spring%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Spring全家桶注解概览
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-12-07 19:06:00" itemprop="dateCreated datePublished" datetime="2018-12-07T19:06:00+08:00">2018-12-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/" itemprop="url" rel="index">
+                    <span itemprop="name">后端开发</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.9k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h1 id="Java元注解"><a href="#Java元注解" class="headerlink" title="Java元注解"></a>Java元注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@Documented</strong></td>
+<td align="left">javadoc文档中列出被此注解注解的元素</td>
+</tr>
+<tr>
+<td align="left"><strong>@Target</strong></td>
+<td align="left">注解能被应用的目标元素，比如类、方法、属性、参数等等</td>
+</tr>
+<tr>
+<td align="left"><strong>@Retention</strong></td>
+<td align="left">仅在源码保留，还是保留到编译后的字节码，还是到运行时也去加载</td>
+</tr>
+<tr>
+<td align="left"><strong>@Inherited</strong></td>
+<td align="left">如果子类没有定义注解的话，能自动从父类获取定义了继承属性的注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@Repeatable</strong></td>
+<td align="left">通过关联注解容器定义可重复注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@Native</strong></td>
+<td align="left">是否在.h头文件中生成被标记的字段，原生程序需要和Java程序交互</td>
+</tr>
+</tbody></table>
+<a id="more"></a>
+
+<h1 id="SpringCore-注解"><a href="#SpringCore-注解" class="headerlink" title="SpringCore 注解"></a>SpringCore 注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@Controller</strong></td>
+<td align="left">定义表现层组件</td>
+</tr>
+<tr>
+<td align="left"><strong>@Service</strong></td>
+<td align="left">定义业务逻辑层组件</td>
+</tr>
+<tr>
+<td align="left"><strong>@Repository</strong></td>
+<td align="left">定义数据访问层资源库组件</td>
+</tr>
+<tr>
+<td align="left"><strong>@Component</strong></td>
+<td align="left">定义其它组件（比如访问外部服务的组件）</td>
+</tr>
+<tr>
+<td align="left"><strong>@Autowired</strong></td>
+<td align="left">自动装配<code>Bean</code>（默认按类型装配<code>byType</code>）</td>
+</tr>
+<tr>
+<td align="left"><strong>@Required</strong></td>
+<td align="left">用于在<code>setter</code>方法标记属性值需要由<code>Spring</code>进行装配</td>
+</tr>
+<tr>
+<td align="left"><strong>@Qualifier</strong></td>
+<td align="left">用于通过给<code>Bean</code>定义修饰语来注入相应的Bean</td>
+</tr>
+<tr>
+<td align="left"><strong>@Resource</strong></td>
+<td align="left">自动装配<code>Bean</code>（默认按照名称进行装配<code>byName</code>）</td>
+</tr>
+<tr>
+<td align="left"><strong>@Value</strong></td>
+<td align="left">用于注入属性配置或SpEL表达式</td>
+</tr>
+<tr>
+<td align="left"><strong>@Lookup</strong></td>
+<td align="left">可以实现方法注入(注入的对象是<code>Prototype</code>生命周期,每次<code>new</code>一个出来）</td>
+</tr>
+<tr>
+<td align="left"><strong>@EnableTransactionManagement</strong></td>
+<td align="left">用于开启事务管理</td>
+</tr>
+<tr>
+<td align="left"><strong>@Transactional</strong></td>
+<td align="left">用于开启事务以及设置传播性、隔离性、回滚条件等</td>
+</tr>
+<tr>
+<td align="left"><strong>@TransactionalEventListener</strong></td>
+<td align="left">用于配置事务的回调方法(事务提交前、提交后、完成后,回滚后)</td>
+</tr>
+<tr>
+<td align="left"><strong>@Order</strong></td>
+<td align="left">注解可以设置<code>Spring</code>管理对象的加载顺序</td>
+</tr>
+<tr>
+<td align="left"><strong>@AliasFor</strong></td>
+<td align="left">注解可以设置一组注解属性相互作为别名</td>
+</tr>
+</tbody></table>
+<h1 id="SpringContext-注解"><a href="#SpringContext-注解" class="headerlink" title="SpringContext 注解"></a>SpringContext 注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@Configuration</strong></td>
+<td align="left">用于标注配置类，启用Java配置方式的Bean配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@Bean</strong></td>
+<td align="left">用于配置一个<code>Bean</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@ComponentScan</strong></td>
+<td align="left">用于扫描包方式配置<code>Bean</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@ComponentScans</strong></td>
+<td align="left">用于配置一组<code>@ComponentScan</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@PropertySource</strong></td>
+<td align="left">用于导入配置文件</td>
+</tr>
+<tr>
+<td align="left"><strong>@PropertySources</strong></td>
+<td align="left">用于配置一组<code>@PropertySource</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@Conditional</strong></td>
+<td align="left">用于设置关联的条件类，在合适的时候启用<code>Bean</code>的配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@Import</strong></td>
+<td align="left">用于导入其它配置类</td>
+</tr>
+<tr>
+<td align="left"><strong>@ImportResource</strong></td>
+<td align="left">用于导入非Java配置方式的<code>XML</code>配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@Profile</strong></td>
+<td align="left">用于指定在合适的<code>Profile</code>下启用配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@Lazy</strong></td>
+<td align="left">用于告知容器延迟到使用的时候实例化<code>Bean</code>（默认情况下容器启动的时候实例化Bean来检查所有的问题）</td>
+</tr>
+<tr>
+<td align="left"><strong>@Description</strong></td>
+<td align="left">用于给Bean设置描述</td>
+</tr>
+<tr>
+<td align="left"><strong>@Scope</strong></td>
+<td align="left">用于设置Bean的生命周期</td>
+</tr>
+<tr>
+<td align="left"><strong>@Primary</strong></td>
+<td align="left">用于在定义了多个Bean的时候指定首选的Bean</td>
+</tr>
+<tr>
+<td align="left"><strong>@EventListener</strong></td>
+<td align="left">用于设置回调方法监听Spring制定的以及自定义的各种事件</td>
+</tr>
+<tr>
+<td align="left"><strong>@EnableAspectJAutoProxy</strong></td>
+<td align="left">用于开启支持<code>AspectJ</code>的<code>@Aspect</code>切面配置支持</td>
+</tr>
+</tbody></table>
+<h1 id="SpringMVC-注解"><a href="#SpringMVC-注解" class="headerlink" title="SpringMVC 注解"></a>SpringMVC 注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@RequestScope</strong></td>
+<td align="left"><code>Bean</code>特殊生命周期的复合注解（需要<code>Bean</code>跟随<strong>请求</strong>声明周期）</td>
+</tr>
+<tr>
+<td align="left"><strong>@SessionScope</strong></td>
+<td align="left"><code>Bean</code>特殊生命周期的复合注解（需要<code>Bean</code>跟随<strong>会话</strong>声明周期）</td>
+</tr>
+<tr>
+<td align="left"><strong>@ApplicationScope</strong></td>
+<td align="left"><code>Bean</code>特殊生命周期的复合注解（需要<code>Bean</code>跟随<strong>应用程序</strong>的声明周期）</td>
+</tr>
+<tr>
+<td align="left"><strong>@RequestMapping</strong></td>
+<td align="left">用于配置<code>Http</code>请求路径参数等，手动配置<code>HttpMethod</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@PostMapping</strong></td>
+<td align="left">基于<code>@RequestMapping</code>的复核注解，<code>HTTPPOST</code>请求</td>
+</tr>
+<tr>
+<td align="left"><strong>@GetMapping</strong></td>
+<td align="left">基于<code>@RequestMapping</code>的复核注解，<code>HTTPGET</code>请求</td>
+</tr>
+<tr>
+<td align="left"><strong>@DeleteMapping</strong></td>
+<td align="left">基于<code>@RequestMapping</code>的复核注解，<code>HTTPDELETE</code>请求</td>
+</tr>
+<tr>
+<td align="left"><strong>@PutMapping</strong></td>
+<td align="left">基于<code>@RequestMapping</code>的复核注解，<code>HTTPPUT</code>请求</td>
+</tr>
+<tr>
+<td align="left"><strong>@ResponseStatus</strong></td>
+<td align="left">可用到方法或异常上，请求得到响应代码</td>
+</tr>
+<tr>
+<td align="left"><strong>@ExceptionHandle</strong></td>
+<td align="left">可用到方法或异常上，请求得到异常原因,可以进行统一的全局异常处理</td>
+</tr>
+<tr>
+<td align="left"><strong>@ResponseBody</strong></td>
+<td align="left">把返回内容（序列化后）输出到请求体，<code>@RestController</code>常用</td>
+</tr>
+<tr>
+<td align="left"><strong>@RequestBody</strong></td>
+<td align="left">从请求体获取参数（处理复杂数据，比如<code>JSON</code>）</td>
+</tr>
+<tr>
+<td align="left"><strong>@RequestHeader</strong></td>
+<td align="left">从请求头获取参数获取参数</td>
+</tr>
+<tr>
+<td align="left"><strong>@CookieValue</strong></td>
+<td align="left">从<code>cookie</code>中获取参数</td>
+</tr>
+<tr>
+<td align="left"><strong>@SessionAttribute</strong></td>
+<td align="left">从会话中获取参数</td>
+</tr>
+<tr>
+<td align="left"><strong>@RequestAttribute</strong></td>
+<td align="left">从请求的<code>Attribute</code>中（过滤器和拦截器手动设置的一些临时数据）</td>
+</tr>
+<tr>
+<td align="left"><strong>@RequestParam</strong></td>
+<td align="left">从请求参数（处理简单数据，键值对）</td>
+</tr>
+<tr>
+<td align="left"><strong>@PathVariable</strong></td>
+<td align="left">从路径片段中获取参数</td>
+</tr>
+<tr>
+<td align="left"><strong>@MatrixAttribute</strong></td>
+<td align="left">矩阵变量允许我们采用特殊的规则在<code>URL</code>路径后加参数（分号区分不同参数，逗号为参数增加多个值）</td>
+</tr>
+<tr>
+<td align="left"><strong>@ControllerAdvice</strong></td>
+<td align="left">允许我们在集中的地方配置控制器，相当于为<code>@ExceptionHandler</code>加上了<code>@ResponseBody</code></td>
+</tr>
+<tr>
+<td align="left"><strong>@RestControllerAdvice</strong></td>
+<td align="left">和<code>@ControllerAdvice</code>类似</td>
+</tr>
+<tr>
+<td align="left"><strong>@InitBinder</strong></td>
+<td align="left">用来设置<code>WebDataBinder</code>，<code>WebDataBinder</code>用来自动绑定前台请求参数到<code>Model</code>中</td>
+</tr>
+<tr>
+<td align="left"><strong>@ModelAttribute</strong></td>
+<td align="left">让全局的<code>@RequestMapping</code>都能获得在此处设置的键值对</td>
+</tr>
+<tr>
+<td align="left"><strong>@CrossOrigin</strong></td>
+<td align="left">用到<code>@Controller</code>或<code>Method</code>上（需要配合<code>@RequestMapping</code>）设置细粒度的跨域行为</td>
+</tr>
+</tbody></table>
+<h1 id="SpringBoot-注解"><a href="#SpringBoot-注解" class="headerlink" title="SpringBoot 注解"></a>SpringBoot 注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@ConfigurationProperties</strong></td>
+<td align="left">配合<code>@EnableConfigurationProperties</code>注解来设置需要启用的配置类,用来自定义配置类和配置文件进行关联</td>
+</tr>
+<tr>
+<td align="left"><strong>@EnableConfigurationProperties</strong></td>
+<td align="left">启动自定义配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@DeprecatedConfigurationProperty</strong></td>
+<td align="left">用于标记废弃的配置以及设置替代配置和告知废弃原因</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConfigurationPropertiesBinding</strong></td>
+<td align="left">用于指定自定义的转换器用于配置解析的时的类型转换</td>
+</tr>
+<tr>
+<td align="left"><strong>@NestedConfigurationProperty</strong></td>
+<td align="left">用于关联外部的类型作为嵌套配置类</td>
+</tr>
+<tr>
+<td align="left"><strong>@EnableAutoConfiguration</strong></td>
+<td align="left">可以启用自动配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@SpringBootApplication</strong></td>
+<td align="left">复合注解，<code>SpringBoot</code>启动注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@AutoConfigureOrder</strong></td>
+<td align="left">用于设置自动配置类加载顺序，以及精确控制加载依赖关系（值越小优先级越高）</td>
+</tr>
+<tr>
+<td align="left"><strong>@AutoConfigureAfter</strong></td>
+<td align="left">在指定的配置类初始化后再加载</td>
+</tr>
+<tr>
+<td align="left"><strong>@AutoConfigureBefore</strong></td>
+<td align="left">在指定的配置类初始化前加载</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnBean</strong></td>
+<td align="left">用于仅当容器中已经包含指定的Bean类型或名称时才匹配条件</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnClass</strong></td>
+<td align="left">仅当<code>classpath</code>上存在指定类时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnCloudPlatform</strong></td>
+<td align="left">仅当指定的云平台处于活动状态时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnExpression</strong></td>
+<td align="left">依赖于<code>SpEL</code>表达式的值的条件元素的配置注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnJava</strong></td>
+<td align="left">基于应用运行的JVM版本的条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnJndi</strong></td>
+<td align="left">基于<code>JNDI</code>可用和可以查找指定位置的条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnMissingBean</strong></td>
+<td align="left">仅当容器中不包含指定的Bean类型或名称时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnMissingClass</strong></td>
+<td align="left">仅当<code>classpath</code>上不存在指定类时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnNotWebApplication</strong></td>
+<td align="left">仅当不是<code>WebApplicationContext</code>（非<code>Web</code>项目）时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnWebApplication</strong></td>
+<td align="left">仅当是<code>WebApplicationContext</code>（<code>Web</code>项目）时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnProperty</strong></td>
+<td align="left">是检查指定的属性是否具有指定的值</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnResource</strong></td>
+<td align="left">示仅当<code>classpath</code>上存在指定资源时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@ConditionalOnSingleCandidate</strong></td>
+<td align="left">仅当容器中包含指定的Bean类并且可以判断只有单个候选者时条件匹配</td>
+</tr>
+<tr>
+<td align="left"><strong>@Conditional</strong></td>
+<td align="left">关联到自己实现的<code>SpringBootCondition</code></td>
+</tr>
+</tbody></table>
+<h1 id="SpringCloud-注解"><a href="#SpringCloud-注解" class="headerlink" title="SpringCloud 注解"></a>SpringCloud 注解</h1><table>
+<thead>
+<tr>
+<th align="left">注解</th>
+<th align="left">解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>@EnableXXX</strong></td>
+<td align="left">开启某个功能</td>
+</tr>
+<tr>
+<td align="left"><strong>@RibbonClient</strong></td>
+<td align="left">这个注解用来为负载均衡客户端做一些自定义的配置</td>
+</tr>
+<tr>
+<td align="left"><strong>@SpringCloudApplication</strong></td>
+<td align="left">复合注解，<code>SpringCloud</code>启动注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@LoadBalanced</strong></td>
+<td align="left">用于和<code>RestTemplate</code>配合使用构成一个负载均衡的<code>Http</code>客户端，实现原理上其实这个注解是一个<code>@Qualifier</code>注解</td>
+</tr>
+<tr>
+<td align="left"><strong>@SpanName</strong></td>
+<td align="left">手动设置span的名称</td>
+</tr>
+</tbody></table>
+<h1 id="注"><a href="#注" class="headerlink" title="注"></a>注</h1><ol>
+<li>元注解，也就是注解的注解  </li>
+<li><code>Spring</code>容器相关的一些注解，包括<code>@Qualifier</code>、<code>@AliasFor</code>、<code>@Order</code>等看似不重要但其实很重要的注解  </li>
+<li><code>Spring</code>、<code>Java</code>配置相关的一些注解，包括条件注解  </li>
+<li><code>SpringBoo</code>t自动配置相关的一些注解  </li>
+<li>很多注解可以同时应用到类型、方法、参数上，有的时候应用到不同的地方作用会略微不一样，这个需要重点关注  </li>
+</ol>
+<h1 id="参考文献"><a href="#参考文献" class="headerlink" title="参考文献"></a>参考文献</h1><p><a href="https://mp.weixin.qq.com/s/ZDqDvG5Soy_gucYrvMi6fg" target="_blank" rel="noopener">朱晔和你聊Spring系列S1E9：聊聊Spring的那些注解</a>  </p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Spring/" rel="tag"><i class="fa fa-tag"></i> Spring</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/12/04/%E7%90%86%E8%A7%A3%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1-ZooKeeper/" rel="next" title="理解分布式协调服务 zookeeper">
+                  <i class="fa fa-chevron-left"></i> 理解分布式协调服务 zookeeper
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/12/11/%E6%B5%85%E6%9E%90%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="prev" title="浅析分布式事务">
+                  浅析分布式事务 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#Java元注解"><span class="nav-number">1.</span> <span class="nav-text">Java元注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SpringCore-注解"><span class="nav-number">2.</span> <span class="nav-text">SpringCore 注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SpringContext-注解"><span class="nav-number">3.</span> <span class="nav-text">SpringContext 注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SpringMVC-注解"><span class="nav-number">4.</span> <span class="nav-text">SpringMVC 注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SpringBoot-注解"><span class="nav-number">5.</span> <span class="nav-text">SpringBoot 注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#SpringCloud-注解"><span class="nav-number">6.</span> <span class="nav-text">SpringCloud 注解</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#注"><span class="nav-number">7.</span> <span class="nav-text">注</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#参考文献"><span class="nav-number">8.</span> <span class="nav-text">参考文献</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="如果你了解过Raft协议、ZAB(ZooKeeper&amp;#39;s Atomic Broadcast)协议及Paxos算法，你会发现它们本质上都是为了解决共识问题，即属于一种一致性算法（原子广播协议通常意义上可以等同于一致性协议）。但你可能会觉得相比于Paxos，ZAB与Raft可能更相似。从直观感受上，Paxos协议（Basic Paxos）更像是一种广义上的一致性算法的理论版本，它泛化了很多问题">
+<meta name="keywords" content="一致性算法,原子广播协议">
+<meta property="og:type" content="article">
+<meta property="og:title" content="简单对比 Raft 及 ZAB 协议">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;08&#x2F;%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94-Raft-%E5%8F%8A-ZAB-%E5%8D%8F%E8%AE%AE&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="如果你了解过Raft协议、ZAB(ZooKeeper&amp;#39;s Atomic Broadcast)协议及Paxos算法，你会发现它们本质上都是为了解决共识问题，即属于一种一致性算法（原子广播协议通常意义上可以等同于一致性协议）。但你可能会觉得相比于Paxos，ZAB与Raft可能更相似。从直观感受上，Paxos协议（Basic Paxos）更像是一种广义上的一致性算法的理论版本，它泛化了很多问题">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.889Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/08/%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94-Raft-%E5%8F%8A-ZAB-%E5%8D%8F%E8%AE%AE/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>简单对比 Raft 及 ZAB 协议 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/08/%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94-Raft-%E5%8F%8A-ZAB-%E5%8D%8F%E8%AE%AE/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          简单对比 Raft 及 ZAB 协议
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-08 14:59:48" itemprop="dateCreated datePublished" datetime="2019-01-08T14:59:48+08:00">2019-01-08</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E4%B8%80%E8%87%B4%E6%80%A7%E7%AE%97%E6%B3%95/" itemprop="url" rel="index">
+                    <span itemprop="name">一致性算法</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.9k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>如果你了解过<code>Raft</code>协议、<code>ZAB</code>(<code>ZooKeeper&#39;s Atomic Broadcast</code>)协议及<code>Paxos</code>算法，你会发现它们本质上都是为了解决共识问题，即属于一种一致性算法（原子广播协议通常意义上可以等同于一致性协议）。但你可能会觉得相比于<code>Paxos</code>，<code>ZAB</code>与<code>Raft</code>可能更相似。从直观感受上，<code>Paxos</code>协议（<code>Basic Paxos</code>）更像是一种广义上的一致性算法的理论版本，它泛化了很多问题，并且没有基于特定场景的（工程）设计，因此相对而言也更难理解。而<code>ZAB</code>及<code>Raft</code>则像是具化的一致性化算法，并且简化了一些问题的前提设定，这也使得它们更易理解，也更易实现。本文对<code>Raft</code>协议及<code>ZAB</code>协议进行简单理解对比，主要讨论它们的不同之处。考虑到<code>Raft</code>论文给出了关于实现的详细细节，但官方提供的<code>ZAB</code>论文并没有涉及太多实现细节（Andr´e Medeiros 于 2012 年发表了一篇理论结合实践的论文），因此关于<code>ZAB</code>的细节是针对<code>ZooKeeper</code>的实现而言的。</p>
+<a id="more"></a>
+
+<p>首先，考虑一个问题，为什么需要选举出一个<code>leader</code>？我们知道，在<code>Basic Paxos</code>中并没有强调一定需要一个<code>leader</code>。但在<code>Raft</code>中包含了<code>leader</code>的强领导原则，而<code>ZAB</code>协议，正常的<code>Broadcast</code>阶段也需要一个<code>leader</code>。很自然地，若能够选举出一个<code>leader</code>节点，由其来统筹所有的客户端请求，可以方便并发控制，而且，因为<code>leader</code>是具备最新日志的节点，这使得日志同步过程也变得更简单，单向地由<code>leader</code>流向<code>follower</code>。另外，其实在日志恢复过程中，需要挑选出包含最新日志的节点，如果将它作为<code>leader</code>，那将使得失败恢复过程加快。最后，根本上而言，<code>Raft</code>及<code>ZAB</code>的对日志的应用都差不多归纳为一个二阶段过程，先收集<code>follower</code>反馈，然后，根据特定规则决定是否提交。那么收集反馈的工作若交由<code>leader</code>来处理，明显简化了协议流程。</p>
+<p>接下来，我们简述<code>Raft</code>协议与<code>ZAB</code>协议中选举流程的对比情况。明显地，二者都是先选投票给自己，然后广播投票信息，另外它们都包含了选举轮次的概念（在<code>Raft</code>中为任期<code>term</code>，在<code>ZAB</code>中为<code>round</code>，两者的选举过程可能会涉及多轮），这确实比较类似，但需要注意的是，选举完成后，对于<code>Raft</code>而言，<code>term</code>即为<code>leader</code>所在的任期，而<code>ZAB</code>协议却额外使用了一个任期概念(<code>epoch</code>)。在具体的选举过程中，<code>Raft</code>协议规定一旦节点认为它能够为候选者投票，则在此轮投票过程中，都不会改变。而在<code>ZAB</code>协议中，集群中各节点反复交换选票信息（里面包含各自已提交的历史事务日志），以更新选票信息。二者都有<code>quorum</code>选票成功的概念。</p>
+<p>与选举流程相关的另一个问题就是如何定义节点包含更新的事务日志。在<code>Raft</code>中，是通过依次比较<code>term</code>及<code>index</code>来确定。而<code>ZAB</code>协议是依次比较<code>epoch</code>及<code>counter</code>来决定（即通过比较<code>zxid</code>），值得注意的是选举轮次<code>round</code>也会作为比较因素。另外，在<code>Raft</code>中有一个很重要的一点为，被选举出来的<code>leader</code>只能提交本<code>term</code>的事务日志（不能显式提交之前<code>term</code>的未提交的事务日志，论文中详细阐述了原因），即在提交当前<code>term</code>的事务日志时，隐式（顺便）提交了之前<code>term</code>的未提交的（但已被复制到<code>quorum</code>节点）事务日志。在<code>ZAB</code>协议中，当<code>leader</code>选举未完成后，不会存在这样的情况，因为在<code>Broadcast</code>阶段之前，<code>Synchronization</code>阶段（<code>Raft</code>协议并未提供此阶段）会保证各节点的日志处于完全一致的状态。</p>
+<p>另外，<code>ZAB</code>与<code>Raft</code>协议在选举阶段都使用了超时机制，以保证节点在超时时间内未收到投票信息，会自动转入下一轮的选举。具体而言，<code>Raft</code>的选举流程还可能会出现瓜分选票的情况(<code>split vote)</code>，因此，<code>Raft</code>通过随机化超时(<code>randomized timeout</code>)时间来缓解这个问题（不是解决）。而<code>ZAB</code>协议不会存在瓜分选票的情况，唯一依据是节点的选票的新旧程度。因此，理论上<code>Raft</code>可能存在活性的问题，即不会选举过程不会终止。而<code>ZAB</code>的选举时间应该会比<code>Raft</code>的选举时间更长（更频繁的交换选票信息）。</p>
+<p>其次，在<code>ZAB</code>论文中有提到过，<code>follower</code>及<code>leader</code>由<code>Broadcast</code>阶段进入选举阶段，有各自判定依据，或者，这可以表述为，各节点如何触发<code>leader</code>选举过程。明显，在集群刚启动时，节点会先进行选举。另外，<code>Raft</code>协议通过周期性地由<code>leader</code>向<code>follower</code>发送心跳，心巩固<code>leader</code>的领导地位，一旦超时时间内，<code>follower</code>未收到心跳信息，则转为<code>candidate</code>状态、递增<code>term</code>，并触发选举流程（当<code>leader</code>发现消息回复中包含更高<code>term</code>时，便转为<code>follower</code>状态）。而在<code>ZAB</code>协议中，也是通过<code>leader</code>周期性向<code>follower</code>发送心跳，一旦<code>leader</code>未检测到<code>quorum</code>个回复，则会转为<code>election</code>状态，并进入选举流程（它会断开与<code>follower</code>的连接）。而此时<code>follower</code>一旦检测到<code>leader</code>已经卸任，同样会进入<code>election</code>状态，进入选举流程。</p>
+<p>如果不幸<code>leader</code>发生了宕机，集群因此重新进行了选举，并生成了新的<code>leader</code>，上一个<code>term</code>并不会影响到当前的<code>leader</code>的工作。这在<code>Raft</code>及<code>ZAB</code>协议中分别可以通过<code>term</code>及<code>epoch</code>来判定决定。那上一任期遗留的事务日志如何处理？典型地，这包含是否已被<code>quorum</code>节点复制的日志。而对于之前<code>term</code>的事务日志，<code>Raft</code>的策略在前文已经叙述，不会主动提交，若已经被过半复制，则会隐式提交。而那些未过半复制的，可能会被删除。而<code>ZAB</code>协议则采取更激进的策略，对于所有过半还是未过半的日志都判定为提交，都将其应用到状态机。</p>
+<p>最后，是关于如何让一个新的节点加入协议流程的问题。在<code>Raft</code>中，<code>leader</code>会周期性地向<code>follower</code>发送心跳信息，里面包含了<code>leader</code>信息，因此，此节点可以重构其需要的信息。在<code>ZAB</code>中会有所不同，刚启动后，它会向转入<code>election</code>状态，并向所有节点发送投票信息，因此，正常情况下它会收到集群中其它的<code>follower</code>节点发送的关于<code>leader</code>的投票信息，当然也会收到<code>leader</code>的消息，然后从这些回复中判断当前的<code>leader</code>节点的信息，然后转入<code>following</code>状态，会周期性收到<code>leader</code>的心跳消息。需要注意的一点是，对于<code>Raft</code>而言，一个节点加入协议（不是新机器）不会阻塞整个协议的运行，因为<code>leader</code>保存有节点目前已同步的信息，或者说下一个需要同步的日志的索引，因此它只需要将后续的日志通过心跳发送给<code>follower</code>即可。而<code>ZAB</code>协议中是会阻塞<code>leader</code>收到客户端的写请求。因此，<code>leader</code>向<code>follower</code>同步日志的过程，需要获取<code>leader</code>数据的读锁，然后，确定需要同步给<code>follower</code>的事务日志，确定之后才能释放锁。值得注意的是，<code>Raft</code>的日志被设计成是连续的。而<code>ZAB</code>的日志被设计成允许存在空洞。具体而言，<code>leader</code>为每个<code>follower</code>保存了一个队列，用于存放所有变更。当<code>follower</code>在与<code>leader</code>进行同步时，需要阻塞<code>leader</code>的写请求，只有等到将<code>follower</code>和<code>leader</code>之间的差异数据先放入队列完成之后，才能解除阻塞。这是为了保证所有请求的顺序性，因为在同步期间的数据需要被添加在了上述队列末尾，从而保证了队列中的数据是有序的，从而进一步保证<code>leader</code>发给<code>follower</code>的数据与其接受到客户端的请求的顺序相同，而<code>follower</code>也是一个个进行确认请求（这不同于<code>Raft</code>，后者可以批量同步事务日志），所以对于<code>leader</code>的请求回复也是严格有序的。</p>
+<p>最后，从论文来看，二者的快照也略有不同。<code>Raft</code>的快照机制对应了某一个时刻状态机数据（即采取的是准确式快照）。而<code>ZooKeeper为</code>了保证快照的高性能，采用一种<code>fuzzy snapshot</code>机制（这在<code>ZooKeeper</code>博文中有介绍），大概地，它会记录从快照开始的事务标识，并且此时不会阻塞写请求（不锁定内存），因此，它会对部分新的事务日志应用多次（事务日志的幂等特性保证了这种做法的正确性）。</p>
+<p>顺便提一下，<code>ZooKeepr</code>为保证读性能的线性扩展，让任何节点都能处理读请求。但这带来的代价是过期数据。（虽然可通过<code>sync read</code>来强制读取最新数据）。而<code>Raft</code>不会出现过期数据的情况（具体如何保证取决于实现，如将读请求转发到<code>leader</code>）。</p>
+<p>本文是从协议流程的各个阶段来对比<code>Raft</code>及<code>ZAB</code>协议。<a href="https://blog.acolyer.org/2015/03/11/vive-la-difference-paxos-vs-viewstamped-replication-vs-zab/" target="_blank" rel="noopener">这里</a>也提供更系统、更理论、更深入的对比（加入了<code>Viewstamped Replication</code>和<code>Paxos</code>一致性协议），它简要概括了<a href="https://arxiv.org/pdf/1309.5671.pdf" target="_blank" rel="noopener">论文</a>。</p>
+<p>关于<code>ZAB</code>协议与<code>Paxos</code>的区别，这里便不多阐述了。在<code>ZAB</code>文章中有简略介绍。另外，也可以在<a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Zab+vs.+Paxos" target="_blank" rel="noopener">这里</a>进行了解。这篇博文主要参考了文献[1]。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://my.oschina.net/pingpangkuangmo/blog/782702" target="_blank" rel="noopener">Raft对比ZAB协议</a><br>[2]. <a href="https://blog.acolyer.org/2015/03/11/vive-la-difference-paxos-vs-viewstamped-replication-vs-zab/" target="_blank" rel="noopener">Vive La Différence: Paxos vs Viewstamped Replication vs Zab</a><br>[3]. Van Renesse R, Schiper N, Schneider F B. Vive la différence: Paxos vs. viewstamped replication vs. zab[J]. IEEE Transactions on Dependable and Secure Computing, 2015, 12(4): 472-484.</p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E7%AE%97%E6%B3%95/" rel="tag"><i class="fa fa-tag"></i> 一致性算法</a>
+              <a href="/tags/%E5%8E%9F%E5%AD%90%E5%B9%BF%E6%92%AD%E5%8D%8F%E8%AE%AE/" rel="tag"><i class="fa fa-tag"></i> 原子广播协议</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/05/%E7%90%86%E8%A7%A3-ZAB-%E5%8D%8F%E8%AE%AE/" rel="next" title="理解 ZAB 协议">
+                  <i class="fa fa-chevron-left"></i> 理解 ZAB 协议
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/09/etcd-raftexample-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd raftexample 源码简析">
+                  etcd raftexample 源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

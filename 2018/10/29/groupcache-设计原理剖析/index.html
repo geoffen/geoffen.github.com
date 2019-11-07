@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="groupcache是一个用go实现的分布式k&#x2F;v缓存及缓存填充库，它的作者也是memcached的作者，它已在Google多个生产环境中使用。它非常小巧精致，比较适用于分布式缓存的学习。它本身只是一个代码包（大约2000行代码，不需要配置服务器，在不同的请求处理场合，它可以充当客户端或者服务器的角色。它支持一致性哈希，即通过一致性哈希来对查询请求进行路由。对于缓存的具体策略，groupcache">
+<meta name="keywords" content="分布式系统,分布式缓存,LRU缓存,一致性哈希,缓存过滤机制,缓存击穿,热点数据扩散">
+<meta property="og:type" content="article">
+<meta property="og:title" content="groupcache 设计原理剖析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;10&#x2F;29&#x2F;groupcache-%E8%AE%BE%E8%AE%A1%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="groupcache是一个用go实现的分布式k&#x2F;v缓存及缓存填充库，它的作者也是memcached的作者，它已在Google多个生产环境中使用。它非常小巧精致，比较适用于分布式缓存的学习。它本身只是一个代码包（大约2000行代码，不需要配置服务器，在不同的请求处理场合，它可以充当客户端或者服务器的角色。它支持一致性哈希，即通过一致性哈希来对查询请求进行路由。对于缓存的具体策略，groupcache">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:40:50.852Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/10/29/groupcache-%E8%AE%BE%E8%AE%A1%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>groupcache 设计原理剖析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/10/29/groupcache-%E8%AE%BE%E8%AE%A1%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          groupcache 设计原理剖析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-10-29 17:54:55" itemprop="dateCreated datePublished" datetime="2018-10-29T17:54:55+08:00">2018-10-29</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:40:50" itemprop="dateModified" datetime="2019-10-24T13:40:50+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>2.7k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>2 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><a href="https://github.com/golang/groupcache" target="_blank" rel="noopener"><code>groupcache</code></a>是一个用<code>go</code>实现的分布式k/v缓存及缓存填充库，它的作者也是<a href="https://github.com/memcached/memcached" target="_blank" rel="noopener"><code>memcached</code></a>的作者，它已在Google多个生产环境中使用。它非常小巧精致，比较适用于分布式缓存的学习。它本身只是一个代码包（大约2000行代码，不需要配置服务器，在不同的请求处理场合，它可以充当客户端或者服务器的角色。它支持一致性哈希，即通过一致性哈希来对查询请求进行路由。对于缓存的具体策略，<code>groupcache</code>采用的是<code>LRU</code>，使用了一个<code>List</code>和一个<code>Map</code>来实现，非常简单。下面先简述本地缓存的基本模型和常见问题，然后剖析<code>groupcache</code>的设计原理。</p>
+<a id="more"></a>
+
+<p>单机缓存或者本地缓存是简单的，通过在内存中维护一个cache，当收到查询时，先查询cache是否已缓存查询结果，如果命中则直接返回，否则必须到存储系统执行查询，然后将结果先缓存到cache，然后返回结果。当然，这是本地缓存的基本模型，一般而言，缓存系统都面临着诸如<strong>缓存穿透</strong>、<strong>缓存雪崩</strong>及<strong>缓存击穿</strong>等问题。</p>
+<ul>
+<li>缓存穿透指的是查询一定不存在的数据，此时从数据源查询不到结果，因此也无法对结果进行缓存，这直接导致此类型的查询请求每次都会落到数据源层，不仅使得缓存失效，当请求数量过多时也会浪费资源。</li>
+<li>缓存雪崩指的是大量的缓存的过期时间被设置为相同或近似，使得缓存失效时，所有的查询请求全部落地到数据源层，同样，此时数据源层存在服务不可用的可能性。</li>
+<li>缓存击穿则指的是对于那些热点数据，在缓存失效时，高并发的查询请求也会导致后端数据源层崩溃。</li>
+</ul>
+<p>对于<code>groupcache</code>的设计，文章从一致性哈希、缓存命名空间、热数据扩散以及缓存过滤几个方面进行阐述。</p>
+<h2 id="一致性哈希"><a href="#一致性哈希" class="headerlink" title="一致性哈希"></a>一致性哈希</h2><p>一致性哈希最初是在论文<a href="https://www.akamai.com/us/en/multimedia/documents/technical-publication/consistent-hashing-and-random-trees-distributed-caching-protocols-for-relieving-hot-spots-on-the-world-wide-web-technical-publication.pdf" target="_blank" rel="noopener">《Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web》</a>中提出，目标是致力于解决因特网中的热点(<code>Hot spot</code>)问题，并真正应用于<code>p2p</code>环境，它弥补简单的哈希算法的不足。一般可以从四个方面来衡量哈希算法的适用性。</p>
+<ul>
+<li><strong>平衡性</strong>。平衡性即哈希的结果能够尽可能的分散到所有节点或缓冲，以保证缓冲空间被最大程度使用。</li>
+<li><strong>单调性</strong>。单调性即如果当前缓存系统已经存在被映射的缓冲内容，当有新的节点加入到系统时，哈希算法应该能够尽可能保证原有已分配的的缓冲内容只能被映射到原有的对应节点或者新的节点，而不能被映射到旧的节点集合的其它节点。</li>
+<li><strong>分散性</strong>。分布式环境中，不同终端所见的节点范围有可能不同（因为可能只能看见部分节点），这会导致不同终端的哈希结果不一致，最终，相同的内容被映射到了不同的节点。而分散性则专门用于描述此种情况发生的严重程度。好的哈希算法应该尽量避免发生这种情况，即降低分散性。</li>
+<li><strong>负载</strong>。本质上与分散性阐述的是同一问题。但它从节点出发，即某一特定的节点应该尽可能被相同的缓冲内容所映射到，换言之，避免（不同终端）将相同的内容映射到不同的节点。</li>
+</ul>
+<p>所谓一致性哈希，简而言之，即将节点与缓冲内容分别映射到一个巨大的环形空间中，最终内容的缓存节点为在顺时针方向上最靠近它的节点。可以发现，系统中节点的添加与删除，一致性哈希算法仍能基本满足以上四个特性。另外一个关键问题是，当集群中节点数量较少时，节点分布不均匀（即节点所负责的内容范围相差较大）会直接导致内容（数据）倾斜，因此一般会引入虚拟节点，即将节点映射为虚拟节点。如此，整个缓存映射过程便拆分为两个阶段：对于特定缓冲内容，先找到其映射的虚拟节点，然后再由虚拟节点映射到物理节点。</p>
+<p>一致性哈希在分布式缓存中充当查询路由角色，因为不同节点负责特定的<code>key</code>集合。因此，如果此时当查询没能在本节点缓存中命中时，则需通过一致性哈希路由特定节点(<code>peer</code>)，然后借助<code>http</code>发送数据查询请求，请求的协议格式为: <code>GET http://peer/key</code>。因此，所有节点必须监听其它节点的数据查询请求，同时具备相应的请求处理模块。</p>
+<h2 id="缓存命名空间"><a href="#缓存命名空间" class="headerlink" title="缓存命名空间"></a>缓存命名空间</h2><p>即便是在单个节点上，也可以创建若干个不同名称的缓存命名空间，以使得不同命名空间的缓存相互独立。如此，可以在原本针对<code>key</code>进行分片的基础上，丰富缓存功能。因此，节点间的数据查询请求协议格式变更为：<code>GET http://peer/groupname/key</code>。</p>
+<h2 id="热点数据扩散"><a href="#热点数据扩散" class="headerlink" title="热点数据扩散"></a>热点数据扩散</h2><p>分布式缓存系统，不同的节点会负责特定的<code>key</code>集合的查询请求。但因为并非所有的<code>key</code>的访问量是均匀的，因此，存在这种情况：某些<code>key</code>属于热点数据而被大量访问，这可能导致包含该<code>key</code>的节点无法及时处理甚至瘫痪。考虑到这一点，<code>groupcache</code>增加了热点数据自动扩展的功能。即针对每一个节点，除了会缓存本节点存在且大量被访问的<code>key</code>之外（缓存这些<code>key</code>的对象被称之为<code>maincache</code>），也会缓存那些不属于本节点，但同样被大量访问（发生大量地<code>miss cache</code>）的<code>key</code>，而缓存这些<code>key</code>的对象被称这为<code>hotcache</code>，如此便能缓解热点数据的查询请求集中某一个节点的问题。</p>
+<h2 id="缓存过滤机制"><a href="#缓存过滤机制" class="headerlink" title="缓存过滤机制"></a>缓存过滤机制</h2><p><code>groupcache</code>的<code>singleflight</code>模块实现了缓存过滤机制。即在大量相同的请求并发访问时，若缓存未能命中，则会触发大量的<code>Load</code>过程。即所有的查询请求全部会落到数据源（如<code>DB</code>）或从其它节点加载数据，因此考虑到节点可靠性，此时<code>DB</code>存在因压力过大而导致服务不可用的情况，同时也浪费资源。<code>groupcache</code>设计所提供的解决方案是：尽管存在并发的查询，但能保证只有一个请求能够真正的转发到<code>DB</code>执行查询，而其余的请求都会阻塞等待，直至第一个请求的查询结果返回，同时，其它请求会使用第一个请求的查询结果，最后再返回给客户端。<code>singleflight</code>通过<code>go</code>的<code>sync.WaitGroup</code>实现同一时间相同查询请求的合并。</p>
+<p>最后，虽然官方声称<code>groupcache</code>在很多场景下已经成为<code>memcached</code>的替代版，但其本身存在固有的”局限性”。</p>
+<ul>
+<li><code>groupcache</code>采用的是<code>LRU</code>缓存机制，使用<code>List</code>和<code>Map</code>实现，不支持过期机制（不支持设置过期时间），也没有明确的回收机制（只是简单地将队尾的数据移除），但能够控制缓存总大小在用户设置的阈值之下。</li>
+<li><code>groupcache</code>不支持<code>set</code>、<code>update</code>以及<code>delete</code>，即对于客户端而言，只能执行<code>get</code>操作。</li>
+<li><code>groupcache</code>针对<code>key</code>不支持多个版本的值。</li>
+</ul>
+<p>总而言之，<code>groupcache</code>是一个值得学习的开源分布式缓存系统，通过阅读源码，一方面可以了解分布式缓存相关的设计原则，也能学习编程相关的设计经验。</p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%BC%93%E5%AD%98/" rel="tag"><i class="fa fa-tag"></i> 分布式缓存</a>
+              <a href="/tags/LRU%E7%BC%93%E5%AD%98/" rel="tag"><i class="fa fa-tag"></i> LRU缓存</a>
+              <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" rel="tag"><i class="fa fa-tag"></i> 一致性哈希</a>
+              <a href="/tags/%E7%BC%93%E5%AD%98%E8%BF%87%E6%BB%A4%E6%9C%BA%E5%88%B6/" rel="tag"><i class="fa fa-tag"></i> 缓存过滤机制</a>
+              <a href="/tags/%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF/" rel="tag"><i class="fa fa-tag"></i> 缓存击穿</a>
+              <a href="/tags/%E7%83%AD%E7%82%B9%E6%95%B0%E6%8D%AE%E6%89%A9%E6%95%A3/" rel="tag"><i class="fa fa-tag"></i> 热点数据扩散</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/10/25/Live-Sequence-Protocol-%E5%AE%9E%E7%8E%B0/" rel="next" title="Live Sequence Protocol 实现">
+                  <i class="fa fa-chevron-left"></i> Live Sequence Protocol 实现
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/10/29/2018-10-29-Java%E5%90%8E%E7%AB%AF%E5%B7%A5%E7%A8%8B%E5%B8%88%E6%8A%80%E8%83%BD%E6%A0%91/" rel="prev" title="Java后端工程师技能树">
+                  Java后端工程师技能树 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#一致性哈希"><span class="nav-number">1.</span> <span class="nav-text">一致性哈希</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#缓存命名空间"><span class="nav-number">2.</span> <span class="nav-text">缓存命名空间</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#热点数据扩散"><span class="nav-number">3.</span> <span class="nav-text">热点数据扩散</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#缓存过滤机制"><span class="nav-number">4.</span> <span class="nav-text">缓存过滤机制</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

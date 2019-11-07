@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章阐述了etcd-raft存储模块相关逻辑源码，准确而言是与日志存储相关，主要是围绕raftLog、unstable以及Storage&#x2F;MemoryStorage展开，涉及流程较多，且结合流程逻辑阐述得比较详细。本文主题是snapshot，快照也属于存储的范畴，因此本文内容与上一篇文章存在重叠。不同的是，本文是围绕snapshot展开相关逻辑的分析。具体而言，首先简要介绍snapshot数">
+<meta name="keywords" content="分布式系统,snapshot管理">
+<meta property="og:type" content="article">
+<meta property="og:title" content="etcd-raft snapshot实现源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;14&#x2F;etcd-raft-snapshot%E5%AE%9E%E7%8E%B0%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章阐述了etcd-raft存储模块相关逻辑源码，准确而言是与日志存储相关，主要是围绕raftLog、unstable以及Storage&#x2F;MemoryStorage展开，涉及流程较多，且结合流程逻辑阐述得比较详细。本文主题是snapshot，快照也属于存储的范畴，因此本文内容与上一篇文章存在重叠。不同的是，本文是围绕snapshot展开相关逻辑的分析。具体而言，首先简要介绍snapshot数">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:41:41.862Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/14/etcd-raft-snapshot%E5%AE%9E%E7%8E%B0%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>etcd-raft snapshot实现源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/14/etcd-raft-snapshot%E5%AE%9E%E7%8E%B0%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          etcd-raft snapshot实现源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-14 14:49:40" itemprop="dateCreated datePublished" datetime="2019-01-14T14:49:40+08:00">2019-01-14</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:41:41" itemprop="dateModified" datetime="2019-10-24T13:41:41+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>15k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>14 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章阐述了<code>etcd-raft</code>存储模块相关逻辑源码，准确而言是与日志存储相关，主要是围绕<code>raftLog</code>、<code>unstable</code>以及<code>Storage/MemoryStorage</code>展开，涉及流程较多，且结合流程逻辑阐述得比较详细。本文主题是<code>snapshot</code>，快照也属于存储的范畴，因此本文内容与上一篇文章存在重叠。不同的是，本文是围绕<code>snapshot</code>展开相关逻辑的分析。具体而言，首先简要介绍<code>snapshot</code>数据结构及重要接口实现，然后重点分析<code>snapshot</code>的全局逻辑（大部分源码已在上篇文章中分析），这主要包括如下四个子问题：其一，<code>leader</code>节点何时执行<code>snapshot</code>同步复制，其二，（应用程序）何时触发<code>snapshot</code>操作及，其三，（应用程序）如何应用<code>snapshot</code>数据，最后，<code>follower</code>节点何时以及如何应用<code>snapshot</code>数据事实上，第一、四两点是从底层协议的角度阐述与<code>snapshot</code>的相关操作，而第二、三点是从应用程序的角度来阐述<code>snapshot</code>相关操作（这其实涵盖了所有节点的操作）。但总的原则不变，目的是从整体上把握<code>snapshot</code>的逻辑，希望读者不要混淆。</p>
+<a id="more"></a>
+
+<p>需要注意，<code>etcd-raft</code>中关于存储的组件<code>unstable</code>、<code>Storage</code>以及<code>WAL</code>都包含快照，其中前二者的日志项包括快照存储在内存中，<code>WAL</code>将日志项以及快照数据存储在磁盘上。所谓快照实际上表示的是某一时刻系统的状态数据，那么在此时刻之前所保留的日志可以清除，因此它明显具有压缩日志项、节约磁盘空间的作用（在<code>unstable</code>及<code>Storage</code>中仍旧存储在内存）。但<code>WAL</code>与前二者不同，实际上它存储的<code>snapshot</code>数据是指存储它的元数据信息（原因是进行日志重放时，只要从快照元数据记录的日志索引开始即可，在【<a href="https://qqzeng.top/2019/01/11/etcd-raft-WAL%E6%97%A5%E5%BF%97%E7%AE%A1%E7%90%86%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" target="_blank" rel="noopener">etcd-raft WAL日志管理源码简析</a>】章节详述），并且每次构建快照数据，它不会覆盖已有的快照数据，而<code>unstable</code>及<code>Storage</code>在更新快照时则会进行替换。另外，<code>etcd-raft</code>还提供一个<code>Snapshotter</code>组件来构建<code>Snapshot</code>数据，它也属于快照数据，而且是增量更新并保存并持久化到磁盘的快照数据目录下的。下面介绍的<code>Snapshot</code>数据结构指的便是此<code>Snapshot</code>类型数据。因为它们相互关联，但作用不同。因此希望读者不要将这几种类型的<code>snapshot</code>混淆，仔细理解每一处的含义。</p>
+<h2 id="数据结构"><a href="#数据结构" class="headerlink" title="数据结构"></a>数据结构</h2><p><code>Snapshot</code>的数据结构及其相关接口的实现较为简单，大致了解下即可，其中数据结构相关代码的主要目录为<code>/etcd/etcdserver/api/snap/</code>。</p>
+<h3 id="Snapshot"><a href="#Snapshot" class="headerlink" title="Snapshot"></a>Snapshot</h3><p><code>Snapshot</code>的数据结构如下所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Snapshot <span class="keyword">struct</span> &#123;</span><br><span class="line">	Data             []<span class="keyword">byte</span>           <span class="string">`protobuf:"bytes,1,opt,name=data" json:"data,omitempty"`</span></span><br><span class="line">	Metadata         SnapshotMetadata <span class="string">`protobuf:"bytes,2,opt,name=metadata" json:"metadata"`</span></span><br><span class="line">&#125; <span class="comment">// raft.pb.go</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> SnapshotMetadata <span class="keyword">struct</span> &#123;</span><br><span class="line">	ConfState        ConfState <span class="string">`protobuf:"bytes,1,opt,name=conf_state,json=confState" json:"conf_state"`</span></span><br><span class="line">    <span class="comment">// 系统构建快照时，最后一条日志项的索引值</span></span><br><span class="line">	Index            <span class="keyword">uint64</span>    <span class="string">`protobuf:"varint,2,opt,name=index" json:"index"`</span></span><br><span class="line">	Term             <span class="keyword">uint64</span>    <span class="string">`protobuf:"varint,3,opt,name=term" json:"term"`</span></span><br><span class="line">&#125; <span class="comment">// raft.pb.go</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> ConfState <span class="keyword">struct</span> &#123; </span><br><span class="line">    <span class="comment">// 表示集群中的节点的信息， Nodes 表示 leader及follower的id数组，</span></span><br><span class="line">    <span class="comment">// 而 Learners 表示集群中 learner 的 id 数组</span></span><br><span class="line">	Nodes            []<span class="keyword">uint64</span> <span class="string">`protobuf:"varint,1,rep,name=nodes" json:"nodes,omitempty"`</span></span><br><span class="line">	Learners         []<span class="keyword">uint64</span> <span class="string">`protobuf:"varint,2,rep,name=learners" json:"learners,omitempty"`</span></span><br><span class="line">&#125; <span class="comment">// raft.pb.go</span></span><br></pre></td></tr></table></figure>
+
+<p><code>Snapshot</code>的数据结构比较简单。我们下面简单了解其几个关键接口实现，首先是创建快照（文件）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 构建快照文件，应用程序使用此接口来创建持久化的快照文件</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Snapshotter)</span> <span class="title">SaveSnap</span><span class="params">(snapshot raftpb.Snapshot)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> raft.IsEmptySnap(snapshot) &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> s.save(&amp;snapshot)</span><br><span class="line">&#125; <span class="comment">// snapshotter.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Snapshotter)</span> <span class="title">save</span><span class="params">(snapshot *raftpb.Snapshot)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	start := time.Now()</span><br><span class="line">	<span class="comment">// 1. snapshot 文件命令规则：Term-Index.snap</span></span><br><span class="line">	fname := fmt.Sprintf(<span class="string">"%016x-%016x%s"</span>, snapshot.Metadata.Term, snapshot.Metadata.Index, snapSuffix)</span><br><span class="line">	<span class="comment">// 2. 序列化快照结构体数据</span></span><br><span class="line">	b := pbutil.MustMarshal(snapshot)</span><br><span class="line">	<span class="comment">// 3. 生成 crc 检验数据</span></span><br><span class="line">	crc := crc32.Update(<span class="number">0</span>, crcTable, b)</span><br><span class="line">	<span class="comment">// 4. 生成快照 pb 结构数据</span></span><br><span class="line">	snap := snappb.Snapshot&#123;Crc: crc, Data: b&#125;</span><br><span class="line">	<span class="comment">// 5. 序列化</span></span><br><span class="line">	d, err := snap.Marshal()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	snapMarshallingSec.Observe(time.Since(start).Seconds())</span><br><span class="line">	<span class="comment">// 6. 构建快照文件路径</span></span><br><span class="line">	spath := filepath.Join(s.dir, fname)</span><br><span class="line">	fsyncStart := time.Now()</span><br><span class="line">	<span class="comment">// 7. 快照文件存盘</span></span><br><span class="line">	err = pioutil.WriteAndSyncFile(spath, d, <span class="number">0666</span>)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// snapshotter.go</span></span><br></pre></td></tr></table></figure>
+
+<p>再简单也解加载快照文件的过程：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 加载快照文件，应用程序使用此接口来加载已存盘的快照文件</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *Snapshotter)</span> <span class="title">Load</span><span class="params">()</span> <span class="params">(*raftpb.Snapshot, error)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 获取快照文件目录下的所有快照谁的，并排序</span></span><br><span class="line">	names, err := s.snapNames()</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 2. 遍历快照文件集合，并加载每一个快照文件到内存，形成*raftpb.Snapshot实例</span></span><br><span class="line">	<span class="comment">// load 的过程也比较简单，为创建的逆过程，包括反序列化及校验 crc</span></span><br><span class="line">	<span class="keyword">var</span> snap *raftpb.Snapshot</span><br><span class="line">	<span class="keyword">for</span> _, name := <span class="keyword">range</span> names &#123;</span><br><span class="line">		<span class="keyword">if</span> snap, err = loadSnap(s.lg, s.dir, name); err == <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="keyword">break</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> snap, <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// snapshotter.go</span></span><br></pre></td></tr></table></figure>
+
+<p>快照数据结构比较简单，而且其相关接口的实现也比较简单，不多阐述。</p>
+<h2 id="关键流程"><a href="#关键流程" class="headerlink" title="关键流程"></a>关键流程</h2><p>上文提到，<code>snapshot</code>是系统某时刻状态的数据，在<code>etcd-raft</code>中会在多个地方存储<code>snapshot</code>数据，这包括<code>unstable</code>、<code>Storage/MemoryStorage</code>、<code>WAL</code>以及<code>snap</code>日志文件。正是因为涉及到多个存储的结构，因此整个关于<code>snapshot</code>的逻辑也稍显啰嗦。此部分代码的主要目录为：<code>/etcd/raft/</code>、<code>/etcd/contrib/raftexample/</code>。</p>
+<h3 id="snapshot-相关逻辑总结"><a href="#snapshot-相关逻辑总结" class="headerlink" title="snapshot 相关逻辑总结"></a>snapshot 相关逻辑总结</h3><p>大概地，关于<code>unstable</code>日志存储，它与底层协议库直接交互，当<code>leader</code>节点发现<code>follower</code>节点进度过慢时（这也包括节点新加入的情形），会尝试发送<code>MsgSnap</code>，以加快节点状态同步（关于<code>leader</code>如何知道<code>follower</code>节点的日志过旧的原因是<code>leader</code>为每个<code>follower</code>维护了其目前的日志进度视图，这通过<code>progress.go</code>实现）。更准确来说，<code>leader</code>节点在发现本节点的日志过长时（<code>MemoryStorage</code>的实现规则是将长度大于 10000  ），会将更早的日志<code>compact</code>掉以节约内存（这在应用每次收到<code>raft</code>协议核心的<code>Ready</code>通知时，都会检查是否可以触发构建快照）。因此，若<code>leader</code>在给<code>follower</code>节点同步日志时，其可能发现对应的（需要从哪一项日志开始同步）日志项不存在，那么它会认为对应的日志已经被<code>compact</code>掉，因此尝试使用同步快照来代替（即发送<code>MsgSnap</code>消息）。换言之，<code>unstable</code>中的<code>snapshot</code>是来自于<code>leader</code>节点的同步（若<code>follower</code>节点允许直接执行快照同步，会将<code>unstable</code>中的快照直接进行替换）。</p>
+<p>而关于<code>Storage</code>日志存储中的快照的来源，则可能来自两处，其一是节点自身主动构建<code>snapshot</code>，即应用程序发现达到快照构建条件时，便触发快照创建，所以这部分快照所对应的数据已存在于节点的应用状态机中，因此也不需要被重放，其主要目的是进行日志压缩。其二是<code>leader</code>节点通过<code>MsgSnap</code>将快照同步到<code>follower</code>节点的<code>unstable</code>中，然后<code>follower</code>的会生成<code>Ready</code>结构并传递给上层应用（里面封装了<code>unstable</code>的<code>snapshot</code>数据），因此最终由<code>follower</code>节点的应用将<code>unstable</code>中的<code>snapshot</code>应用到节点的<code>Storage</code>中。此处的快照的作用使用同步快照数据来代替同步日志项数据，因此减少了网络及 IO 开销，并加速了节点状态的同步。</p>
+<p>对比<code>unstable</code>和<code>Storage</code>中快照数据的来源可知，<code>unstable</code>中的快照数据也必须交给上层应用，由上层应用进行<code>WAL</code>持久化、保存<code>snap</code>日志并应用到<code>Storage</code>中。而<code>Storage</code>中的快照数据的另外一个来源则由节点应用层自身直接创建，当然，此时也要作<code>WAL</code>持久化并且记录<code>snap</code>日志。由此可见，<code>unstable</code>与<code>Storage</code>中的日志存储的内容差别较大。另外需要强调的是，<code>WAL</code>日志中的快照部分存储<code>snapshot</code>元信息。而<code>snap</code>的数据存储方法由使用<code>etcd-raft</code>的应用实现，这取决于应用存储的数据类型（在<code>etcd-raft</code>中使用的是<code>Snapshot</code>数据结构来存储）。</p>
+<p>综上，基本涵盖了整个关于<code>snapshot</code>流程的逻辑。下面结合代码更详细地阐述各个逻辑，本文将它分为四个方面进行叙述：其一，<code>leader</code>节点何时执行<code>snapshot</code>同步复制，其二，（应用程序）何时触发<code>snapshot</code>操作及，其三，（应用程序）如何应用<code>snapshot</code>数据，最后，<code>follower</code>节点何时以及如何应用<code>snapshot</code>数据。（这四点其实可以串联在一起叙述，但本文还是将它们分开叙述，希望读者能够理清并串联好整个逻辑）</p>
+<h3 id="leader-节点执行-snapshot-同步复制"><a href="#leader-节点执行-snapshot-同步复制" class="headerlink" title="leader 节点执行 snapshot 同步复制"></a>leader 节点执行 snapshot 同步复制</h3><p>上文提到当<code>leader</code>节点发现<code>follower</code>节点日志过旧时会使用同步<code>snapshot</code>复制来代替普通的日志同步（即发送<code>MsgSnap</code>而非<code>MsgApp</code>消息），这<code>leadaer</code>节点之所以能够发现<code>follower</code>节点的日志进度过慢的原因是，它使用为此<code>follower</code>节点保存的当前已同步日志索引来获取其<code>unstable</code>（也包括<code>Storage</code>）中的日志项（集合）时，发现不能成功获取对应的日志项，由此说明对应的日志项已经被<code>compact</code>掉了，即已经创建了快照。（关于如何创建快照，在下小节详述），因此，<code>leader</code>节点会向<code>follower</code>节点发送<code>MsgSnap</code>消息。相关代码及部分关键注释如下（下面只展示了关键函数的代码，整个流程为：<code>stepLeader() -&gt; bcastAppend() -&gt; sendAppend() -&gt; maybeSendAppend()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">maybeSendAppend</span><span class="params">(to <span class="keyword">uint64</span>, sendIfEmpty <span class="keyword">bool</span>)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 获取 id 为 to 的 follower 的日志同步进度视图（具体查看 progress.go）</span></span><br><span class="line">	pr := r.getProgress(to)</span><br><span class="line">	<span class="comment">// 2. 若对应 follower 节点未停止接收消息（停止的原因可能是在执行一个耗时操作，如应用快照数据）</span></span><br><span class="line">	<span class="keyword">if</span> pr.IsPaused() &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 构建消息实例</span></span><br><span class="line">	m := pb.Message&#123;&#125;</span><br><span class="line">	m.To = to</span><br><span class="line">	<span class="comment">// 4. 通过 Next(为节点维护的下一个需要同步的日志索引)查找对应的 term 及 ents</span></span><br><span class="line">	<span class="comment">// 注意：1. maxMsgSize 是作为控制最大的传输日志项数量</span></span><br><span class="line">	<span class="comment">// 		2. 其在查找对应的 term 及 ents 时，也会查找 Storage 中的日志项集合</span></span><br><span class="line">	term, errt := r.raftLog.term(pr.Next - <span class="number">1</span>)</span><br><span class="line">	ents, erre := r.raftLog.entries(pr.Next, r.maxMsgSize)</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(ents) == <span class="number">0</span> &amp;&amp; !sendIfEmpty &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 5. 如果查找失败，则考虑发送 MsgSnap 消息</span></span><br><span class="line">	<span class="keyword">if</span> errt != <span class="literal">nil</span> || erre != <span class="literal">nil</span> &#123; <span class="comment">// send snapshot if we failed to get term or entries</span></span><br><span class="line">		<span class="comment">// 此处记录对应节点最近是活跃</span></span><br><span class="line">		<span class="keyword">if</span> !pr.RecentActive &#123;</span><br><span class="line">			r.logger.Debugf(<span class="string">"ignore sending snapshot to %x since it is not recently active"</span>, to)</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">		&#125;</span><br><span class="line">		m.Type = pb.MsgSnap</span><br><span class="line">		<span class="comment">// 5.1 通过 raftLog 获取 snapshot 数据，若 unstable 中没有，则从 Storage 中获取</span></span><br><span class="line">		snapshot, err := r.raftLog.snapshot()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		m.Snapshot = snapshot</span><br><span class="line">		sindex, sterm := snapshot.Metadata.Index, snapshot.Metadata.Term</span><br><span class="line">		r.logger.Debugf(<span class="string">"%x [firstindex: %d, commit: %d] sent snapshot[index: %d, term: %d] to %x [%s]"</span>,</span><br><span class="line">			r.id, r.raftLog.firstIndex(), r.raftLog.committed, sindex, sterm, to, pr)</span><br><span class="line">		<span class="comment">// 5.2 更新对应节点的 progress 实例对象</span></span><br><span class="line">		pr.becomeSnapshot(sindex)</span><br><span class="line">		r.logger.Debugf(<span class="string">"%x paused sending replication messages to %x [%s]"</span>, r.id, to, pr)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123; <span class="comment">// 6. 否则进行日志同步，即发送正常的 MsgApp 消息</span></span><br><span class="line">		m.Type = pb.MsgApp</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 此处会将此消息打包到 raft.msgs 中，进一步会由 node 将其打包到 Ready 结构中，并转发给上层应用程序，</span></span><br><span class="line">	<span class="comment">// 由应用程序调用启用网络传输的组件，将消息发送出去（在上一篇文章中已经详述）</span></span><br><span class="line">	r.send(m)</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="何时触发-snapshot-操作"><a href="#何时触发-snapshot-操作" class="headerlink" title="何时触发  snapshot  操作"></a>何时触发  snapshot  操作</h3><p>事实上，触发<code>snapshot</code>操作是由上层应用程序完成的（并非底层<code>raft</code>协议核心库的功能）。触发构建快照的规则是：<code>Storage</code>中的日志条目的数量大于 10000，一旦达到此条件，则会将日志项索引不在过去 10000 条索引范围内的日志执行<code>compact</code>操作，并创建对应的快照数据，记录到<code>WAL</code>日志文件，以及<code>snap</code>快照文件中。相关代码及部分关键注释如下（下面只展示了关键函数的代码，整个流程为：<code>startRaft() -&gt; serveChannels() -&gt; maybeTriggerSnapshot()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 针对 memoryStorage 触发快照操作（如果满足条件）（注意这是对 memoryStorage 中保存的日志信息作快照）</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">maybeTriggerSnapshot</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="comment">// 0. 判断是否达到创建快照（compact）的条件</span></span><br><span class="line">	<span class="keyword">if</span> rc.appliedIndex-rc.snapshotIndex &lt;= rc.snapCount &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	log.Printf(<span class="string">"start snapshot [applied index: %d | last snapshot index: %d]"</span>, rc.appliedIndex, rc.snapshotIndex)</span><br><span class="line">	<span class="comment">// 1. 加载状态机中当前的状态数据（此方法由应用程序提供，在 kvstore 中）</span></span><br><span class="line">	data, err := rc.getSnapshot()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Panic(err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 利用上述快照数据、以及 appliedIndex 等为 memoryStorage 实例创建快照（它会覆盖/更新 memoryStorage 已有的快照信息）</span></span><br><span class="line">	snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &amp;rc.confState, data)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 保存快照到 WAL 日志（快照的索引/元数据信息）</span></span><br><span class="line">	<span class="comment">// 以及到 snap 日志文件中（它包含所有信息，一般而言，此 snap 结构由应用程序决定，etcd-raft 的实现包含了元数据及实际数据）</span></span><br><span class="line">	<span class="keyword">if</span> err := rc.saveSnap(snap); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 4. 如果满足日志被 compact 的条件（防止内存中的日志项过多），则对内存中的日志项集合作 compact 操作</span></span><br><span class="line">	<span class="comment">// compact 操作会丢弃 memoryStorage 日志项集中 compactIndex 之前的日志</span></span><br><span class="line">	compactIndex := <span class="keyword">uint64</span>(<span class="number">1</span>)</span><br><span class="line">	<span class="keyword">if</span> rc.appliedIndex &gt; snapshotCatchUpEntriesN &#123;</span><br><span class="line">		compactIndex = rc.appliedIndex - snapshotCatchUpEntriesN</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> err := rc.raftStorage.Compact(compactIndex); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="built_in">panic</span>(err)</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	log.Printf(<span class="string">"compacted log at index %d"</span>, compactIndex)</span><br><span class="line">    <span class="comment">// 5. 更新应用程序的快照位置(进度)信息</span></span><br><span class="line">	rc.snapshotIndex = rc.appliedIndex</span><br><span class="line">&#125; <span class="comment">// /etcd/contrib/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="如何应用-snapshot-数据"><a href="#如何应用-snapshot-数据" class="headerlink" title="如何应用 snapshot 数据"></a>如何应用 snapshot 数据</h3><p>本小节所涉及的如何应用<code>snapshot</code>数据亦是针对应用程序而言（因为<code>follower</code>节点的<code>unstable</code>也会由协议库来应用<code>leader</code>节点发送的快照数据）。大概地，应用程序应用快照数据包含两个方面：其一，在节点刚启动时（宕机后重启）会进行日志重放，因此在重放过程中，若快照数据不为空（由<code>snap</code>存盘的快照数据，包括元信息及实际数据），则加载快照数据，并将其应用到<code>Storage</code>的快照中，而且会重放快照数据后的<code>WAL</code>日志项数据，并将其追加到<code>Storage</code>的日志项集。如此以来，节点便能重构其状态数据。其相关代码如下（实际完整调用为：<code>startRaft() -&gt; serveChannels()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">replayWAL</span><span class="params">()</span> *<span class="title">wal</span>.<span class="title">WAL</span></span> &#123;</span><br><span class="line">	log.Printf(<span class="string">"replaying WAL of member %d"</span>, rc.id)</span><br><span class="line">	<span class="comment">// 1. 从 snap 快照文件中加载 快照数据（包含元信息及实际数据）</span></span><br><span class="line">	snapshot := rc.loadSnapshot()</span><br><span class="line">	<span class="comment">// 2. 从指定日志索引位置打开 WAL 日志，以准备读取快照之后的日志项</span></span><br><span class="line">	w := rc.openWAL(snapshot)</span><br><span class="line">	<span class="comment">// 3. 读取指定索引位置后的所有日志</span></span><br><span class="line">	_, st, ents, err := w.ReadAll()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">"raftexample: failed to read WAL (%v)"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 应用程序创建一个 MemoryStorage 实例</span></span><br><span class="line">	rc.raftStorage = raft.NewMemoryStorage()</span><br><span class="line">	<span class="comment">// 5. 若快照数据不为空，则将快照数据应用到 memoryStorage 中，替换掉已有的 snapshot 实例</span></span><br><span class="line">	<span class="keyword">if</span> snapshot != <span class="literal">nil</span> &#123;</span><br><span class="line">		rc.raftStorage.ApplySnapshot(*snapshot)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 6. 设置 HardState 到 memoryStorage 实例</span></span><br><span class="line">	rc.raftStorage.SetHardState(st)</span><br><span class="line"></span><br><span class="line">	<span class="comment">// append to storage so raft starts at the right place in log</span></span><br><span class="line">	<span class="comment">// 7. 将 WAL 重放的日志项集追加到 memoryStorage 实例（显然，此日志项不包含已经快照的日志项）</span></span><br><span class="line">	rc.raftStorage.Append(ents)</span><br><span class="line">	<span class="comment">// send nil once lastIndex is published so client knows commit channel is current</span></span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(ents) &gt; <span class="number">0</span> &#123;</span><br><span class="line">		<span class="comment">// 8. 如果在快照后，仍存在日志项记录，则设置 lastIndex</span></span><br><span class="line">		rc.lastIndex = ents[<span class="built_in">len</span>(ents)<span class="number">-1</span>].Index</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="comment">// 9. 通知 kvstore，日志重放已经完毕，因此 kvstore 状态机也会从 snap 快照文件中加载数据</span></span><br><span class="line">		<span class="comment">// 参见下面的代码片段</span></span><br><span class="line">        rc.commitC &lt;- <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> w</span><br><span class="line">&#125; <span class="comment">// /etcd/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *kvstore)</span> <span class="title">readCommits</span><span class="params">(commitC &lt;-<span class="keyword">chan</span> *<span class="keyword">string</span>, errorC &lt;-<span class="keyword">chan</span> error)</span></span> &#123;</span><br><span class="line">	<span class="comment">// raftNode 会将日志项 或 nil 放入 commitC 管道</span></span><br><span class="line">	<span class="keyword">for</span> data := <span class="keyword">range</span> commitC &#123;</span><br><span class="line">		<span class="keyword">if</span> data == <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="comment">// done replaying log; new data incoming</span></span><br><span class="line">			<span class="comment">// OR signaled to load snapshot</span></span><br><span class="line">			<span class="comment">// 从 snap 快照文件中加载数据，这包括两种情形：</span></span><br><span class="line">			<span class="comment">// 一是重启时重放日志，</span></span><br><span class="line">			<span class="comment">// 二是当 leader 向 follower 同步 snapshot 数据时，节点会将其应用到 unstable 及 Storage 中，同样会保存到 WAL 及 snap 文件</span></span><br><span class="line">			<span class="comment">// 因此让状态机重新加载 snap 快照数据</span></span><br><span class="line">			snapshot, err := s.snapshotter.Load()</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">			<span class="keyword">if</span> err := s.recoverFromSnapshot(snapshot.Data); err != <span class="literal">nil</span> &#123;</span><br><span class="line">				log.Panic(err)</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="keyword">continue</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 有新的数据已经被提交，因此将其应用到状态机中</span></span><br><span class="line">		<span class="keyword">var</span> dataKv kv</span><br><span class="line">		dec := gob.NewDecoder(bytes.NewBufferString(*data))</span><br><span class="line">		<span class="keyword">if</span> err := dec.Decode(&amp;dataKv); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			log.Fatalf(<span class="string">"raftexample: could not decode message (%v)"</span>, err)</span><br><span class="line">		&#125;</span><br><span class="line">		s.mu.Lock()</span><br><span class="line">		s.kvStore[dataKv.Key] = dataKv.Val</span><br><span class="line">		s.mu.Unlock()</span><br><span class="line">	&#125;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raftexample/kvstore.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *kvstore)</span> <span class="title">recoverFromSnapshot</span><span class="params">(snapshot []<span class="keyword">byte</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> store <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">string</span></span><br><span class="line">	<span class="keyword">if</span> err := json.Unmarshal(snapshot, &amp;store); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	s.mu.Lock()</span><br><span class="line">	s.kvStore = store</span><br><span class="line">	s.mu.Unlock()</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raftexample/kvstore.go</span></span><br></pre></td></tr></table></figure>
+
+<p>其二，当<code>leader</code>节点同步快照数据给<code>follower</code>节点时，协议库会将快照数据应用到<code>unstable</code>（如果合法的话），然后，将<code>Ready</code>实例返回给应用程序，应用程序会检测到<code>Ready</code>结构中包含快照数据，因此，会将快照数据应用到<code>Storage</code>中。其相关代码如下（实际完整调用为：<code>startRaft() -&gt; serveChannels()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rc *raftNode)</span> <span class="title">serveChannels</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="comment">// 节点刚启动时，通过加载 snap 快照 &amp;&amp; 重放 WAL 日志，以将其应用到 memoryStorage 中</span></span><br><span class="line">    <span class="comment">// 因此可以从 memoryStorage 中取出相关数据</span></span><br><span class="line">	snap, err := rc.raftStorage.Snapshot()</span><br><span class="line">	rc.confState = snap.Metadata.ConfState</span><br><span class="line">	rc.snapshotIndex = snap.Metadata.Index</span><br><span class="line">	rc.appliedIndex = snap.Metadata.Index</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 应用程序状态机更新的事件循环，即循环等待底层协议库的 Ready 通知</span></span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">			rc.node.Tick()</span><br><span class="line">		<span class="comment">// 1. 收到底层协议库的 Ready 通知，关于 Ready 的结构已经在介绍 raftexample 文章中简要介绍</span></span><br><span class="line">		<span class="keyword">case</span> rd := &lt;-rc.node.Ready():</span><br><span class="line">			<span class="comment">// 2. 先将 Ready 中需要被持久化的数据保存到 WAL 日志文件（在消息转发前）</span></span><br><span class="line">			rc.wal.Save(rd.HardState, rd.Entries)</span><br><span class="line">			<span class="comment">// 3. 如果 Ready 中的需要被持久化的快照不为空</span></span><br><span class="line">			<span class="comment">// 此部分快照数据的来源是 leader 节点通过 MsgSnap 消息同步给 follower 节点</span></span><br><span class="line">			<span class="keyword">if</span> !raft.IsEmptySnap(rd.Snapshot) &#123;</span><br><span class="line">				<span class="comment">// 3.1 保存快照到 WAL 日志（快照的索引/元数据信息）以及到</span></span><br><span class="line">				<span class="comment">// snap 日志文件中（由应用程序来实现 snap 的数据结构，etcd-raft 的实现包含了快照的元信息及实际数据）</span></span><br><span class="line">				<span class="comment">// snap 日志文件会作为 状态机 (kvstore) 加载快照数据的来源（重启时加载，以及快照更新时重新加载）</span></span><br><span class="line">				rc.saveSnap(rd.Snapshot)</span><br><span class="line">				<span class="comment">// 3.2 将快照应用到 memoryStorage 实例，替换掉其 snapshot 实例</span></span><br><span class="line">				rc.raftStorage.ApplySnapshot(rd.Snapshot)</span><br><span class="line">				<span class="comment">// 3.3 更新应用程序保存的快照信息</span></span><br><span class="line">				<span class="comment">// 这包括更新 snapshotIndex、appliedIndex以及confState</span></span><br><span class="line">				<span class="comment">// 另外，还会通知 kvstore 重新加载 snap 文件的快照数据</span></span><br><span class="line">				rc.publishSnapshot(rd.Snapshot)</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="comment">// 4. 追加 Ready 结构中需要被持久化的信息（在消息转发前）</span></span><br><span class="line">			rc.raftStorage.Append(rd.Entries)</span><br><span class="line">			<span class="comment">// 5. 转发 Ready 结构中的消息</span></span><br><span class="line">			rc.transport.Send(rd.Messages)</span><br><span class="line">			<span class="comment">// 6. 将日志应用到状态机（如果存在已经提交，即准备应用的日志项）</span></span><br><span class="line">			<span class="comment">// 会更新 appliedIndex</span></span><br><span class="line">			<span class="keyword">if</span> ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok &#123;</span><br><span class="line">				rc.stop()</span><br><span class="line">				<span class="keyword">return</span></span><br><span class="line">			&#125;</span><br><span class="line">			<span class="comment">// 7. 触发快照操作（如果满足条件）</span></span><br><span class="line">			rc.maybeTriggerSnapshot()</span><br><span class="line">			<span class="comment">// 8. 通知底层 raft 协议库实例 node，即告知当前 Ready 已经处理完毕，可以准备下一个</span></span><br><span class="line">			rc.node.Advance()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/contrib/raftexample/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="follower-节点何时以及如何应用-snapshot-数据"><a href="#follower-节点何时以及如何应用-snapshot-数据" class="headerlink" title="follower 节点何时以及如何应用 snapshot 数据"></a>follower 节点何时以及如何应用 snapshot 数据</h3><p> 最后，我们来简单了解<code>follower</code>节点收到<code>leader</code>节点的<code>MsgSnap</code>消息时，如何应用<code>snapshot</code>数据。其大致的逻辑为：当<code>follower</code>节点收到<code>MsgSnap</code>消息时，会判断此快照是否合法，若合法，则将共应用到<code>unstable</code>，并且更新相关的记录索引（如<code>offset</code>等），返回快照应用成功的消息。否则，返回快照已应用的消息（事实上回复消息没有明显区分应用失败还是成功，实际上是以<code>lastIndex</code>及<code>commited</code>来区分，这足以使得<code>leader</code>节点获悉<code>follower</code>节点日志进度）。同时<code>follower</code>节点还会更新集群的拓扑结构信息。再提醒一次，其最后调用的<code>send()</code>函数使得节点的上层应用程序将<code>snapshot</code>应用到<code>Storage</code>，并且作<code>WAL</code>日志以及<code>snap</code>快照。其相关代码为（实际完整调用为：<code>stepFollower() -&gt; handleSnapshot() -&gt; restore()</code>）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">handleSnapshot</span><span class="params">(m pb.Message)</span></span> &#123;</span><br><span class="line">	sindex, sterm := m.Snapshot.Metadata.Index, m.Snapshot.Metadata.Term</span><br><span class="line">	<span class="comment">// 1. 若应用成功，则发送当前 raftLog 中（包括 unstable 及 Storage）的最后一项日志（之前的日志已作为快照数据存储）</span></span><br><span class="line">	<span class="keyword">if</span> r.restore(m.Snapshot) &#123;</span><br><span class="line">		r.logger.Infof(<span class="string">"%x [commit: %d] restored snapshot [index: %d, term: %d]"</span>,</span><br><span class="line">			r.id, r.raftLog.committed, sindex, sterm)</span><br><span class="line">		<span class="comment">// 1.1 此 send 函数会将消息最终放入 Ready 结构中，node 会将 Ready 实例进行打包，以发送给节点上层应用程序</span></span><br><span class="line">		<span class="comment">// 上层应用程序收到 Ready 通知后，检查到此消息中包含 snapshot 数据，则应用到 Storage，并作 WAL日志以及 snap 快照记录</span></span><br><span class="line">		r.send(pb.Message&#123;To: m.From, Type: pb.MsgAppResp, Index: r.raftLog.lastIndex()&#125;)</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="comment">// 1.2 否则说明此快照数据已应用，则发送目前已提交的日志项的索引给 leader</span></span><br><span class="line">		r.logger.Infof(<span class="string">"%x [commit: %d] ignored snapshot [index: %d, term: %d]"</span>,</span><br><span class="line">			r.id, r.raftLog.committed, sindex, sterm)</span><br><span class="line">		r.send(pb.Message&#123;To: m.From, Type: pb.MsgAppResp, Index: r.raftLog.committed&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">restore</span><span class="params">(s pb.Snapshot)</span> <span class="title">bool</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 若快照消息中的快照索引小于已提交的日志项的日志索引，则不能应用此快照（之前已应用）</span></span><br><span class="line">	<span class="keyword">if</span> s.Metadata.Index &lt;= r.raftLog.committed &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 否则，若此索引与任期匹配</span></span><br><span class="line">	<span class="keyword">if</span> r.raftLog.matchTerm(s.Metadata.Index, s.Metadata.Term) &#123;</span><br><span class="line">		r.logger.Infof(<span class="string">"%x [commit: %d, lastindex: %d, lastterm: %d] fast-forwarded commit to snapshot [index: %d, term: %d]"</span>,</span><br><span class="line">			r.id, r.raftLog.committed, r.raftLog.lastIndex(), r.raftLog.lastTerm(), s.Metadata.Index, s.Metadata.Term)</span><br><span class="line">		<span class="comment">// 2.1 则更新 raftLog 中的 commited 字段，因为 committed 之前的日志代表已经提交</span></span><br><span class="line">		r.raftLog.commitTo(s.Metadata.Index)</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">// The normal peer can't become learner.</span></span><br><span class="line">	<span class="comment">// 3. 这里是更新当前节点的集群的拓扑结构信息，即集群中包含哪些节点，它们各自的角色是什么</span></span><br><span class="line">	<span class="keyword">if</span> !r.isLearner &#123;</span><br><span class="line">		<span class="keyword">for</span> _, id := <span class="keyword">range</span> s.Metadata.ConfState.Learners &#123;</span><br><span class="line">			<span class="keyword">if</span> id == r.id &#123;</span><br><span class="line">				r.logger.Errorf(<span class="string">"%x can't become learner when restores snapshot [index: %d, term: %d]"</span>, r.id, s.Metadata.Index, s.Metadata.Term)</span><br><span class="line">				<span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	r.logger.Infof(<span class="string">"%x [commit: %d, lastindex: %d, lastterm: %d] starts to restore snapshot [index: %d, term: %d]"</span>,</span><br><span class="line">		r.id, r.raftLog.committed, r.raftLog.lastIndex(), r.raftLog.lastTerm(), s.Metadata.Index, s.Metadata.Term)</span><br><span class="line"> 	<span class="comment">// 4. 更新 raftLog 的 commited 为快照消息中的索引，以及更换 unstable 中的 snapshot 实例为快照消息中的快照实例</span></span><br><span class="line"> 	<span class="comment">// 并更新 unstable 的 offset 为 快照消息索引+1，更新 ents 字段为空</span></span><br><span class="line">	r.raftLog.restore(s)</span><br><span class="line">	<span class="comment">// 5. 以下同样是重构节点的拓扑信息</span></span><br><span class="line">	r.prs = <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">uint64</span>]*Progress)</span><br><span class="line">	r.learnerPrs = <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">uint64</span>]*Progress)</span><br><span class="line">	r.restoreNode(s.Metadata.ConfState.Nodes, <span class="literal">false</span>)</span><br><span class="line">	r.restoreNode(s.Metadata.ConfState.Learners, <span class="literal">true</span>)</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于<code>snapshot</code>的逻辑已经阐述完毕。</p>
+<p>简单小结，本文先是简单介绍了<code>Snapshot</code>的数据结构及接口实现（该<code>Snapshot</code>为重启的快照数据加载来源，并配合<code>WAL</code>日志重放记录，以重构节点宕机前的状态），然后围绕<code>unstable</code>及<code>Storage</code>总结了关于<code>snapshot</code>的流程逻辑，以在总体上把握<code>snapshot</code>的核心设计流程。最后，结合代码分析从四个方面梳理<code>snapshot</code>的相关流程，目的是加深读者对整个系统中如何使用<code>snapshot</code>的印象，并且需要理解为何如此设计。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://github.com/etcd-io/etcd" target="_blank" rel="noopener">https://github.com/etcd-io/etcd</a><br>[2]. <a href="https://zhuanlan.zhihu.com/p/29865583" target="_blank" rel="noopener">etcd-raft snapshot实现分析</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/snapshot%E7%AE%A1%E7%90%86/" rel="tag"><i class="fa fa-tag"></i> snapshot管理</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/12/etcd-raft-%E5%AD%98%E5%82%A8%E6%A8%A1%E5%9D%97%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="etcd-raft 存储模块源码简析">
+                  <i class="fa fa-chevron-left"></i> etcd-raft 存储模块源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/15/etcd-raft-%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E5%8F%98%E6%9B%B4%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd-raft 集群配置变更源码简析">
+                  etcd-raft 集群配置变更源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#数据结构"><span class="nav-number">1.</span> <span class="nav-text">数据结构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Snapshot"><span class="nav-number">1.1.</span> <span class="nav-text">Snapshot</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键流程"><span class="nav-number">2.</span> <span class="nav-text">关键流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#snapshot-相关逻辑总结"><span class="nav-number">2.1.</span> <span class="nav-text">snapshot 相关逻辑总结</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#leader-节点执行-snapshot-同步复制"><span class="nav-number">2.2.</span> <span class="nav-text">leader 节点执行 snapshot 同步复制</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#何时触发-snapshot-操作"><span class="nav-number">2.3.</span> <span class="nav-text">何时触发  snapshot  操作</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#如何应用-snapshot-数据"><span class="nav-number">2.4.</span> <span class="nav-text">如何应用 snapshot 数据</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#follower-节点何时以及如何应用-snapshot-数据"><span class="nav-number">2.5.</span> <span class="nav-text">follower 节点何时以及如何应用 snapshot 数据</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

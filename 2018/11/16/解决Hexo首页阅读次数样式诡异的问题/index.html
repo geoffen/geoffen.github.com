@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="前言  今晚在完善阅读统计的功能是时候发现一个很诡异的问题，我们一起来探讨一下。上一篇文章大概有阐述阅读统计功能的搭建，所有这里我就不多说了。  利用leancloud接完统计功能后，当前这个hexo版本我会发现首页的阅读数量的样式有点诡异，大致如下：  两种情况： 1：阅读次数::9:9   :2：阅读次数::99  实际上这个时候我们的阅读量只有9而已，正常来说应该这样显示：  阅读次数：9">
+<meta name="keywords" content="hexo">
+<meta property="og:type" content="article">
+<meta property="og:title" content="解决Hexo首页阅读次数样式诡异的问题">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;11&#x2F;16&#x2F;%E8%A7%A3%E5%86%B3Hexo%E9%A6%96%E9%A1%B5%E9%98%85%E8%AF%BB%E6%AC%A1%E6%95%B0%E6%A0%B7%E5%BC%8F%E8%AF%A1%E5%BC%82%E7%9A%84%E9%97%AE%E9%A2%98&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="前言  今晚在完善阅读统计的功能是时候发现一个很诡异的问题，我们一起来探讨一下。上一篇文章大概有阐述阅读统计功能的搭建，所有这里我就不多说了。  利用leancloud接完统计功能后，当前这个hexo版本我会发现首页的阅读数量的样式有点诡异，大致如下：  两种情况： 1：阅读次数::9:9   :2：阅读次数::99  实际上这个时候我们的阅读量只有9而已，正常来说应该这样显示：  阅读次数：9">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-11-06T00:39:08.488Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/11/16/%E8%A7%A3%E5%86%B3Hexo%E9%A6%96%E9%A1%B5%E9%98%85%E8%AF%BB%E6%AC%A1%E6%95%B0%E6%A0%B7%E5%BC%8F%E8%AF%A1%E5%BC%82%E7%9A%84%E9%97%AE%E9%A2%98/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>解决Hexo首页阅读次数样式诡异的问题 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/11/16/%E8%A7%A3%E5%86%B3Hexo%E9%A6%96%E9%A1%B5%E9%98%85%E8%AF%BB%E6%AC%A1%E6%95%B0%E6%A0%B7%E5%BC%8F%E8%AF%A1%E5%BC%82%E7%9A%84%E9%97%AE%E9%A2%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          解决Hexo首页阅读次数样式诡异的问题
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-11-16 10:19:43" itemprop="dateCreated datePublished" datetime="2018-11-16T10:19:43+08:00">2018-11-16</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-11-06 08:39:08" itemprop="dateModified" datetime="2019-11-06T08:39:08+08:00">2019-11-06</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%8D%9A%E5%AE%A2/" itemprop="url" rel="index">
+                    <span itemprop="name">博客</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.9k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>  今晚在完善阅读统计的功能是时候发现一个很诡异的问题，我们一起来探讨一下。上一篇文章大概有阐述阅读统计功能的搭建，所有这里我就不多说了。<br>  利用leancloud接完统计功能后，当前这个hexo版本我会发现首页的阅读数量的样式有点诡异，大致如下：<br>  两种情况： 1：<em>阅读次数::9:9</em>   :2：<em>阅读次数::99</em><br>  实际上这个时候我们的阅读量只有9而已，正常来说应该这样显示：  <em>阅读次数：9</em><br>  于是我忍不住摁住F12一探究竟,大致可以知道阅读次数那一块的元素是js直接赋值的，所以我就去找了一下阅读统计的部分的相关js，我比较粗暴，直接定位全局搜索一波 <em>leancloud_visitors</em>  相关的文件<br>  这是我们可以找到一个路径为 <em>themes\next\layout_third-party\analytics\lean-analytics.swig</em> 的文件，打开发现就是这部分js处理leancloud的阅读数量统计。</p>
+ <a id="more"></a>
+
+<h3 id="贴一波阅读次数统计的代码-LeanCloud提供支持"><a href="#贴一波阅读次数统计的代码-LeanCloud提供支持" class="headerlink" title="贴一波阅读次数统计的代码(LeanCloud提供支持)"></a>贴一波阅读次数统计的代码(LeanCloud提供支持)</h3>  <figure class="highlight javascript"><figcaption><span>看到function showTime 我相信你已经很明白了</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">&#123;% <span class="keyword">if</span> theme.leancloud_visitors.enable %&#125;</span><br><span class="line"></span><br><span class="line">  &#123;# custom analytics part create by xiamo #&#125;</span><br><span class="line"> &lt;script src=<span class="string">"https://cdn1.lncld.net/static/js/av-core-mini-0.6.1.js"</span>&gt;<span class="xml"><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span></span><br><span class="line"> &lt;script&gt;AV.initialize(<span class="string">"&#123;&#123;theme.leancloud_visitors.app_id&#125;&#125;"</span>, <span class="string">"&#123;&#123;theme.leancloud_visitors.app_key&#125;&#125;"</span>);<span class="xml"><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span></span><br><span class="line"> &lt;script&gt;</span><br><span class="line"> <span class="function"><span class="keyword">function</span> <span class="title">showTime</span>(<span class="params">Counter</span>) </span>&#123;</span><br><span class="line">    <span class="built_in">console</span>.warn(<span class="string">'~欢迎光临我的博客 Email:binzhizhu@gmail.com '</span>)</span><br><span class="line"> 	<span class="keyword">var</span> query = <span class="keyword">new</span> AV.Query(Counter);</span><br><span class="line"> 	$(<span class="string">".leancloud_visitors"</span>).each(<span class="function"><span class="keyword">function</span>(<span class="params"></span>) </span>&#123;</span><br><span class="line"> 		<span class="keyword">var</span> url = $(<span class="keyword">this</span>).attr(<span class="string">"id"</span>).trim();</span><br><span class="line"> 		query.equalTo(<span class="string">"url"</span>, url);</span><br><span class="line"> 		query.find(&#123;</span><br><span class="line"> 			success: <span class="function"><span class="keyword">function</span>(<span class="params">results</span>) </span>&#123;</span><br><span class="line">                <span class="built_in">console</span>.warn(<span class="string">'--这里是阅读统计代码-- by --leancloud--'</span>)</span><br><span class="line"> 				<span class="keyword">if</span> (results.length == <span class="number">0</span>) &#123;</span><br><span class="line"> 					<span class="keyword">var</span> content = $(<span class="built_in">document</span>.getElementById(url)).text() + <span class="string">': 0'</span>;</span><br><span class="line"> 					$(<span class="built_in">document</span>.getElementById(url)).text(content);</span><br><span class="line"> 					<span class="keyword">return</span>;</span><br><span class="line"> 				&#125;</span><br><span class="line"> 				<span class="keyword">for</span> (<span class="keyword">var</span> i = <span class="number">0</span>; i &lt; results.length; i++) &#123;</span><br><span class="line"> 					<span class="keyword">var</span> object = results[i];</span><br><span class="line"> 					<span class="keyword">var</span> content = $(<span class="built_in">document</span>.getElementById(url)).text() + object.attributes.time;</span><br><span class="line"> 					$(<span class="built_in">document</span>.getElementById(url)).text(content);</span><br><span class="line"> 				&#125;</span><br><span class="line"> 			&#125;,</span><br><span class="line"> 			error: <span class="function"><span class="keyword">function</span>(<span class="params">object, error</span>) </span>&#123;</span><br><span class="line"> 				<span class="built_in">console</span>.log(<span class="string">"Error: "</span> + error.code + <span class="string">" "</span> + error.message);</span><br><span class="line"> 			&#125;</span><br><span class="line"> 		&#125;);</span><br><span class="line"></span><br><span class="line"> 	&#125;);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>  上述代码中的 for循环，看起来是没任何问题。但我hexo g -d 到GitHubPage 的时候，我再for循环里面console.log(‘obj’,object),打印了一下当前文章的所有属性，发现同一篇文章会打印两次，所有才会出现上面所说的 <em>阅读次数::99<em>的情况。相当于第一次循环time是9，循环了两次拼接了起来于是变成</em>阅读次数::99</em><br>  所有我 直接在for循环的最后加了一句  </p>
+ <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">return;</span><br></pre></td></tr></table></figure>
+
+<h3 id="真-阅读统计代码段"><a href="#真-阅读统计代码段" class="headerlink" title="真.阅读统计代码段"></a>真.阅读统计代码段</h3><p>  这么做实际上很简单，类似于做一层兼容了，确保不会重复循环，修复了之后发现真的没有问题了，阅读次数显示正常了，美滋滋，这也是一种收获。顺便也贴一下其他阅读统计事件的代码片段吧：<br>   <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"> function addCount(Counter) &#123;</span><br><span class="line"> 	var Counter = AV.Object.extend(&quot;Counter&quot;);</span><br><span class="line"> 	url = $(&quot;.leancloud_visitors&quot;).attr(&apos;id&apos;).trim();</span><br><span class="line"> 	title = $(&quot;.leancloud_visitors&quot;).attr(&apos;data-flag-title&apos;).trim();</span><br><span class="line"> 	var query = new AV.Query(Counter);</span><br><span class="line"> 	query.equalTo(&quot;url&quot;, url);</span><br><span class="line"> 	query.find(&#123;</span><br><span class="line"> 		success: function(results) &#123;</span><br><span class="line"> 			if (results.length &gt; 0) &#123;</span><br><span class="line"> 				var counter = results[0];</span><br><span class="line"> 				counter.fetchWhenSave(true);</span><br><span class="line"> 				counter.increment(&quot;time&quot;);</span><br><span class="line"> 				counter.save(null, &#123;</span><br><span class="line"> 					success: function(counter) &#123;</span><br><span class="line"> 						var content = $(document.getElementById(url)).text() + &apos;: &apos; + counter.get(&apos;time&apos;);</span><br><span class="line"> 						$(document.getElementById(url)).text(content);</span><br><span class="line"> 					&#125;,</span><br><span class="line"> 					error: function(counter, error) &#123;</span><br><span class="line"> 						console.log(&apos;Failed to save Visitor num, with error message: &apos; + error.message);</span><br><span class="line"> 					&#125;</span><br><span class="line"> 				&#125;);</span><br><span class="line"> 			&#125; else &#123;</span><br><span class="line"> 				var newcounter = new Counter();</span><br><span class="line"> 				newcounter.set(&quot;title&quot;, title);</span><br><span class="line"> 				newcounter.set(&quot;url&quot;, url);</span><br><span class="line"> 				newcounter.set(&quot;time&quot;, 1);</span><br><span class="line"> 				newcounter.save(null, &#123;</span><br><span class="line"> 					success: function(newcounter) &#123;</span><br><span class="line"> 					    console.log(&quot;newcounter.get(&apos;time&apos;)=&quot;+newcounter.get(&apos;time&apos;));</span><br><span class="line"> 						var content = $(document.getElementById(url)).text() + &apos;: &apos; + newcounter.get(&apos;time&apos;);</span><br><span class="line"> 						$(document.getElementById(url)).text(content);</span><br><span class="line"> 					&#125;,</span><br><span class="line"> 					error: function(newcounter, error) &#123;</span><br><span class="line"> 						console.log(&apos;Failed to create&apos;);</span><br><span class="line"> 					&#125;</span><br><span class="line"> 				&#125;);</span><br><span class="line"> 			&#125;</span><br><span class="line"> 		&#125;,</span><br><span class="line"> 		error: function(error) &#123;</span><br><span class="line"> 			console.log(&apos;Error:&apos; + error.code + &quot; &quot; + error.message);</span><br><span class="line"> 		&#125;</span><br><span class="line"> 	&#125;);</span><br><span class="line"> &#125;</span><br><span class="line"> $(function() &#123;</span><br><span class="line"> 	var Counter = AV.Object.extend(&quot;Counter&quot;);</span><br><span class="line"> 	if ($(&apos;.leancloud_visitors&apos;).length == 1) &#123;</span><br><span class="line"> 		addCount(Counter);</span><br><span class="line"> 	&#125; else if ($(&apos;.post-title-link&apos;).length &gt; 1) &#123;</span><br><span class="line"> 		showTime(Counter);</span><br><span class="line"> 	&#125;</span><br><span class="line"> &#125;);</span><br><span class="line"> &lt;/script&gt;</span><br><span class="line">&#123;% endif %&#125;</span><br></pre></td></tr></table></figure></p>
+<p> 这篇博客写得我有点疲惫了，已经深夜十分了，准备入睡啦，明天还要起来搬砖呢，晚安各位，希望能够帮助到大家吧，我也是刚学习Hexo自己搭建博客。<br> 但有趣的一点是我们可以在这些开源的框架或者资源里面肆意的玩弄代码，hexo其实就是提供给大家开源开发的，看着文档接服务就好了，一大推的第三方服务已经Api。</p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/hexo/" rel="tag"><i class="fa fa-tag"></i> hexo</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/11/13/2018-11-13-%E6%9C%8D%E5%8A%A1%E6%9E%B6%E6%9E%84%E4%B9%8B%E6%BC%94%E5%8F%98%E4%B8%8E%E8%BF%9B%E5%8C%96/" rel="next" title="服务架构之演变与进化">
+                  <i class="fa fa-chevron-left"></i> 服务架构之演变与进化
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/11/16/MapReduce-%E5%8E%9F%E5%9E%8B%E5%AE%9E%E7%8E%B0/" rel="prev" title="MapReduce 原型实现">
+                  MapReduce 原型实现 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#前言"><span class="nav-number">1.</span> <span class="nav-text">前言</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#贴一波阅读次数统计的代码-LeanCloud提供支持"><span class="nav-number">1.1.</span> <span class="nav-text">贴一波阅读次数统计的代码(LeanCloud提供支持)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#真-阅读统计代码段"><span class="nav-number">1.2.</span> <span class="nav-text">真.阅读统计代码段</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

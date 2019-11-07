@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="diskQueue是nsq分布式实时消息队列的消息持久化存储组件。考虑到nsq为了限制消息积压所占的内存，同时也为了保证节点宕机消息尽可能丢失，因此，当内存消息队列memoryMsgChan的长度达到配置的阈值时，会将消息写入到持久化存储消息队列中。是的，diskQueue提供两个关键特性，一是持久化存储，二是队列接口。而在nsq系统中diskQueue的用法和memoryMsgChan（buff">
+<meta name="keywords" content="分布式系统,消息队列">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nsq diskqueue 源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;05&#x2F;19&#x2F;nsq-diskqueue-%E6%8C%81%E4%B9%85%E5%8C%96%E5%AD%98%E5%82%A8%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="diskQueue是nsq分布式实时消息队列的消息持久化存储组件。考虑到nsq为了限制消息积压所占的内存，同时也为了保证节点宕机消息尽可能丢失，因此，当内存消息队列memoryMsgChan的长度达到配置的阈值时，会将消息写入到持久化存储消息队列中。是的，diskQueue提供两个关键特性，一是持久化存储，二是队列接口。而在nsq系统中diskQueue的用法和memoryMsgChan（buff">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.841Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/05/19/nsq-diskqueue-%E6%8C%81%E4%B9%85%E5%8C%96%E5%AD%98%E5%82%A8%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>nsq diskqueue 源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/05/19/nsq-diskqueue-%E6%8C%81%E4%B9%85%E5%8C%96%E5%AD%98%E5%82%A8%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nsq diskqueue 源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-05-19 12:08:17" itemprop="dateCreated datePublished" datetime="2019-05-19T12:08:17+08:00">2019-05-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" itemprop="url" rel="index">
+                    <span itemprop="name">消息队列</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>15k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>14 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>diskQueue</code>是<code>nsq</code>分布式实时消息队列的消息持久化存储组件。考虑到<code>nsq</code>为了限制消息积压所占的内存，同时也为了保证节点宕机消息尽可能丢失，因此，当内存消息队列<code>memoryMsgChan</code>的长度达到配置的阈值时，会将消息写入到持久化存储消息队列中。是的，<code>diskQueue</code>提供两个关键特性，一是持久化存储，二是队列接口。而在<code>nsq</code>系统中<code>diskQueue</code>的用法和<code>memoryMsgChan</code>（<code>buffered go channel</code>）基本上是相同的，因此，对于生产者或者消费者而言，消息的存储方式对于它们而言是透明的，它们只需要调用相应的接口投递或获取消息即可。这确实是数据存储的最佳实践。在此前的6篇文章已经将<code>nsq</code>相关模块的源码阐述完毕。本文的主题是<code>diskQueue</code>——持久化消息队列存储组件。重点阐述其实现原理，同时分析其为上层应用程序提供的接口。</p>
+<a id="more"></a>
+
+<p>据官方介绍，<code>diskQueue</code>是从<code>nsq</code>项目中抽取而来，将它单独作为一个项目<a href="https://github.com/nsqio/go-diskqueue" target="_blank" rel="noopener"><code>go-diskqueue</code></a>。它本身比较简单，只有一个源文件<code>diskqueue.go</code>。本文阐述的内容更完整的源码注释可在<a href="https://github.com/qqzeng/nsqio/tree/master/go-diskqueue" target="_blank" rel="noopener">这里</a>找到，注释源码版本为<code>v1.1.0</code>，仅供参考。</p>
+<p>本文阐述的内容可分两个部分：其一，分析<code>diskQueue</code>的工作原理，这包括如何从文件中读取一条消息以及如何写入一条消息到文件系统中（考虑到写入或读取文件时，可能涉及到文件的切换，因为它需要保证单个文件的大小 不能过大，因此采用滚动写入的方式。另外在读取或写入文件时，也要考虑文件损坏的情况）。同时分析<code>diskQueue</code>提供给应用程序的接口，典型地，包括将消息写入到<code>diskQueue</code>中，从<code>diskQueue</code>读取一条消息，以及删除或清空<code>diskQueue</code>存储的消息。但本文的行文方式为：从<code>diskQueue</code>实例结构开始，围绕<code>diskQueue.ioLoop</code>主循环展开，阐述上述介绍的各个流程。</p>
+<h2 id="diskQueue-实例结构"><a href="#diskQueue-实例结构" class="headerlink" title="diskQueue 实例结构"></a>diskQueue 实例结构</h2><p><code>diskQueue</code>结构所包含字段可以分为四个部分：</p>
+<ul>
+<li>第一部分为<code>diskQueue</code>当前读写的文件的状态，如读取或写入索引<code>readPos/writePos</code>，读取或写入文件编号<code>readFileNum/writeFileNum</code>，以及<code>depth</code>表示当前可供读取或消费的消息的数量；</li>
+<li>第二部分为<code>diskQueue</code>的元数据信息，如单个文件最大大小<code>maxBytesPerFile</code>，每写多少条消息需要执行刷盘操作<code>syncEvery</code>等待；</li>
+<li>第三部分是读写文件句柄<code>readFile/wirteFile</code>，以及文件读取流<code>reader</code>或写入缓冲<code>writeBuf</code>；</li>
+<li>最后一部分为用于传递信号的内部管道，如<code>writeChan</code>，应用程序可通过此管道向<code>diskQueue</code>间接压入消息，<code>emptyChan</code>应用程序通过此管道间接发出清空<code>diskQueue</code>的信号等。</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// diskQueue 实现了一个基于后端持久化的 FIFO 队列</span></span><br><span class="line"><span class="keyword">type</span> diskQueue <span class="keyword">struct</span> &#123;</span><br><span class="line">	<span class="comment">// run-time state (also persisted to disk)</span></span><br><span class="line">	<span class="comment">// 运行时状态，需要被持久化</span></span><br><span class="line">	readPos      <span class="keyword">int64</span>					<span class="comment">// 当前的文件读取索引</span></span><br><span class="line">	writePos     <span class="keyword">int64</span>					<span class="comment">// 当前的文件写入索引</span></span><br><span class="line">	readFileNum  <span class="keyword">int64</span>					<span class="comment">// 当前读取的文件号</span></span><br><span class="line">	writeFileNum <span class="keyword">int64</span>					<span class="comment">// 当前写入的文件号</span></span><br><span class="line">	depth        <span class="keyword">int64</span>					<span class="comment">// diskQueue 中等待被读取的消息数</span></span><br><span class="line"></span><br><span class="line">	sync.RWMutex</span><br><span class="line"></span><br><span class="line">	<span class="comment">// instantiation time metadata</span></span><br><span class="line">	<span class="comment">// 初始化时元数据</span></span><br><span class="line">	name            <span class="keyword">string</span>				<span class="comment">// diskQueue 名称</span></span><br><span class="line">	dataPath        <span class="keyword">string</span>				<span class="comment">// 数据持久化路径</span></span><br><span class="line">	maxBytesPerFile <span class="keyword">int64</span> 				<span class="comment">// 目前，此此属性一旦被初始化，则不可变更</span></span><br><span class="line">	minMsgSize      <span class="keyword">int32</span>				<span class="comment">// 最小消息的大小</span></span><br><span class="line">	maxMsgSize      <span class="keyword">int32</span>				<span class="comment">// 最大消息的大小</span></span><br><span class="line">	syncEvery       <span class="keyword">int64</span>         		<span class="comment">// 累积的消息数量，才进行一次同步刷新到磁盘操作</span></span><br><span class="line">	syncTimeout     time.Duration 		<span class="comment">// 两次同步之间的间隔</span></span><br><span class="line">	exitFlag        <span class="keyword">int32</span>				<span class="comment">// 退出标志</span></span><br><span class="line">	needSync        <span class="keyword">bool</span>				<span class="comment">// 是否需要同步刷新</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// keeps track of the position where we have read</span></span><br><span class="line">	<span class="comment">// (but not yet sent over readChan)</span></span><br><span class="line">	<span class="comment">// 之所以存在 nextReadPos &amp; nextReadFileNum 和 readPos &amp; readFileNum</span></span><br><span class="line">    <span class="comment">// 是因为虽然消费者已经发起了数据读取请求，但 diskQueue 还未将此消息发送给消费者，</span></span><br><span class="line">	<span class="comment">// 当发送完成后，会将 readPos 更新到 nextReadPos，readFileNum 也类似</span></span><br><span class="line">	nextReadPos     <span class="keyword">int64</span>				<span class="comment">// 下一个应该被读取的索引位置</span></span><br><span class="line">	nextReadFileNum <span class="keyword">int64</span>				<span class="comment">// 下一个应该被读取的文件号</span></span><br><span class="line"></span><br><span class="line">	readFile  *os.File					<span class="comment">// 当前读取文件句柄</span></span><br><span class="line">	writeFile *os.File					<span class="comment">// 当前写入文件句柄</span></span><br><span class="line">	reader    *bufio.Reader				<span class="comment">// 当前文件读取流</span></span><br><span class="line">	writeBuf  bytes.Buffer				<span class="comment">// 当前文件写入流</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// exposed via ReadChan()</span></span><br><span class="line">	<span class="comment">// 应用程序可通过此通道从 diskQueue 中读取消息，</span></span><br><span class="line">    <span class="comment">// 因为 readChan 是 unbuffered的，所以，读取操作是同步的</span></span><br><span class="line">	<span class="comment">// 另外当一个文件中的数据被读取完时，文件会被删除，同时切换到下一个被读取的文件</span></span><br><span class="line">	readChan <span class="keyword">chan</span> []<span class="keyword">byte</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// internal channels</span></span><br><span class="line">    <span class="comment">// 应用程序通过此通道往 diskQueue压入消息，写入操作也是同步的</span></span><br><span class="line">	writeChan         <span class="keyword">chan</span> []<span class="keyword">byte</span> </span><br><span class="line">	writeResponseChan <span class="keyword">chan</span> error		<span class="comment">// 可通过此通道向应用程序返回消息写入结果</span></span><br><span class="line">	emptyChan         <span class="keyword">chan</span> <span class="keyword">int</span>			<span class="comment">// 应用程序可通过此通道发送清空 diskQueue 的消息</span></span><br><span class="line">	emptyResponseChan <span class="keyword">chan</span> error		<span class="comment">// 可通过此通道向应用程序返回清空 diskQueue 的结果</span></span><br><span class="line">	exitChan          <span class="keyword">chan</span> <span class="keyword">int</span>			<span class="comment">// 退出信号</span></span><br><span class="line">	exitSyncChan      <span class="keyword">chan</span> <span class="keyword">int</span>			<span class="comment">// 保证 ioLoop 已退出的信号</span></span><br><span class="line"></span><br><span class="line">	logf AppLogFunc</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="diskQueue-构造方法"><a href="#diskQueue-构造方法" class="headerlink" title="diskQueue 构造方法"></a>diskQueue 构造方法</h2><p>首先考虑<code>diskQueue</code>在<code>nsq</code>系统中什么情况下会被实例化？答案是在实例化<code>topic</code>或<code>channel</code>时候。<code>diskQueue</code>的实例过程比较简单，首先根据传入的参数构造<code>diskQueue</code>实例，然后从配置文件中加载<code>diskQueue</code>的重要的属性状态，这包括<code>readPos &amp; writePos</code>,<code>readFileNum &amp; writerFileNum</code>和<code>depth</code>，并初始化<code>nextReadFileNum</code>和<code>nextReadPos</code>两个重要的属性。最后异步开启消息处理的主循环<code>ioLoop</code>方法。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// New 方法初始化一个 diskQueue 实例，并从持久化存储中加载元数据信息，然后开始启动</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">(name <span class="keyword">string</span>, dataPath <span class="keyword">string</span>, maxBytesPerFile <span class="keyword">int64</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">	minMsgSize <span class="keyword">int32</span>, maxMsgSize <span class="keyword">int32</span>,</span></span></span><br><span class="line"><span class="function"><span class="params">	syncEvery <span class="keyword">int64</span>, syncTimeout time.Duration, logf AppLogFunc)</span> <span class="title">Interface</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 实例化 diskQueue</span></span><br><span class="line">	d := diskQueue&#123;</span><br><span class="line">		name:              name,</span><br><span class="line">		dataPath:          dataPath,</span><br><span class="line">		maxBytesPerFile:   maxBytesPerFile,</span><br><span class="line">		minMsgSize:        minMsgSize,</span><br><span class="line">		maxMsgSize:        maxMsgSize,</span><br><span class="line">		readChan:          <span class="built_in">make</span>(<span class="keyword">chan</span> []<span class="keyword">byte</span>),</span><br><span class="line">		writeChan:         <span class="built_in">make</span>(<span class="keyword">chan</span> []<span class="keyword">byte</span>),</span><br><span class="line">		writeResponseChan: <span class="built_in">make</span>(<span class="keyword">chan</span> error),</span><br><span class="line">		emptyChan:         <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">int</span>),</span><br><span class="line">		emptyResponseChan: <span class="built_in">make</span>(<span class="keyword">chan</span> error),</span><br><span class="line">		exitChan:          <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">int</span>),</span><br><span class="line">		exitSyncChan:      <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">int</span>),</span><br><span class="line">		syncEvery:         syncEvery,</span><br><span class="line">		syncTimeout:       syncTimeout,</span><br><span class="line">		logf:              logf,</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 从持久化存储中初始化 diskQueue 的一些属性状态： readPos, writerPos, depth 等</span></span><br><span class="line">	err := d.retrieveMetaData()</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 3. 在一个单独的 goroutien 中执行主循环</span></span><br><span class="line">	<span class="keyword">go</span> d.ioLoop()</span><br><span class="line">	<span class="keyword">return</span> &amp;d</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 从持久化存储中初始化 diskQueue 的一些属性状态</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">retrieveMetaData</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> f *os.File</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="comment">// 1. 获取元数据文件名 *.diskqueue.meta.dat，并打开文件，准备读取文件</span></span><br><span class="line">	fileName := d.metaDataFileName()</span><br><span class="line">	f, err = os.OpenFile(fileName, os.O_RDONLY, <span class="number">0600</span>)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">defer</span> f.Close()</span><br><span class="line">	<span class="comment">// 2. 从文件中内容初始化特定状态属性信息 readPos, writerPos, depth</span></span><br><span class="line">	<span class="keyword">var</span> depth <span class="keyword">int64</span></span><br><span class="line">	_, err = fmt.Fscanf(f, <span class="string">"%d\n%d,%d\n%d,%d\n"</span>,</span><br><span class="line">		&amp;depth,</span><br><span class="line">		&amp;d.readFileNum, &amp;d.readPos,</span><br><span class="line">		&amp;d.writeFileNum, &amp;d.writePos)</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 初始化 nextReadFileNum 和 nextReadPos</span></span><br><span class="line">	atomic.StoreInt64(&amp;d.depth, depth)</span><br><span class="line">	d.nextReadFileNum = d.readFileNum</span><br><span class="line">	d.nextReadPos = d.readPos</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="diskQueue-消息处理主循环"><a href="#diskQueue-消息处理主循环" class="headerlink" title="diskQueue 消息处理主循环"></a>diskQueue 消息处理主循环</h2><p><code>diskQueue</code>消息处理主循环<code>ioLoop</code>在其被实例化后就会开始执行。<code>diskQueue</code>包含的逻辑主要包括四个方面：从文件中读取一条消息，并压入到<code>readChan</code>管道中；将应用程序传入的消息，写入到文件；每隔一段时间，将写入缓冲的数据执行刷盘动作；最后是当应用程序调用清空<code>diskQueue</code>的接口时，执行删除并关闭<code>diskQueue</code>的动作。同时，笔者在阐述这些流程的实现细节的同时，将应用程序如何同<code>diskQueue</code>交互放在一起串联分析。下面的代码是<code>ioLoop</code>的大致框架，为了使框架更清晰省略了细节：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// diskQueue 消息处理主循环</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ioLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// 1. 只有写入缓冲中的消息达到一定数量，才执行同步刷新到磁盘的操作</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 2. 刷新磁盘操作，重置计数信息，即将 writeFile 流刷新到磁盘，同时持久化元数据</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">        <span class="comment">// 3. 从文件中读取消息的逻辑</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="comment">// 4. 当读取到数据时，将它压入到 r/readChan 通道，</span></span><br><span class="line">            <span class="comment">// 同时判断是否需要更新到下一个文件读取，同时设置 needSync</span></span><br><span class="line">		<span class="keyword">case</span> r &lt;- dataRead:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 5. 收到清空持久化存储 disQueue 的消息</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-d.emptyChan: <span class="comment">// (当应用程序调用 diskQueue.Empty 方法时触发)</span></span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 6. 收到写入消息到磁盘的消息 (当应用程序调用 diskQueue.Put 方法时触发)</span></span><br><span class="line">		<span class="keyword">case</span> dataWrite := &lt;-d.writeChan:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 7. 定时执行刷盘操作，在存在数据等待刷盘时，才需要执行刷盘动作</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-syncTicker.C:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 8. 退出信号</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-d.exitChan:</span><br><span class="line">			<span class="keyword">goto</span> exit</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">exit:</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="diskQueue-读取消息"><a href="#diskQueue-读取消息" class="headerlink" title="diskQueue 读取消息"></a>diskQueue 读取消息</h3><p>从<code>diskQueue</code>读取一条消息涉及到的<code>ioLoop</code>方法中的步骤3和4，其中步骤2的核心逻辑为：若当前持久化中还有未被读取或消费的消息，则尝试从特定的文件(<code>readFileNum</code>)、特定偏移位置(<code>readPos</code>)读取一条消息。这个过程并不复杂，值得注意的一点是：程序中还使用了另外一组与读取相关的状态(<code>nextReadFileNum</code>和<code>nextReadPos</code>)。当消息未从文件中读取时，<code>readPos == nextReadPos &amp;&amp; readFileNum == nextReadFileNum</code> ，当消息已从文件中读出但未发送给应用程序时，<code>readPos + totalBytes == nextReadPos &amp;&amp; readFileNum == nextReadFileNum</code>（若涉及到文件切换，则<code>nextReadFileNum++ &amp;&amp; nextReadPos == 0</code>），当消息已经发送给应用程序时，<code>readPos == nextReadPos &amp;&amp; readFileNum == nextReadFileNum</code>。换言之，之所以存在<code>nextReadFileNum</code>和<code>nextReadPos</code>是因为虽然消费者已经发起了数据读取请求，但 <code>diskQueue</code>还未将此消息发送给消费者，当发送完成后，会将它们相应更新。好，文件读取过程已经阐述完毕。当消息从文件中读取出来后，是通过<code>diskQueue.readChan</code>发送给上层应用程序的，上层应用程序通过调用<code>diskQueue.ReadChan</code>获取到此管道实例，并一直等待从此管道接收消息。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 获取 diskQueu 的读取通道，即 readChan，通过此通道从 diskQueue 中读取/消费消息</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ReadChan</span><span class="params">()</span> <span class="title">chan</span> []<span class="title">byte</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> d.readChan</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ioLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> dataRead []<span class="keyword">byte</span></span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="keyword">var</span> count <span class="keyword">int64</span></span><br><span class="line">	<span class="keyword">var</span> r <span class="keyword">chan</span> []<span class="keyword">byte</span></span><br><span class="line">	syncTicker := time.NewTicker(d.syncTimeout)</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// dont sync all the time :)</span></span><br><span class="line">		<span class="comment">// 1. 只有写入缓冲中的消息达到一定数量，才执行同步刷新到磁盘的操作</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 2. 刷新磁盘操作，重置计数信息，即将 writeFile 流刷新到磁盘，同时持久化元数据</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 3. 若当前还有数据（消息）可供消费</span></span><br><span class="line">        <span class="comment">// （即当前读取的文件编号 readFileNum &lt; 目前已经写入的文件编号 writeFileNum</span></span><br><span class="line">		<span class="comment">// 或者 当前的读取索引 readPos &lt; 当前的写的索引 writePos）</span></span><br><span class="line">		<span class="comment">// 因为初始化读每一个文件时都需要重置 readPos = 0</span></span><br><span class="line">		<span class="keyword">if</span> (d.readFileNum &lt; d.writeFileNum) || (d.readPos &lt; d.writePos) &#123;</span><br><span class="line">			<span class="comment">// 保证当前处于可读取的状态，即 readPos + totalByte == nextReadPos，</span></span><br><span class="line">			<span class="comment">// 若二者相等，则需要通过 d.readOne 方法先更新 nextReadPos</span></span><br><span class="line">			<span class="keyword">if</span> d.nextReadPos == d.readPos &#123;</span><br><span class="line">				dataRead, err = d.readOne()</span><br><span class="line">				<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">					d.logf(ERROR, <span class="string">"DISKQUEUE(%s) reading at %d of %s - %s"</span>,</span><br><span class="line">						d.name, d.readPos, d.fileName(d.readFileNum), err)</span><br><span class="line">					d.handleReadError()</span><br><span class="line">					<span class="keyword">continue</span></span><br><span class="line">				&#125;</span><br><span class="line">			&#125;</span><br><span class="line">			<span class="comment">// 取出读取通道 readChan</span></span><br><span class="line">			r = d.readChan</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 当 r == nil时，代表此时消息已经全部读取完毕，</span></span><br><span class="line">            <span class="comment">// 因此使用 select 不能将数据（消息）压入其中</span></span><br><span class="line">			r = <span class="literal">nil</span> </span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="comment">// 4. 当读取到数据时，将它压入到 r/readChan 通道，</span></span><br><span class="line">            <span class="comment">// 同时判断是否需要更新到下一个文件读取，同时设置 needSync</span></span><br><span class="line">		<span class="keyword">case</span> r &lt;- dataRead:</span><br><span class="line">			count++ <span class="comment">// 更新当前等待刷盘的消息数量</span></span><br><span class="line">			<span class="comment">// 判断是否可以将磁盘中读取的上一个文件删除掉（已经读取完毕），同时需要设置 needSync</span></span><br><span class="line">			<span class="comment">// 值得注意的是，moveForward 方法中将 readPos 更新为了 nextReadPos，</span></span><br><span class="line">            <span class="comment">// 且 readFileNum 也被更新为 nextReadFileNum</span></span><br><span class="line">			<span class="comment">// 因为此时消息已经发送给了消费者了。</span></span><br><span class="line">			d.moveForward()</span><br><span class="line">		<span class="comment">// 5. 收到清空持久化存储 disQueue 的消息</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-d.emptyChan: <span class="comment">// (当应用程序调用 diskQueue.Empty 方法时触发)</span></span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 6. 收到写入消息到磁盘的消息 (当应用程序调用 diskQueue.Put 方法时触发)</span></span><br><span class="line">		<span class="keyword">case</span> dataWrite := &lt;-d.writeChan:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 7. 定时执行刷盘操作，在存在数据等待刷盘时，才需要执行刷盘动作</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-syncTicker.C:</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 8. 退出信号</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-d.exitChan:</span><br><span class="line">			<span class="keyword">goto</span> exit</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">exit:</span><br><span class="line">	syncTicker.Stop()</span><br><span class="line">	d.exitSyncChan &lt;- <span class="number">1</span></span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<p>当消息被压入到<code>readChan</code>管道后，随即更新等待刷盘的消息数量，然后调用<code>diskQueue.moveForward</code>方法判断是否可以将磁盘中读取的上一个文件删除掉（已经读取完毕），同时考虑是否需要设置<code>needSync</code>（因为即将读取一个新的文件），最后复原<code>readFileNum</code>和<code>readPos</code>并更新等待被读取的消息数量<code>depth</code>。相关源码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 检查当前读取的文件和上一次读取的文件是否为同一个，即读取是否涉及到文件的更换，</span></span><br><span class="line"><span class="comment">// 若是，则说明可以将磁盘中上一个文件删除掉，因为上一个文件包含的消息已经读取完毕，</span></span><br><span class="line"><span class="comment">// 同时需要设置 needSync</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">moveForward</span><span class="params">()</span></span> &#123;</span><br><span class="line">	oldReadFileNum := d.readFileNum</span><br><span class="line">	d.readFileNum = d.nextReadFileNum</span><br><span class="line">	d.readPos = d.nextReadPos</span><br><span class="line">	depth := atomic.AddInt64(&amp;d.depth, <span class="number">-1</span>)</span><br><span class="line">	<span class="keyword">if</span> oldReadFileNum != d.nextReadFileNum &#123;</span><br><span class="line">		<span class="comment">// 每当准备读取一个新的文件时，需要设置 needSync</span></span><br><span class="line">		d.needSync = <span class="literal">true</span></span><br><span class="line">		fn := d.fileName(oldReadFileNum)</span><br><span class="line">		err := os.Remove(fn) <span class="comment">// 将老的文件删除</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 检测文件末尾是否已经损坏</span></span><br><span class="line">	d.checkTailCorruption(depth)</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<p>注意到在<code>moveForward</code>方法的最后，还检查了文件末尾是否损坏。它先通过元数据信息（4个变量）判断是否已经读到了最后一个文件的末尾，若未到，则返回。否则，通过<code>depth</code>与0的大小关系来判断文件损坏的类型或原因。详细可以查看源码中的注释，解释得较为清楚。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 检测文件末尾是否已经损坏</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">checkTailCorruption</span><span class="params">(depth <span class="keyword">int64</span>)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 若当前还有消息可供读取，则说明未读取到文件末尾，暂时不用检查</span></span><br><span class="line">	<span class="keyword">if</span> d.readFileNum &lt; d.writeFileNum || d.readPos &lt; d.writePos &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// we've reached the end of the diskqueue</span></span><br><span class="line">	<span class="comment">// if depth isn't 0 something went wrong</span></span><br><span class="line">	<span class="comment">// 若代码能够执行，则正常情况下，说明已经读取到 diskQueue 的尾部，</span></span><br><span class="line">	<span class="comment">// 即读取到了最后一个文件的尾部了，因此，此时的 depth(累积等待读取或消费的消息数量)</span></span><br><span class="line">	<span class="comment">// 应该为0,因此若其不为0,则表明文件尾部已经损坏，报错。</span></span><br><span class="line">	<span class="comment">// 一方面，若其小于 0,则表明初始化加载的元数据已经损坏（depth从元数据文件中读取而来）</span></span><br><span class="line">	<span class="comment">// 原因是：实际上文件还有可供读取的消息，但depth指示没有了，因此 depth 计数错误。</span></span><br><span class="line">	<span class="comment">// 否则，说明是消息实体数据存在丢失的情况</span></span><br><span class="line">	<span class="comment">// 原因是：实际上还有消息可供读取 depth &gt; 0,但是文件中已经没有消息了，因此文件被损坏。</span></span><br><span class="line">	<span class="comment">// 同时，强制重置 depth，并且设置 needSync</span></span><br><span class="line">	<span class="keyword">if</span> depth != <span class="number">0</span> &#123;</span><br><span class="line">		<span class="keyword">if</span> depth &lt; <span class="number">0</span> &#123;</span><br><span class="line">			d.logf(ERROR,</span><br><span class="line">				<span class="string">"DISKQUEUE(%s) negative depth at tail (%d), metadata corruption,"</span> \</span><br><span class="line">                   resetting <span class="number">0.</span>..<span class="string">", d.name, depth)</span></span><br><span class="line"><span class="string">		&#125; else if depth &gt; 0 &#123;</span></span><br><span class="line"><span class="string">			d.logf(ERROR,</span></span><br><span class="line"><span class="string">				"</span>DISKQUEUE(%s) positive depth at tail (%d), data loss, resetting <span class="number">0.</span>..<span class="string">",</span></span><br><span class="line"><span class="string">				d.name, depth)</span></span><br><span class="line"><span class="string">		&#125;</span></span><br><span class="line"><span class="string">		// force set depth 0</span></span><br><span class="line"><span class="string">		atomic.StoreInt64(&amp;d.depth, 0)</span></span><br><span class="line"><span class="string">		d.needSync = true</span></span><br><span class="line"><span class="string">	&#125;</span></span><br><span class="line"><span class="string">	// 另外，若 depth == 0。</span></span><br><span class="line"><span class="string">	// 但文件读取记录信息不合法 d.readFileNum != d.writeFileNum || d.readPos != d.writePos</span></span><br><span class="line"><span class="string">	// 则跳过接下来需要被读或写的所有文件，类似于重置持久化存储的状态，格式化操作</span></span><br><span class="line"><span class="string">	// 同时设置 needSync</span></span><br><span class="line"><span class="string">	if d.readFileNum != d.writeFileNum || d.readPos != d.writePos &#123;</span></span><br><span class="line"><span class="string">		if d.readFileNum &gt; d.writeFileNum &#123;</span></span><br><span class="line"><span class="string">			d.logf(ERROR,</span></span><br><span class="line"><span class="string">				"</span>DISKQUEUE(%s) readFileNum &gt; writeFileNum (%d &gt; %d), <span class="string">" \</span></span><br><span class="line"><span class="string">                   "</span>corruption, skipping to next writeFileNum and resetting <span class="number">0.</span>..<span class="string">",</span></span><br><span class="line"><span class="string">				d.name, d.readFileNum, d.writeFileNum)</span></span><br><span class="line"><span class="string">		&#125;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">		if d.readPos &gt; d.writePos &#123;</span></span><br><span class="line"><span class="string">			d.logf(ERROR,</span></span><br><span class="line"><span class="string">				"</span>DISKQUEUE(%s) readPos &gt; writePos (%d &gt; %d), corruption, <span class="string">"  \</span></span><br><span class="line"><span class="string">                   "</span>skipping to next writeFileNum and resetting <span class="number">0.</span>..<span class="string">",</span></span><br><span class="line"><span class="string">				d.name, d.readPos, d.writePos)</span></span><br><span class="line"><span class="string">		&#125;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line"><span class="string">		d.skipToNextRWFile()</span></span><br><span class="line"><span class="string">		d.needSync = true</span></span><br><span class="line"><span class="string">	&#125;</span></span><br><span class="line"><span class="string">&#125; // diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<p>当程序发现在<code>depth == 0</code>的情况下，即此时所有的消息已经被读取完毕，但若某个异常的情况下，可能会有：<code>readFileNum != writeFileNum || readPos != writePos</code>，则<code>diskQueue</code>会显式地删除掉接下来需要被读或写的所有文件，类似于重置持久化存储的状态或格式化操作。同时，<code>skipToNextRWFile</code>也可用作清空 <code>diskQueue</code>当前未读取的所有文件。具体代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将 readFileNum 到 writeFileNum 之间的文件全部删除</span></span><br><span class="line"><span class="comment">// 将 readFileNum 设置为 writeFileNum</span></span><br><span class="line"><span class="comment">// 即将前面不正确的文件全部删除掉，重新开始读取</span></span><br><span class="line"><span class="comment">// 另外，其也可用作清空 diskQueue 当前未读取的所有文件的操作，重置 depth</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">skipToNextRWFile</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="keyword">if</span> d.readFile != <span class="literal">nil</span> &#123;</span><br><span class="line">		d.readFile.Close()</span><br><span class="line">		d.readFile = <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> d.writeFile != <span class="literal">nil</span> &#123;</span><br><span class="line">		d.writeFile.Close()</span><br><span class="line">		d.writeFile = <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">for</span> i := d.readFileNum; i &lt;= d.writeFileNum; i++ &#123;</span><br><span class="line">		fn := d.fileName(i)</span><br><span class="line">		innerErr := os.Remove(fn)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	d.writeFileNum++</span><br><span class="line">	d.writePos = <span class="number">0</span></span><br><span class="line">	d.readFileNum = d.writeFileNum</span><br><span class="line">	d.readPos = <span class="number">0</span></span><br><span class="line">	d.nextReadFileNum = d.writeFileNum</span><br><span class="line">	d.nextReadPos = <span class="number">0</span></span><br><span class="line">	atomic.StoreInt64(&amp;d.depth, <span class="number">0</span>)</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，从<code>diskQueue</code>的文件系统中读取消息，并发送到上层应用程序的相关逻辑已经阐述完毕。除了需要清楚其读取核心逻辑外，还需要关注其对文件损坏的检测与处理。</p>
+<h3 id="diskQueue-写入消息"><a href="#diskQueue-写入消息" class="headerlink" title="diskQueue 写入消息"></a>diskQueue 写入消息</h3><p>当<code>topic</code>或<code>channel</code>所维护的内存消息队列<code>memoryMsgChan</code>满了时，会通过调用<code>backend.Put</code>方法将消息写入到<code>diskQueue</code>。消息写入持久化存储的逻辑比从文件系统中读取一条消息的逻辑要简单。其关键步骤为先定位写入索引，同样是先写临时文件缓冲再执行数据刷新操作，最后需要更新<code>writePos</code>，当发现要切换写入文件时，还要更新<code>writeFileNum</code>。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ioLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// 1-5.</span></span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 6. 收到写入消息到磁盘的消息 (当应用程序调用 diskQueue.Put 方法时触发)</span></span><br><span class="line">		<span class="keyword">case</span> dataWrite := &lt;-d.writeChan:</span><br><span class="line">			<span class="comment">// 删除目前还未读取的文件，同时删除元数据文件</span></span><br><span class="line">			d.emptyResponseChan &lt;- d.deleteAllFiles()</span><br><span class="line">			count = <span class="number">0</span> <span class="comment">// 重置当前等待刷盘的消息数量</span></span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 将一个字节数组内容写入到持久化存储，同时更新读写位置信息，以及判断是否需要滚动文件</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">writeOne</span><span class="params">(data []<span class="keyword">byte</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="comment">// 1. 若当前写入文件句柄为空，则需要先实例化</span></span><br><span class="line">	<span class="keyword">if</span> d.writeFile == <span class="literal">nil</span> &#123;</span><br><span class="line">		curFileName := d.fileName(d.writeFileNum)</span><br><span class="line">		d.writeFile, err = os.OpenFile(curFileName, os.O_RDWR|os.O_CREATE, <span class="number">0600</span>)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		d.logf(INFO, <span class="string">"DISKQUEUE(%s): writeOne() opened %s"</span>, d.name, curFileName)</span><br><span class="line">		<span class="comment">// 2. 同时，若当前的写入索引大于0,则重新定位写入索引</span></span><br><span class="line">		<span class="keyword">if</span> d.writePos &gt; <span class="number">0</span> &#123;</span><br><span class="line">			_, err = d.writeFile.Seek(d.writePos, <span class="number">0</span>)</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 获取写入数据长度，并检查长度合法性。然后将数据写入到写入缓冲，</span></span><br><span class="line">    <span class="comment">// 最后将写入缓冲的数据一次性刷新到文件</span></span><br><span class="line">	dataLen := <span class="keyword">int32</span>(<span class="built_in">len</span>(data))</span><br><span class="line">	<span class="keyword">if</span> dataLen &lt; d.minMsgSize || dataLen &gt; d.maxMsgSize &#123;</span><br><span class="line">		<span class="keyword">return</span> fmt.Errorf(<span class="string">"invalid message write size (%d) maxMsgSize=%d"</span>, </span><br><span class="line">                          dataLen, d.maxMsgSize)</span><br><span class="line">	&#125;</span><br><span class="line">	d.writeBuf.Reset()</span><br><span class="line">	err = binary.Write(&amp;d.writeBuf, binary.BigEndian, dataLen)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	_, err = d.writeBuf.Write(data)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// only write to the file once</span></span><br><span class="line">	_, err = d.writeFile.Write(d.writeBuf.Bytes())</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 更新写入索引 writePos 及 depth，且若 writePos 大于 maxBytesPerFile，</span></span><br><span class="line">    <span class="comment">// 则说明当前已经写入到文件的末尾。</span></span><br><span class="line">	<span class="comment">// 因此需要更新 writeFileNum，重置 writePos，</span></span><br><span class="line">    <span class="comment">// 即更换到一个新的文件执行写入操作（为了避免一直写入单个文件）</span></span><br><span class="line">	<span class="comment">// 且每一次更换到下一个文件，都需要将写入文件同步到磁盘</span></span><br><span class="line">	totalBytes := <span class="keyword">int64</span>(<span class="number">4</span> + dataLen)</span><br><span class="line">	d.writePos += totalBytes</span><br><span class="line">	atomic.AddInt64(&amp;d.depth, <span class="number">1</span>)</span><br><span class="line">	<span class="keyword">if</span> d.writePos &gt; d.maxBytesPerFile &#123;</span><br><span class="line">		d.writeFileNum++</span><br><span class="line">		d.writePos = <span class="number">0</span></span><br><span class="line">		<span class="comment">// sync every time we start writing to a new file</span></span><br><span class="line">		err = d.sync()</span><br><span class="line">		<span class="comment">// ..</span></span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="diskQueue-清空消息"><a href="#diskQueue-清空消息" class="headerlink" title="diskQueue 清空消息"></a>diskQueue 清空消息</h3><p>当应用程序调用<code>diskQueue.Empty</code>接口时，会将持久化存储<code>diskQueue</code>中的所有消息清空，并重置了所有状态属性信息，类似于一个格式化操作。还记得上面在阐述读取消息的流程中涉及到的<code>diskQueue.skipToNextRWFile</code>方法吗，它的一个作用就是删除<code>diskQueue</code>当前未读取的所有文件。除此之外，清空消息操作还删除了元数据文件。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 清空 diskQueue 中未读取的文件</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">Empty</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	d.RLock()</span><br><span class="line">	<span class="keyword">defer</span> d.RUnlock()</span><br><span class="line">	<span class="keyword">if</span> d.exitFlag == <span class="number">1</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> errors.New(<span class="string">"exiting"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	d.logf(INFO, <span class="string">"DISKQUEUE(%s): emptying"</span>, d.name)</span><br><span class="line">	d.emptyChan &lt;- <span class="number">1</span></span><br><span class="line">	<span class="keyword">return</span> &lt;-d.emptyResponseChan</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// diskQueue 消息处理主循环</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ioLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// 1-3.</span></span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="comment">// 4.</span></span><br><span class="line">        <span class="comment">// ...    </span></span><br><span class="line">		<span class="comment">// 5. 收到清空持久化存储 disQueue 的消息</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-d.emptyChan: <span class="comment">// (当应用程序调用 diskQueue.Empty 方法时触发)</span></span><br><span class="line">			<span class="comment">// 删除目前还未读取的文件，同时删除元数据文件</span></span><br><span class="line">			d.emptyResponseChan &lt;- d.deleteAllFiles()</span><br><span class="line">			count = <span class="number">0</span> <span class="comment">// 重置当前等待刷盘的消息数量</span></span><br><span class="line">		<span class="comment">// 6-8</span></span><br><span class="line">        <span class="comment">// ...    </span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 调用 skipToNextRWFile 方法清空 readFileNum -&gt; writeFileNum 之间的文件，</span></span><br><span class="line"><span class="comment">// 并且设置 depth 为 0。 同时删除元数据文件</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">deleteAllFiles</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	err := d.skipToNextRWFile()</span><br><span class="line">	innerErr := os.Remove(d.metaDataFileName())</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="diskQueue-刷盘操作"><a href="#diskQueue-刷盘操作" class="headerlink" title="diskQueue 刷盘操作"></a>diskQueue 刷盘操作</h3><p>同大多的存储系统类似，<code>diskQueue</code>采用批量刷新缓冲区的操作来提高消息写入文件系统的性能。其中，<code>diskQueue</code>规定触发刷盘动作的有个条件，其中任一条件成立即可。一是当缓冲区中的消息的数量达到阈值(<code>syncEvery</code>)时，二是每隔指定时间(<code>syncTimeout</code>)。需要注意的一点为在执行刷盘动作，也会重新持久化<code>diskQueue</code>的元数据信息。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">ioLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	syncTicker := time.NewTicker(d.syncTimeout)</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// dont sync all the time :)</span></span><br><span class="line">		<span class="comment">// 1. 只有写入缓冲中的消息达到一定数量，才执行同步刷新到磁盘的操作</span></span><br><span class="line">		<span class="keyword">if</span> count == d.syncEvery &#123;</span><br><span class="line">			d.needSync = <span class="literal">true</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 2. 刷新磁盘操作，重置计数信息，即将 writeFile 流刷新到磁盘，同时持久化元数据</span></span><br><span class="line">		<span class="keyword">if</span> d.needSync &#123;</span><br><span class="line">			err = d.sync()</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">			count = <span class="number">0</span> <span class="comment">// 重置当前等待刷盘的消息数量</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 3.</span></span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="comment">// 4-6</span></span><br><span class="line">        <span class="comment">// ...    </span></span><br><span class="line">		<span class="comment">// 7. 定时执行刷盘操作，在存在数据等待刷盘时，才需要执行刷盘动作</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-syncTicker.C:</span><br><span class="line">			<span class="keyword">if</span> count == <span class="number">0</span> &#123;</span><br><span class="line">				<span class="comment">// avoid sync when there's no activity</span></span><br><span class="line">				<span class="keyword">continue</span></span><br><span class="line">			&#125;</span><br><span class="line">			d.needSync = <span class="literal">true</span></span><br><span class="line">		<span class="comment">// 8.</span></span><br><span class="line">        <span class="comment">// ...    </span></span><br><span class="line">	&#125;</span><br><span class="line"><span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// diskQueue.go</span></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 同步刷新 writeFile 文件流（即将操作系统缓冲区中的数据写入到磁盘），同时持久化元数据信息</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *diskQueue)</span> <span class="title">sync</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> d.writeFile != <span class="literal">nil</span> &#123;</span><br><span class="line">		err := d.writeFile.Sync()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	err := d.persistMetaData()</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 重置了刷新开关</span></span><br><span class="line">	d.needSync = <span class="literal">false</span></span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>简单小结，本文详细分析了持久化消息队列存储组件——<code>diskQueue</code>，它被用作<code>nsq</code>的消息持久化存储。围绕<code>diskQueue</code>展开，通过阐述其提供给上层应用程序的功能接口来分析其工作原理，重点梳理了从<code>diskQueue</code>中读取和写消息的逻辑，同一般的队列实现类似，采用一组索引标记读写的位置，只不过<code>diskQueue</code>采用了两组读取索引。另外，在读取消息的过程检测文件是否被损坏，同时在写入过程中，通过不断切换文件来限制写入单个文件的数据量。<code>diskQueue</code>同样提供了清空存储的所有消息（删除所有文件，并重置<code>diskQueue</code>状态信息）的操作（类似于文件系统的格式化操作），最后不要忘记缓冲区的批量刷新刷盘动作助于提高文件系统的写入性能。更完整的源码注释可参考<a href="https://github.com/qqzeng/nsqio/tree/master/go-diskqueue" target="_blank" rel="noopener">这里</a>。</p>
+<p>参考文献</p>
+<p>[1].<a href="https://github.com/nsqio/go-diskqueue" target="_blank" rel="noopener">https://github.com/nsqio/go-diskqueue</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag"><i class="fa fa-tag"></i> 消息队列</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/05/18/2019-05-18-%E7%89%A9%E8%81%94%E7%BD%91%E7%9A%84%E8%AE%BE%E5%A4%87%E9%98%B2%E4%BC%AA%E8%AE%A4%E8%AF%81/" rel="next" title="物联网的设备防伪认证">
+                  <i class="fa fa-chevron-left"></i> 物联网的设备防伪认证
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/06/23/Shell%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="prev" title="Shell学习笔记">
+                  Shell学习笔记 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#diskQueue-实例结构"><span class="nav-number">1.</span> <span class="nav-text">diskQueue 实例结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#diskQueue-构造方法"><span class="nav-number">2.</span> <span class="nav-text">diskQueue 构造方法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#diskQueue-消息处理主循环"><span class="nav-number">3.</span> <span class="nav-text">diskQueue 消息处理主循环</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#diskQueue-读取消息"><span class="nav-number">3.1.</span> <span class="nav-text">diskQueue 读取消息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#diskQueue-写入消息"><span class="nav-number">3.2.</span> <span class="nav-text">diskQueue 写入消息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#diskQueue-清空消息"><span class="nav-number">3.3.</span> <span class="nav-text">diskQueue 清空消息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#diskQueue-刷盘操作"><span class="nav-number">3.4.</span> <span class="nav-text">diskQueue 刷盘操作</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

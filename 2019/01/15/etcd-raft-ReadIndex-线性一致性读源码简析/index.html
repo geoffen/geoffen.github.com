@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上篇文章阐述了etcd-raft集群配置变更源码的相关逻辑，同时，在理论层面，从正反两个方面简要y论述了一次集群配置变更只能涉及到一个节点的原因。本文的主题为etcd-raft使用ReadIndex来实现线性一致性(linearizability)的实现原理。这包括两个方面，首先简要阐述线性一致性的理论知识，其次是结合etcd-raft的源码来简单梳理其如何使用ReadIndex来保证读请求的线性">
+<meta name="keywords" content="分布式系统,线性一致性,顺序一致性">
+<meta property="og:type" content="article">
+<meta property="og:title" content="etcd-raft ReadIndex 线性一致性读源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;15&#x2F;etcd-raft-ReadIndex-%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%BB%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上篇文章阐述了etcd-raft集群配置变更源码的相关逻辑，同时，在理论层面，从正反两个方面简要y论述了一次集群配置变更只能涉及到一个节点的原因。本文的主题为etcd-raft使用ReadIndex来实现线性一致性(linearizability)的实现原理。这包括两个方面，首先简要阐述线性一致性的理论知识，其次是结合etcd-raft的源码来简单梳理其如何使用ReadIndex来保证读请求的线性">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.776Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/15/etcd-raft-ReadIndex-%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%BB%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>etcd-raft ReadIndex 线性一致性读源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/15/etcd-raft-ReadIndex-%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7%E8%AF%BB%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          etcd-raft ReadIndex 线性一致性读源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-15 21:25:02" itemprop="dateCreated datePublished" datetime="2019-01-15T21:25:02+08:00">2019-01-15</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式协调服务</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>15k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>14 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上篇文章阐述了<code>etcd-raft</code>集群配置变更源码的相关逻辑，同时，在理论层面，从正反两个方面简要y论述了一次集群配置变更只能涉及到一个节点的原因。本文的主题为<code>etcd-raft</code>使用<code>ReadIndex</code>来实现线性一致性(<code>linearizability</code>)的实现原理。这包括两个方面，首先简要阐述线性一致性的理论知识，其次是结合<code>etcd-raft</code>的源码来简单梳理其如何使用<code>ReadIndex</code>来保证读请求的线性一致性。线性一致性广泛被应用于分布式应用中，是用于衡量一个并发系统是否正确的重要标准，我们通常谈论的<code>CAP</code>中的<code>C</code>指的即为线性一致性。需要说明的是，<code>etcd</code>是基于<code>raft</code>来提供一致性保证，虽然共识算法被用于保证状态的一致性，但并不代表实现共识算法的系统就自动具备了线性一致性，这是两个概念，换言之，<code>etcd-raft</code>必须在实现<code>raft</code>的基础上额外增加一些逻辑来保证系统具备线性一致性。</p>
+<a id="more"></a>
+
+<h2 id="线性一致性"><a href="#线性一致性" class="headerlink" title="线性一致性"></a>线性一致性</h2><p>简单而言，线性一致性是针对单个对象的单个操作的一种保证，它对单个对象的一系列操作（读和写）提供了一种实时的保证，即它们可以按照时间进行排序。不精确地说，<code>linearizability</code>可以保证：</p>
+<ul>
+<li>一旦写操作写入了某个值，后面的（由<code>wall-clock</code>定义）读操作应该至少能够返回之前写的最新的值，换言之，它也可以返回之后的写操作所写入的值（注意不一定是读操作之前的最新的写的值）</li>
+<li>一旦读操作返回了某个值，后面的读操作应该返回前一个读操作所返回的值，或者返回之后的写操作所写入的值。（注意不一定的是读之前最新的值）</li>
+</ul>
+<p>并且线性一致性是可组合的(<code>composable</code>)，如果系统中每一个对象上的操作都符合线性一致性，那么系统中的所有操作都符合线性一致性。</p>
+<p>另外，顺序一致性(<code>serializability</code>)很容易同线性一致性混淆。但实际上二者有较大的区别。且不严谨地说，线性一致性比顺序一致性提供更强的一致性保障语义。另外，不同于线性一致性属于分布式系统（并发编程系统）的概念，而顺序一致性是数据库领域的概念，它是对事务的一种保证，或者说，顺序一致性是针对一个或多个对象的一个或多个操作的一种保证。具体而言，它保证了多个事务（每个都可能包含了一组对于不同对象的读或写操作）的执行的效果等同于对这些事务的某一个顺序执行的效果。</p>
+<p>顺序一致性是<code>ACID</code>中的<code>I</code>，且若每个事务都保证了正确性（<code>ACID</code>中的<code>C</code>），则这些事务的顺序执行也会保证正确性，可见，顺序一致性是数据库关于事务执行正确性的一种保证。不同于线性一致性，顺序一致性不会对事务执行的顺序强加任何实时的约束，换言之，其不需要事务的所有操作按照真实时间（应用程序指定的）严格排序的，只需要存在一个满足条件的顺序执行的顺序即可。最后顺序一致性也是不可组合的(<code>composable</code>)。</p>
+<p>将线性一致性同顺序一致性结合起来，便是严格一致性(<code>serializability</code>)，即事务执行的行为等同于某一个顺序（串行）执行的效果，且这些串行的顺序对应实时的顺序。举一个简单的例子，如果存在两个事务<code>T1</code>及<code>T2</code>，我们先执行<code>T1</code>，<code>T1</code>中包含写<code>x</code>的操作，最后提交<code>T1</code>。我们然后执行<code>T2</code>，包含了读<code>x</code>的操作，然后提交它。若一个数据库系统满足严格一致性，则其会先执行<code>T1</code>并提交，然后才执行<code>T2</code>提交<code>T2</code>，因此<code>T2</code>能够读到<code>T1</code>中写入<code>x</code>的值，但如果数据库系统只提供顺序一致性，则其可能会将<code>T2</code>排序到<code>T1</code>之前。因此，可以将线性一致性看成是严格一致性的一种特殊情况，即一次执行只针对单个对象的单个操作。</p>
+<p>另外论文 <a href="https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf" target="_blank" rel="noopener">Linearizability: Correctness Condition for Concurrent Objects</a>中给出了线性一致性的定义：</p>
+<blockquote>
+<p>Linearizability is a correctness condition for concurrent objects that provides the illusion that each operation applied by concurrent processes takes effect instantaneously at some point between its invocation and its response, implying that the meaning of a concurrent object’s operations can be given by pre- and post-conditions</p>
+</blockquote>
+<p>因此，为了提供线性一致性，一个系统应该保证存在这样一个时间点，在这个时间点之后，系统需要被提交到一个新的状态，并且绝不能返回到之前旧的状态。而且，这样的转变是瞬时的，具备原子性。最后，概括而言，线性一致性必须提供三个方面的保证：a) 瞬间完成（保证原子性），b) 发生在invocation <code>和</code>response`两个事件之间，c) 能够反映出”最新的”值（特别注意这个最新的意义）。</p>
+<p>关于此处对顺序一致性的顺序简单（可能不是完全精度）的阐述来源于 <a href="https://pingcap.com/blog-cn/linearizability-and-raft/" target="_blank" rel="noopener">线性一致性和 Raft</a>、<a href="https://medium.com/p/6e579965c4ce/edit" target="_blank" rel="noopener">On Ways To Agree, Part 2: Path to Atomic Broadcast</a> 、 <a href="http://www.bailis.org/blog/linearizability-versus-serializability/" target="_blank" rel="noopener">Linearizability versus Serializability</a> 以及<a href="https://aphyr.com/posts/313-strong-consistency-models" target="_blank" rel="noopener">Strong consistency models</a>。当然你也可以参照 <a href="https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf" target="_blank" rel="noopener">论文</a>。其中文献[1]举例了一个非常通俗易理解的实例来帮助解读对线性一致性理解的普遍的误区。特别地，文献[2]的<code>comment</code>讨论了关于”实时性”以及”可组合”更精确的含义。</p>
+<h2 id="etcd-raft-ReadIndex-线性一致性简析"><a href="#etcd-raft-ReadIndex-线性一致性简析" class="headerlink" title="etcd-raft ReadIndex 线性一致性简析"></a>etcd-raft ReadIndex 线性一致性简析</h2><p>在<code>etcd-raft</code>实现中，所有的写请求都会由<code>leader</code>执行并将请求日志同步到<code>follower</code>节点，且若<code>follower</code>节点收到客户端的写请求，则一般是把写请求转发给<code>leader</code>。那么对于读请求又如何处理呢？虽然<code>etcd-raft</code>能够对日志提供一致性保证，但若不加以协调，两个原因导致在<code>etcd-raft</code>中从不同节点读数据可能会出现不一致：</p>
+<ul>
+<li><code>leader</code>节点与<code>follower</code>节点存在状态差，因为日志是从<code>leader</code>节点同步至<code>follower</code>节点，但不能保证任何时刻 ，二者的日志完全相同，即<code>follower</code>完全有可能落后于<code>leader</code>。另外<code>follower</code>之间同样如此，即也不能保证所有的<code>follower</code>节点的日志完全一致。因此必须对读操作进行协调。</li>
+<li>如果限制只能从<code>leader</code>节点读取（至少<code>leader</code>状态机中最有可能包含最新的数据），这样仍然存在一个问题：若网络发生分区，则包含<code>quorum</code>节点的分区可能选举出一个新<code>leader</code>代替了旧<code>leader</code>，而旧<code>leader</code>却仍然以为自己是作法的<code>leader</code>，并依然处理客户端的读请求，则此时其可能会返回过期的数据，即与从包含<code>quorum</code>节点的分区读到的数据很有可能不同。</li>
+</ul>
+<p>由此可见，必须对读请求作出限制，首先总结<code>etcd-raft</code>针对<code>leader</code>完成<code>ReadIndex</code>线性一致性读所作的协调处理的大致过程：</p>
+<ul>
+<li><p><code>leader</code>需要同集群中<code>quorum</code>节点通信，以确保自己仍然是合法的<code>leader</code>。这一点容易理解，在上面的举例当中，若<code>leader</code>处于网络分区中的非<code>quorum</code>中，则其很可能会被取代，因此必须让<code>leader</code>确保自己仍然是<code>leader</code>。</p>
+</li>
+<li><p>等待状态机至少已经应用<code>ReadIndex</code>记录的日志。注意此处的<strong>至少</strong>两个字，简单而言，若状态机应用到<code>RedaIndex/commit index</code>之后的状态也能够使请求满足线性一致性，这同上文对线性一致性的解释中所强调的是一致的。需要这一条保证的原因是，虽然应用状态机的状态能达成一致，但不能保证多个节点会同时将同一个日志应用到状态机，换言之，各个节点的状态机所处的状态不能<strong>实时一致</strong>。因此，必须根据<code>commit index</code>对请求进行排序，以保证每个请求都至少能反映出状态机在执行完前一请求后的状态，因此，可以认为<code>commit</code>决定了读（也包括写）请求发生的顺序。日志是全局有序的，那么自然而然读请求也被严格排序了。因此这能保证线性一致性。</p>
+</li>
+</ul>
+<p>下文结合源码我们来了解<code>etcd-raft</code>是如何协调处理的。</p>
+<p>首先简单了解相关数据结构，相关注释已概述了各结构的含义，主要涉及的代码目录为：<code>/etcd/raft/</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ReadState 负责记录每个客户端的读请求的状态</span></span><br><span class="line"><span class="comment">// ReadState 最终会被打包放在 Ready 结构中以返回给应用，具体由应用负责处理客户端的读请求</span></span><br><span class="line"><span class="comment">// 即根据 commit index 确定何时才能从状态机中读对应的数据返回给客户端</span></span><br><span class="line"><span class="keyword">type</span> ReadState <span class="keyword">struct</span> &#123;</span><br><span class="line">	Index      <span class="keyword">uint64</span> <span class="comment">// 读请求对应的当前节点的 commit index</span></span><br><span class="line">    RequestCtx []<span class="keyword">byte</span> <span class="comment">// 请求唯一标识，etcd 使用的是 8 位的请求 ID (/etcd/pkg/idutil/id.go)</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/read_only.go</span></span><br><span class="line"><span class="comment">// readIndexStatus 用来记录 follower 对 leader 的心跳消息的响应</span></span><br><span class="line"><span class="keyword">type</span> readIndexStatus <span class="keyword">struct</span> &#123;</span><br><span class="line">	req   pb.Message <span class="comment">// 原始 ReadIndex 请求，是应用在处理客户端读请求时向底层协议加发送的请求。</span></span><br><span class="line">	index <span class="keyword">uint64</span> <span class="comment">// leader 当前的 commit index，在收到此读请求时</span></span><br><span class="line">	acks  <span class="keyword">map</span>[<span class="keyword">uint64</span>]<span class="keyword">struct</span>&#123;&#125; <span class="comment">// 记录了 follower 对 leader 的心跳的响应消息，</span></span><br><span class="line">    <span class="comment">// map 的键为 follower 节点的 ID，值是一个空的 struct，没有意义</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/read_only.go</span></span><br><span class="line"><span class="comment">// readyOnly 负责全局的 ReadIndex 请求</span></span><br><span class="line"><span class="keyword">type</span> readOnly <span class="keyword">struct</span> &#123;</span><br><span class="line">	option           ReadOnlyOption <span class="comment">// 表示为 ReadOnlySafe 或者 ReadOnlyLeaseBased</span></span><br><span class="line">    <span class="comment">// （两种不同的实现线性一致性的方式，官方推荐前者，也是默认的处理方式）</span></span><br><span class="line">	pendingReadIndex <span class="keyword">map</span>[<span class="keyword">string</span>]*readIndexStatus <span class="comment">// 为一个保存所有待处理的 ReadIndex 请求的 map，</span></span><br><span class="line">    <span class="comment">// 其中的 key 表示请求的唯一标识（转换成了字符串），而 value 为 readIndexStatus 结构实例</span></span><br><span class="line">    readIndexQueue   []<span class="keyword">string</span> <span class="comment">// 请求标识 (RequestCtx) 的数组，同样转换成了 string 进行保存</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/read_only.go</span></span><br></pre></td></tr></table></figure>
+
+<p>了解这些数据结构，能够基本感知到它们会被使用在什么地方，或者说它们各自的作用是什么。下面来梳理下<code>etcd-raft</code>所实现的<code>ReadIndex</code>线性一致性的关键流程。</p>
+<h2 id="关键流程"><a href="#关键流程" class="headerlink" title="关键流程"></a>关键流程</h2><p>我们仍然从客户端接收请求入手，但由于<code>raftexample</code>中并没有示例读请求的线性一致性的处理流程，因此，只能选择<code>etcd-server</code>来示例（要比 <code>raftexample</code>更复杂，但我们只关注与<code>ReadIndex</code>线性一致性相关逻辑，其它的不作多阐述）。整个过程包括两个大的部分：应用程序处理读请求（对读请求进行协调）以及底层协议库处理<code>ReadIndex</code>请求。</p>
+<h3 id="应用程序处理读请求"><a href="#应用程序处理读请求" class="headerlink" title="应用程序处理读请求"></a>应用程序处理读请求</h3><p>此部分相关逻辑涉及到的代码目录为<code>/etcd/etcdserver/</code>。在<code>etcd-server</code>在启动创建是会执行<code>Start()</code>函数，以进行一些在接收并处理请求之前的初始化工作，<code>Start()</code>函数会开启若干个<code>go routine</code>来处理初始化任务，其代码如下所示，其中关键的代码为<code>s.goAttach(s.linearizableReadLoop)</code>，顾名思义，其会开启一个协程来循环处理线性一致性读请求。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 循环处理线性一致性读请求</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *EtcdServer)</span> <span class="title">linearizableReadLoop</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> rs raft.ReadState</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// 1. 构建 requestCtx 即请求 ID，且为全局唯一，具体查看 /etcd/pkg/idutil/id.go</span></span><br><span class="line">		ctxToSend := <span class="built_in">make</span>([]<span class="keyword">byte</span>, <span class="number">8</span>)</span><br><span class="line">		id1 := s.reqIDGen.Next()</span><br><span class="line">		binary.BigEndian.PutUint64(ctxToSend, id1)</span><br><span class="line">		<span class="comment">// 2. 判断是否发生了 leader change 事件，若是，则重新执行</span></span><br><span class="line">		leaderChangedNotifier := s.leaderChangedNotify()</span><br><span class="line">		<span class="keyword">select</span> &#123;</span><br><span class="line">		<span class="keyword">case</span> &lt;-leaderChangedNotifier:</span><br><span class="line">			<span class="keyword">continue</span></span><br><span class="line">		<span class="comment">// 3. 等待 readwaitc 管道中 pop 出通知，</span></span><br><span class="line">		<span class="comment">// 显然，即为等待客户端发起读请求，具体是在函数 linearizableReadNotify 中 push 通知的</span></span><br><span class="line">		<span class="keyword">case</span> &lt;-s.readwaitc:</span><br><span class="line">		<span class="keyword">case</span> &lt;-s.stopping:</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 4. 创建一个 notifier，替换原有的。它类似于一个 condition 并发语义</span></span><br><span class="line">		nextnr := newNotifier()</span><br><span class="line">		s.readMu.Lock()</span><br><span class="line">		nr := s.readNotifier</span><br><span class="line">		s.readNotifier = nextnr</span><br><span class="line">		s.readMu.Unlock()</span><br><span class="line">		lg := s.getLogger()</span><br><span class="line">		<span class="comment">// 这里构建一个可取消的机制</span></span><br><span class="line">		cctx, cancel := context.WithTimeout(context.Background(), s.Cfg.ReqTimeout())</span><br><span class="line">		<span class="comment">// 5. 一旦收到一个客户端的读请求，则向底层协议库发送 ReadIndex 请求</span></span><br><span class="line">		<span class="comment">// 底层协议库会构建一个类库 MsgReadIndex 的消息，并将 ctxToSend 作为 Message 的 Entry.Data</span></span><br><span class="line">		<span class="keyword">if</span> err := s.r.ReadIndex(cctx, ctxToSend); err != <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">		cancel()</span><br><span class="line">		<span class="keyword">var</span> (</span><br><span class="line">			timeout <span class="keyword">bool</span></span><br><span class="line">			done    <span class="keyword">bool</span></span><br><span class="line">		)</span><br><span class="line">		<span class="comment">// 6. 设置了超时处理</span></span><br><span class="line">		<span class="keyword">for</span> !timeout &amp;&amp; !done &#123;</span><br><span class="line">			<span class="keyword">select</span> &#123;</span><br><span class="line">			<span class="comment">// 7. 若从 readStateC 收到了 ReadState 通知，则说明底层协议库已经处理完成。</span></span><br><span class="line">			<span class="comment">// 事实上，上层应用程序（在此处是/etcd/etcdserver/raft.go）当收到底层协议库的 Ready 通知时，</span></span><br><span class="line">			<span class="comment">// 并且 Ready 结构中包含的 ReadState 不为空，则会向 readStateC 管道中压入 ReadState 实例，</span></span><br><span class="line">			<span class="comment">// 此处就能 pop 出 ReadState 实例。总而言之，ReadIndex 请求执行至此处表示底层协议库已经处理完毕</span></span><br><span class="line">			<span class="comment">// 只需要等待状态机至少已经应用 ReadIndex 的日志记录即可</span></span><br><span class="line">			<span class="keyword">case</span> rs = &lt;-s.r.readStateC:</span><br><span class="line">				done = bytes.Equal(rs.RequestCtx, ctxToSend)</span><br><span class="line">				<span class="comment">// ...</span></span><br><span class="line">			<span class="keyword">case</span> &lt;-leaderChangedNotifier:</span><br><span class="line">				<span class="comment">// ...</span></span><br><span class="line">			<span class="keyword">case</span> &lt;-time.After(s.Cfg.ReqTimeout()):</span><br><span class="line">				<span class="comment">// ...</span></span><br><span class="line">			<span class="keyword">case</span> &lt;-s.stopping:</span><br><span class="line">				<span class="keyword">return</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">if</span> !done &#123;</span><br><span class="line">			<span class="keyword">continue</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 8. 获取 appliedIndex，判断其是否小于 ReadIndex，若是，则要继续等待，说明状态机此时仍未应用 ReadIndex 处日志</span></span><br><span class="line">		<span class="keyword">if</span> ai := s.getAppliedIndex(); ai &lt; rs.Index &#123;</span><br><span class="line">			<span class="keyword">select</span> &#123;</span><br><span class="line">			<span class="comment">// 9. 等待被调用 s.applyWait.Trigger(index)，那些在index之前的索引上调用的 Wait，都会收到通知而返回。</span></span><br><span class="line">			<span class="comment">// 具体而言，在 server.go 中的 start() -&gt; applyAll() 触发了通知</span></span><br><span class="line">			<span class="comment">// 且 触发调用 applyAll() 是由 etcdsever/raft.go 中 start() 函数往 applyc 中 push 了通知</span></span><br><span class="line">			<span class="keyword">case</span> &lt;-s.applyWait.Wait(rs.Index):</span><br><span class="line">			<span class="keyword">case</span> &lt;-s.stopping:</span><br><span class="line">				<span class="keyword">return</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// unblock all l-reads requested at indices before rs.Index</span></span><br><span class="line">		<span class="comment">// 8. 否则，说明状态机已经至少应用到了 ReadIndex 日志，表明此时可以读取状态机中的内容，返回给客户端</span></span><br><span class="line">		nr.notify(<span class="literal">nil</span>)</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/etcdserver/v3_server.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 用于触发 linearizableReadLoop() 函数执行一遍循环中的等待处理 ReadIndex 请求的逻辑</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *EtcdServer)</span> <span class="title">linearizableReadNotify</span><span class="params">(ctx context.Context)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 获取 notifier</span></span><br><span class="line">	s.readMu.RLock()</span><br><span class="line">	nc := s.readNotifier</span><br><span class="line">	s.readMu.RUnlock()</span><br><span class="line">	<span class="comment">// signal linearizable loop for current notify if it hasn't been already</span></span><br><span class="line">	<span class="comment">// 2. 向 readwaitc 管道中 push 一个空结构，以通知有 ReadIndex 请求到达</span></span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> s.readwaitc &lt;- <span class="keyword">struct</span>&#123;&#125;&#123;&#125;:</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// wait for read state notification</span></span><br><span class="line">	<span class="comment">// 3. 等待 notifier 的通知，即等待 linearizableReadLoop() 调用 notifier.notify() 函数</span></span><br><span class="line">	<span class="comment">// 一旦触发 notifier 管道中 pop 的信号，则表明已经 ReadIndex 请求的准备工作已全部完毕</span></span><br><span class="line">	<span class="comment">// 这包含两个部分：其一是底层协议库的工作，leader 确认自己仍旧是 leader</span></span><br><span class="line">	<span class="comment">// 其二，等待节点的状态机至少已经应用到 ReadIndex 处的日志</span></span><br><span class="line">	<span class="comment">// 此时，就可以正式从状态机中读取对应的请求的内容</span></span><br><span class="line">	<span class="keyword">select</span> &#123;</span><br><span class="line">	<span class="keyword">case</span> &lt;-nc.c:</span><br><span class="line">		<span class="keyword">return</span> nc.err</span><br><span class="line">	<span class="keyword">case</span> &lt;-ctx.Done():</span><br><span class="line">		<span class="keyword">return</span> ctx.Err()</span><br><span class="line">	<span class="keyword">case</span> &lt;-s.done:</span><br><span class="line">		<span class="keyword">return</span> ErrStopped</span><br><span class="line">	&#125;</span><br><span class="line">&#125; <span class="comment">// /etcd/etcdserver/v3_server.go</span></span><br></pre></td></tr></table></figure>
+
+<p>总结而言，上述两个函数 <code>linearizableReadNotify()</code>及<code>linearizableReadLoop()</code>相当于锁的功能（此锁中包含多个条件等待操作），底层协议库未走完<code>ReadIndex</code>请求之前，或者应用层还未将<code>ReadIndex</code>应用到状态机之前，这把锁保证应用不会从状态机中读取请求数据，因此也不会返回对客户端读请求的响应。另外，顺便提一名，<code>linearizableReadNotify()</code>是当应用收到客户端的读请求时调用的，即在函数<code>Range()</code>中被调用，关键部分代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *EtcdServer)</span> <span class="title">Range</span><span class="params">(ctx context.Context, r *pb.RangeRequest)</span> <span class="params">(*pb.RangeResponse, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> resp *pb.RangeResponse</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">if</span> !r.Serializable &#123;</span><br><span class="line">		err = s.linearizableReadNotify(ctx)</span><br><span class="line">		<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> resp, err</span><br><span class="line">&#125; <span class="comment">// // /etcd/etcdserver/v3_server.go</span></span><br></pre></td></tr></table></figure>
+
+<p>关于<code>ReadIndex</code>请求在应用程序层（服务端层）被处理的过程已经解析完毕。下文阐述底层协议库的处理。</p>
+<h3 id="底层协议库处理-ReadIndex-请求"><a href="#底层协议库处理-ReadIndex-请求" class="headerlink" title="底层协议库处理 ReadIndex 请求"></a>底层协议库处理 ReadIndex 请求</h3><p>底层协议库提供处理<code>ReadIndex</code>请求的一个接口：<code>ReadIndex()</code>，上层应用程序也正是调用此函数来使用协议库的协调功能。其中完整的调用栈为<code>ReadIndex() -&gt; step() -&gt; stepWithWaitOption</code>，然后通过将消息压入<code>recvc</code>管道，使得在<code>run()</code>函数从管道中收到消息，然后调用<code>raft.Step()</code>函数，经过一系列的检查之后，进入了<code>stepLeader()</code>函数，对应<code>leader</code>节点的处理流程，重要的代码如下所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 接收上层应用程序的 ReadIndex 请求</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(n *node)</span> <span class="title">ReadIndex</span><span class="params">(ctx context.Context, rctx []<span class="keyword">byte</span>)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// 创建一个 MsgReadIndex 的消息，其中 message 中的 entry 的 data 为请求的标识</span></span><br><span class="line">	<span class="keyword">return</span> n.step(ctx, pb.Message&#123;Type: pb.MsgReadIndex, Entries: []pb.Entry&#123;&#123;Data: rctx&#125;&#125;&#125;)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/node.go</span></span><br></pre></td></tr></table></figure>
+
+<p>进入到<code>stepLeader()</code>函数后，随即根据消息类型进行<code>MsgReadIndex</code>分支。代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepLeader</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">case</span> pb.MsgReadIndex:</span><br><span class="line">		<span class="keyword">if</span> r.quorum() &gt; <span class="number">1</span> &#123;</span><br><span class="line">            <span class="comment">// 1. 如果 leader 在当前任期内没有提交过日志，则直接返回，不处理此 ReadIndex 请求</span></span><br><span class="line">			<span class="comment">// 否则会造成 过期读 甚至不正确的读</span></span><br><span class="line">			<span class="keyword">if</span> r.raftLog.zeroTermOnErrCompacted(r.raftLog.term(r.raftLog.committed)) != r.Term &#123;</span><br><span class="line">				<span class="comment">// Reject read only request when this leader has not committed any log entry at its term.</span></span><br><span class="line">				<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">			&#125;</span><br><span class="line">			<span class="comment">// 2. 判断线性一致性读的实现方式</span></span><br><span class="line">			<span class="keyword">switch</span> r.readOnly.option &#123;</span><br><span class="line">			<span class="keyword">case</span> ReadOnlySafe: <span class="comment">// 3. 采用 ReadIndex 实现</span></span><br><span class="line">				<span class="comment">// 3.1 使用 leader 节点当前的 commit index 及 ReadIndex 消息 m 构造一个 readIndexStatus，并追加到 pendingReadIndex 中</span></span><br><span class="line">				r.readOnly.addRequest(r.raftLog.committed, m)</span><br><span class="line">				<span class="comment">// 3.2 将此请求的ID(rctx)作为参数，并向集群中的节点广播心跳消息</span></span><br><span class="line">				r.bcastHeartbeatWithCtx(m.Entries[<span class="number">0</span>].Data)</span><br><span class="line">			<span class="keyword">case</span> ReadOnlyLeaseBased: <span class="comment">// 4. 采用 leaseBase 实现</span></span><br><span class="line">				<span class="comment">// ...</span></span><br><span class="line">			&#125;</span><br><span class="line">		&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">			r.readStates = <span class="built_in">append</span>(r.readStates, ReadState&#123;Index: r.raftLog.committed, RequestCtx: m.Entries[<span class="number">0</span>].Data&#125;)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 并负责更新 pendingReadIndex(当前正在被处理的 ReadIndex 请求)，以及 readIndexQueue</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ro *readOnly)</span> <span class="title">addRequest</span><span class="params">(index <span class="keyword">uint64</span>, m pb.Message)</span></span> &#123;</span><br><span class="line">	ctx := <span class="keyword">string</span>(m.Entries[<span class="number">0</span>].Data)</span><br><span class="line">	<span class="keyword">if</span> _, ok := ro.pendingReadIndex[ctx]; ok &#123;</span><br><span class="line">		<span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	ro.pendingReadIndex[ctx] = &amp;readIndexStatus&#123;index: index, req: m, acks: <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">uint64</span>]<span class="keyword">struct</span>&#123;&#125;)&#125;</span><br><span class="line">	ro.readIndexQueue = <span class="built_in">append</span>(ro.readIndexQueue, ctx)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/read_only.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 向集群中所有的节点发送心跳消息</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">bcastHeartbeatWithCtx</span><span class="params">(ctx []<span class="keyword">byte</span>)</span></span> &#123;</span><br><span class="line">	r.forEachProgress(<span class="function"><span class="keyword">func</span><span class="params">(id <span class="keyword">uint64</span>, _ *Progress)</span></span> &#123;</span><br><span class="line">		<span class="keyword">if</span> id == r.id &#123;</span><br><span class="line">			<span class="keyword">return</span></span><br><span class="line">		&#125;</span><br><span class="line">		r.sendHeartbeat(id, ctx)</span><br><span class="line">	&#125;)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br><span class="line"><span class="comment">// 向指定节点发送心跳消息，并带上 ctx</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">sendHeartbeat</span><span class="params">(to <span class="keyword">uint64</span>, ctx []<span class="keyword">byte</span>)</span></span> &#123;</span><br><span class="line">	commit := min(r.getProgress(to).Match, r.raftLog.committed)</span><br><span class="line">	m := pb.Message&#123;</span><br><span class="line">		To:      to,</span><br><span class="line">		Type:    pb.MsgHeartbeat,</span><br><span class="line">		Commit:  commit,</span><br><span class="line">		Context: ctx,</span><br><span class="line">	&#125;</span><br><span class="line">	r.send(m)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br></pre></td></tr></table></figure>
+
+<p>当消息经网络传输到达<code>follower</code>节点后，<code>follower</code>收到此心跳消息时，其相关的处理如下所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepFollower</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">case</span> pb.MsgHeartbeat:</span><br><span class="line">            r.electionElapsed = <span class="number">0</span></span><br><span class="line">            r.lead = m.From</span><br><span class="line">            r.handleHeartbeat(m)</span><br><span class="line">         <span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br><span class="line"><span class="comment">// 处理心跳消息的逻辑也很简单，应用 commit index，然后发送心跳消息响应，并带上消息中的 ctx</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">handleHeartbeat</span><span class="params">(m pb.Message)</span></span> &#123;</span><br><span class="line">	r.raftLog.commitTo(m.Commit)</span><br><span class="line">	r.send(pb.Message&#123;To: m.From, Type: pb.MsgHeartbeatResp, Context: m.Context&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>同样，当<code>leader</code>收到心跳消息响应的处理逻辑如下所示：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepLeader</span><span class="params">(r *raft, m pb.Message)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="keyword">case</span> pb.MsgHeartbeatResp:</span><br><span class="line">		<span class="comment">// 1. 更新 leader 为消息中的节点的 progress 对象实例</span></span><br><span class="line">		pr.RecentActive = <span class="literal">true</span></span><br><span class="line">		pr.resume()</span><br><span class="line">		<span class="comment">// free one slot for the full inflights window to allow progress.</span></span><br><span class="line">		<span class="keyword">if</span> pr.State == ProgressStateReplicate &amp;&amp; pr.ins.full() &#123;</span><br><span class="line">			pr.ins.freeFirstOne()</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 2. 若发现节点日志落后，则进行日志同步</span></span><br><span class="line">		<span class="keyword">if</span> pr.Match &lt; r.raftLog.lastIndex() &#123;</span><br><span class="line">			r.sendAppend(m.From)</span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 3. 只有 ReadOnlySafe 类型的消息需要针对性处理，且其 ctx 不能为空</span></span><br><span class="line">		<span class="keyword">if</span> r.readOnly.option != ReadOnlySafe || <span class="built_in">len</span>(m.Context) == <span class="number">0</span> &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 4. 更新 pendingReadIndex 中的 ack 字典（因为收到了 follower 的响应），并查看此时心跳响应是否达到 quorum</span></span><br><span class="line">		ackCount := r.readOnly.recvAck(m)</span><br><span class="line">		<span class="comment">// 5. 若没达到 quorum 的心跳响应，则直接返回，说明此时流程还未走完</span></span><br><span class="line">		<span class="keyword">if</span> ackCount &lt; r.quorum() &#123;</span><br><span class="line">			<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">		&#125;</span><br><span class="line">		<span class="comment">// 6. 在 pendingReadIndex 中返回 m 以前的所有的 readIndexStatus，一个 slice</span></span><br><span class="line">		<span class="comment">// 因为此请求依次顺序处理的，若此请求满足了底层协议库的条件，那么此请求之前的消息也会满足。</span></span><br><span class="line">		rss := r.readOnly.advance(m)</span><br><span class="line">		<span class="comment">// 7. 循环 readIndexStatus，并将其追加到</span></span><br><span class="line">		<span class="keyword">for</span> _, rs := <span class="keyword">range</span> rss &#123;</span><br><span class="line">			req := rs.req</span><br><span class="line">			<span class="comment">// 7.1 若是节点本地的 ReadIndex 请求，则直接将其追加到 ReadState 结构中，最后会打包到 Ready 结构，由 node 返回给上层应用程序</span></span><br><span class="line">			<span class="keyword">if</span> req.From == None || req.From == r.id &#123; <span class="comment">// from local member</span></span><br><span class="line">				r.readStates = <span class="built_in">append</span>(r.readStates, ReadState&#123;Index: rs.index, RequestCtx: req.Entries[<span class="number">0</span>].Data&#125;)</span><br><span class="line">			&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">				<span class="comment">// 7.2 否则此消息则是来源于 follower，则向 follower 发送 MsgReadIndexResp 类型的消息</span></span><br><span class="line">				r.send(pb.Message&#123;To: req.From, Type: pb.MsgReadIndexResp, Index: rs.index, Entries: req.Entries&#125;)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 通知 readonly 结构，leader 节点收到了 follower 节点的心跳消息响应（此心跳消息是针对 ReadIndex 请求而发送的）</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ro *readOnly)</span> <span class="title">recvAck</span><span class="params">(m pb.Message)</span> <span class="title">int</span></span> &#123;</span><br><span class="line">	rs, ok := ro.pendingReadIndex[<span class="keyword">string</span>(m.Context)]</span><br><span class="line">	<span class="keyword">if</span> !ok &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="number">0</span></span><br><span class="line">	&#125;</span><br><span class="line">	rs.acks[m.From] = <span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">	<span class="comment">// 返回此时 leader 已经收到的响应消息的数量</span></span><br><span class="line">	<span class="keyword">return</span> <span class="built_in">len</span>(rs.acks) + <span class="number">1</span></span><br><span class="line">&#125; <span class="comment">// /etcd/raft/read_only.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于<code>leader</code>节点处理<code>ReadIndex</code>请求的流程已经阐述完毕，总的流程比较简单，即<code>leader</code>通过一轮心跳消息来确认自己仍然是<code>leader</code>。另外，若客户端将读请求发送给了<code>follower</code>节点，<code>etcd-raft</code>的实现是：应用层会调用协议的核心库的<code>ReadIndex</code>()方法，然后让<code>follower</code>节点先将<code>ReadIndex</code>消息发送给<code>leader</code>，接下来<code>leader</code>同样走一圈上面的流程，在确认自己依旧为<code>leader</code>后，将确认的<code>ReadIndex</code>通过<code>MsgReadIndexResp</code>消息发送给<code>follower</code>节点，最后同样，<code>follower</code>节点将构造<code>ReadState</code>并记录<code>commit index</code>，最后由上层应用收到<code>Ready</code>结构后，从中取出<code>ReadState</code>。因此，综合来看，若<code>ReadIndex</code>请求发送给了<code>follower</code>，则<code>follower</code>先要去问<code>leader</code>查询<code>commit index</code>，然后同样构造<code>ReadState</code>返回给上层应用，这和<code>leader</code>的处理是一样的。关于<code>follower</code>收到<code>MsgReadIndex</code>消息的核心代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">stepFollower</span><span class="params">(r *raft, m pb.Message)</span></span> &#123;</span><br><span class="line">    <span class="keyword">switch</span> m.Type &#123;</span><br><span class="line">    ......</span><br><span class="line">    <span class="keyword">case</span> pb.MsgReadIndex:</span><br><span class="line">        <span class="keyword">if</span> r.lead == None &#123;</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">        m.To = r.lead </span><br><span class="line">        r.send(m) <span class="comment">// 先将消息转发给 leader</span></span><br><span class="line">    <span class="keyword">case</span> pb.MsgReadIndexResp: <span class="comment">// 最后收到 leader 的 MsgReadIndexResp 消息回复后，</span></span><br><span class="line">        <span class="comment">// 追加到其 ReadStates 结构中，以通过 Ready 返回给上层应用程序</span></span><br><span class="line">        r.readStates = <span class="built_in">append</span>(r.readStates, ReadState&#123;Index: m.Index, RequestCtx: m.Entries[<span class="number">0</span>].Data&#125;)</span><br><span class="line">    ......</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raf.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于<code>etcd-raft</code>如何处理<code>ReadIndex</code>线性一致性读的相关逻辑已经分析完毕。</p>
+<p>最后，简单提一点，当节点刚被选举成为<code>leader</code>时，如果其未在新的<code>term</code>中提交过日志，那么其所在的任期内的<code>commit index</code>是无法得知的，因此，在<code>etcd-raft</code>具体实现中，会在<code>leader</code>刚选举成功后，马上提交追加提交一个<code>no-op</code>的日志（代码如下所示），在这之前所有客户端（应用程序）发送的读请求都会被阻塞（写请求肯定不会，其实若是有写请求了，也就不用提交空日志了）。通过此种方式可以确定新的<code>term</code>的<code>commit index</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *raft)</span> <span class="title">becomeLeader</span><span class="params">()</span></span> &#123;</span><br><span class="line">	r.step = stepLeader</span><br><span class="line">	r.reset(r.Term)</span><br><span class="line">	r.tick = r.tickHeartbeat</span><br><span class="line">	r.lead = r.id</span><br><span class="line">	r.state = StateLeader</span><br><span class="line">	r.prs[r.id].becomeReplicate()</span><br><span class="line">	r.pendingConfIndex = r.raftLog.lastIndex()</span><br><span class="line">	<span class="comment">// 提交了一条 no-op 日志</span></span><br><span class="line">	emptyEnt := pb.Entry&#123;Data: <span class="literal">nil</span>&#125;</span><br><span class="line">	<span class="keyword">if</span> !r.appendEntry(emptyEnt) &#123;</span><br><span class="line">		r.logger.Panic(<span class="string">"empty entry was dropped"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	r.reduceUncommittedSize([]pb.Entry&#123;emptyEnt&#125;)</span><br><span class="line">	r.logger.Infof(<span class="string">"%x became leader at term %d"</span>, r.id, r.Term)</span><br><span class="line">&#125; <span class="comment">// /etcd/raft/raft.go</span></span><br></pre></td></tr></table></figure>
+
+<p>简单小结，本文先是从理论角度阐述了什么是线性一致性，并且它具备什么特征。相比于顺序一致性，它们的不同点在哪里，最后线性一致性结合顺序一致性，即为严格一致性。关于这部分理论内容，读者若有兴趣，可以参考参考文献的[1]-[5]，讲得更完备和精确。后一部分内容就结合<code>etcd</code> 的代码阐述了其具体如何保证<code>ReadIndex</code>线性一致性，大概的流程为：先执行应用程序层对读请求的控制，它类似于一把锁的功能，在底层协议库未完成线性一致性相关的逻辑处理之前，会阻塞应用的读请求的处理，直至底层协议库走一圈后返回，才能继续处理，然后继续判断此时<code>ReadIndex</code>处的日志是否有被应用（若状态机已应用到<code>ReadIndex</code>之后的日志也完全可以），直至<code>ReadIndex</code>日志被提交才能返回，即才能释放锁，允许应用程序读取状态机。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://pingcap.com/blog-cn/linearizability-and-raft/" target="_blank" rel="noopener">线性一致性和 Raft</a><br>[2]. <a href="https://medium.com/p/6e579965c4ce/edit" target="_blank" rel="noopener">On Ways To Agree, Part 2: Path to Atomic Broadcast</a><br>[3]. <a href="http://www.bailis.org/blog/linearizability-versus-serializability/" target="_blank" rel="noopener">Linearizability versus Serializability</a><br>[4]. <a href="https://aphyr.com/posts/313-strong-consistency-models" target="_blank" rel="noopener">Strong consistency models</a><br>[5]. <a href="https://cs.brown.edu/~mph/HerlihyW90/p463-herlihy.pdf" target="_blank" rel="noopener">Linearizability: Correctness Condition for Concurrent Objects</a><br>[6]. <a href="https://github.com/etcd-io/etcd" target="_blank" rel="noopener">https://github.com/etcd-io/etcd</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7/" rel="tag"><i class="fa fa-tag"></i> 线性一致性</a>
+              <a href="/tags/%E9%A1%BA%E5%BA%8F%E4%B8%80%E8%87%B4%E6%80%A7/" rel="tag"><i class="fa fa-tag"></i> 顺序一致性</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/01/15/etcd-raft-%E9%9B%86%E7%BE%A4%E9%85%8D%E7%BD%AE%E5%8F%98%E6%9B%B4%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="next" title="etcd-raft 集群配置变更源码简析">
+                  <i class="fa fa-chevron-left"></i> etcd-raft 集群配置变更源码简析
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/16/etcd-raft-LeaseRead-%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E6%80%A7%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="etcd-raft LeaseRead 线性一致性源码简析">
+                  etcd-raft LeaseRead 线性一致性源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#线性一致性"><span class="nav-number">1.</span> <span class="nav-text">线性一致性</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#etcd-raft-ReadIndex-线性一致性简析"><span class="nav-number">2.</span> <span class="nav-text">etcd-raft ReadIndex 线性一致性简析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键流程"><span class="nav-number">3.</span> <span class="nav-text">关键流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#应用程序处理读请求"><span class="nav-number">3.1.</span> <span class="nav-text">应用程序处理读请求</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#底层协议库处理-ReadIndex-请求"><span class="nav-number">3.2.</span> <span class="nav-text">底层协议库处理 ReadIndex 请求</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

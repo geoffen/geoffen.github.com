@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="最近工作的内容属于devops领域方向，研究的课题是基于k8s并集成gitlab-ci的持续集成部署方案。个人以前只使用过Jenkins来做持续集成部署(ci&#x2F;cd)，而且，当时应该是部署在云主机上的。gitlab本身一个企业级代码托管平台，在8.0版本加入了ci，并且默认为每个项目开启。持续集成基本解放了软件项目的开发测试到最终的部署上线的繁琐流程，简单而言，它保证了每一次往版本库提交的代码都符">
+<meta name="keywords" content="k8s,gitlab-ci">
+<meta property="og:type" content="article">
+<meta property="og:title" content="k8s 中安装 gitlab runner">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;07&#x2F;06&#x2F;k8s-%E4%B8%AD%E5%AE%89%E8%A3%85-gitlab-runner&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="最近工作的内容属于devops领域方向，研究的课题是基于k8s并集成gitlab-ci的持续集成部署方案。个人以前只使用过Jenkins来做持续集成部署(ci&#x2F;cd)，而且，当时应该是部署在云主机上的。gitlab本身一个企业级代码托管平台，在8.0版本加入了ci，并且默认为每个项目开启。持续集成基本解放了软件项目的开发测试到最终的部署上线的繁琐流程，简单而言，它保证了每一次往版本库提交的代码都符">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;raw.githubusercontent.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;gitlab_workflow_example_11_9.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;tiller.jpg">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;gitlab-url-token.jpg">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;gitlab-runner.jpg">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;gitlab-runner-list.jpg">
+<meta property="og:updated_time" content="2019-10-24T05:44:17.413Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;raw.githubusercontent.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;hexo&#x2F;static&#x2F;install-runner-in-k8s&#x2F;gitlab_workflow_example_11_9.png">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/07/06/k8s-%E4%B8%AD%E5%AE%89%E8%A3%85-gitlab-runner/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>k8s 中安装 gitlab runner | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/07/06/k8s-%E4%B8%AD%E5%AE%89%E8%A3%85-gitlab-runner/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          k8s 中安装 gitlab runner
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-07-06 06:08:17" itemprop="dateCreated datePublished" datetime="2019-07-06T06:08:17+08:00">2019-07-06</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:44:17" itemprop="dateModified" datetime="2019-10-24T13:44:17+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%8C%81%E7%BB%AD%E9%9B%86%E6%88%90/" itemprop="url" rel="index">
+                    <span itemprop="name">持续集成</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>21k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>19 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>最近工作的内容属于<code>devops</code>领域方向，研究的课题是基于<code>k8s</code>并集成<code>gitlab-ci</code>的持续集成部署方案。个人以前只使用过<code>Jenkins</code>来做持续集成部署(<code>ci/cd</code>)，而且，当时应该是部署在云主机上的。<code>gitlab</code>本身一个企业级代码托管平台，在<code>8.0</code>版本加入了<code>ci</code>，并且默认为每个项目开启。持续集成基本解放了软件项目的开发测试到最终的部署上线的繁琐流程，简单而言，它保证了每一次往版本库提交的代码都符合预期。我们知道<code>docker</code>解决了应用打包和发布这一运维技术难题，简单而言，<code>docker</code>所提供的极为方便的打包机制直接打包了应用运行所需要的整个操作系统，从而保证了本地环境和云端环境的高度一致。但毕竟在整个云计算领域中，<code>docker</code>只是整个容器生态的一个承载点，换言之，与开发者更为密切相关的事情是定义容器组织和管理规范的容器编排技术，这属于一个更高的层次，是一个平台级的技术。<code>kuberentes</code>正是这样一个开源平台，简而言之，<code>kubernetes</code>项目解决的问题是容器的编排、调度以及集群管理，当然，它也提供了一些高级的运维功能，如路由网关、水平扩展、监控、备份以及灾难恢复等。这也使得<code>kubernetes</code>从一诞生就备受关注。因此，将<code>gitlab-ci</code>与<code>k8s</code>进行整合是<code>ci/cd</code>实践中值得期待的方案。本系列博客会阐述个人基于<code>k8s</code>并集成<code>gitlab-ci</code>的持续集成部署方案的实现过程。实践环节包括两个部分，其一是在<code>k8s</code>中安装<code>gitlab runner</code>，其二是研究集成<code>gitlab-ci</code>和<code>k8s</code>来实现一个以<code>build-&gt;test-&gt;deploy</code>为核心的持续集成部署流程。本文的内容为第一个部分。</p>
+<a id="more"></a>
+
+<p>本文不会过多阐述<a href="https://docs.docker.com/" target="_blank" rel="noopener"><code>docker</code></a>相关原理，也不会过多涉及到<a href="https://kubernetes.io/docs/home/" target="_blank" rel="noopener"><code>kubernetes</code></a>相关原理。只会在阐述整个基于<a href="https://docs.gitlab.com/ee/ci/introduction/" target="_blank" rel="noopener"><code>gitlab-ci</code></a>和<code>kubernetes</code>的持续集成部署方案的过程中，涉及到的概念原理。本文从如下几个方面来完整的阐述在<code>k8s</code>中安装<a href="https://docs.gitlab.com/ee/ci/runners/README.html#shared-specific-and-group-runners" target="_blank" rel="noopener"><code>gitlab runner</code></a>的流程：其一，简述<code>gitlab-ci</code>的核心概念及基本原理；其二，简述<code>gitlab runner</code>相关知识 ；其三，详细阐述<code>gitlab runner</code>在<code>k8s</code>中的安装流程；最后，对<code>gitlab runner</code>相关的配置文件中重要的配置进行介绍，以更深入地理解<code>gitlab runner</code>集成到<code>k8s</code>的原理。依据官方文档是使用<a href="https://helm.sh/docs/" target="_blank" rel="noopener"><code>helm</code></a>作为软件安装工具，以在<code>k8s</code>中安装<code>gitlab runner</code>，但本文不会过多涉及<code>helm</code>的相关知识和原理。事实上，若读者不具备相关的知识基础，也没有太大影响。若读者已经对<code>gitlab, gitlab runner</code>已经较为熟悉，可以直接跳到第3小节。</p>
+<h2 id="gitlab-ci-核心概念和基本原理"><a href="#gitlab-ci-核心概念和基本原理" class="headerlink" title="gitlab-ci 核心概念和基本原理"></a>gitlab-ci 核心概念和基本原理</h2><p>所谓持续集成持续部署(<code>ci/cd</code>, <code>Continuous Integration, Continuous Delivery, and Continuous Deployment</code>)，通俗而言，即在软件开发过程中，每当涉及版本库代码变更或更迭时，通过自动化执行一些由开发人员定义的脚本，以最小化引入错误的风险。自动化执行脚本说明（几乎）不需要人为干预。具体而言，持续集成表示当开发人员提交代码到版本库时（不一定是<code>master</code>分支），都会触发一系列的关于测试、构建等步骤的脚本自动化执行，以验证版本库中当前的代码所产生的效果是符合预期的。另外，持续交付(<code>Continuous Delivery</code>)和持续部署(<code>Continuous Deployment</code>)的区别在于是否需要人为干预，以部署项目到生产环境，而后者不需要人为干预。</p>
+<p><code>gitlab-ci/cd</code>集成了上述功能。其基本原理是版本库每一次<code>push</code>或者<code>merge reqeust</code>操作都会触发一次<code>gitlab-ci</code>流程，即执行开发人员预先在<code>.gitlab-ci.yml</code>定义的一系列<code>stage</code>，典型的，包括<code>build</code>、<code>test</code>和<code>deploy</code>这几个核心阶段。<code>gitlab-ci</code>确实较为强大，提供了丰富的功能，以实现项目开发的快速更迭。比如，它可以在各<code>stage</code>中共享缓存，以提高各<code>stage</code>的构建效率。和<code>gitlab-ci/cd</code>相关的几个核心概念如下：</p>
+<ul>
+<li><code>pipeline</code>，表示一次构建任务，可包含多个阶段，如依赖安装、运行测试、项目编译、服务部署。</li>
+<li><code>stage</code>，表示某个具体阶段，它们会依次串行执行，前一个成功执行后下一个才会执行，相反，若前一个执行失败，下一个则默认不会执行。</li>
+<li><code>job</code>，表示<code>stage</code>上所执行的具体工作，一个<code>stage</code>可包含若干个并行执行的<code>job</code>，只有所有的<code>job</code>都执行成功，整个<code>stage</code>才被标记为执行成功，否则标记为执行失败。</li>
+</ul>
+<p>图1来自<code>gitlab</code>官网，阐述了<code>gitlab-ci</code>的一个典型工作流程。使用<code>gitlab</code>作为代码托管工具，你不需要额外的第三方<code>ci/cd</code>软件，并且，它提供整个流程的可视化界面。</p>
+<p><img src="https://raw.githubusercontent.com/qqzeng/qqzeng.github.io/hexo/static/install-runner-in-k8s/gitlab_workflow_example_11_9.png" alt="gitlab workflow example"></p>
+<p>图1 <code>gitlab workflow example</code></p>
+<p>下面的<code>.gitlab-ci.yml</code>模板文件同样来自<a href="https://gitlab.com/gitlab-examples/spring-gitlab-cf-deploy-demo" target="_blank" rel="noopener"><code>gitlab</code>官网</a>，它是依赖<code>spring boot</code>的<code>java</code>应用服务的一个<code>.gitlab-ci.yml</code>示例。没有任何复杂的内容，整个<code>pipeline</code>中包含<code>test</code>和<code>build</code>两个<code>stage</code>。在全局<code>before_script</code>所定义的脚本会在所有<code>stage</code>执行之前被执行，<code>artifacts</code>表示此<code>stage</code>会生成一个<code>artifact</code>（比如一个<code>war</code>包或者可执行文件），最后<code>only</code>表示只会在对应的分支下执行。因此，当你将此<code>.gitlab-ci.yml</code>文件放到你的项目的根目录时，则表示此项目的<code>gitlab-ci</code>的功能已经开启，当你往版本库中<code>push</code>代码时，你会看到它会起作用了——自动执行你在<code>.gitlab-ci.yml</code>中定义的脚本（前提是你已经安装好了<code>gitlab</code>和<code>gitlab runner</code>，且将<code>runner</code>注册到了<code>gitlab</code>仓库中对应的项目，这会在后面提及）。你可以在<a href="https://gitlab.com/gitlab-examples" target="_blank" rel="noopener">这里</a>找到更多的<code>.gitlab-ci.yml</code>示例。</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">image: java:8</span><br><span class="line"></span><br><span class="line">stages:</span><br><span class="line">  - build</span><br><span class="line">  - deploy</span><br><span class="line">  </span><br><span class="line">before_script:</span><br><span class="line">  - chmod +x mvnw</span><br><span class="line">  </span><br><span class="line">build:</span><br><span class="line">  stage: build</span><br><span class="line">  script: ./mvnw package</span><br><span class="line">  artifacts:</span><br><span class="line">    paths:</span><br><span class="line">      - target/demo-0.0.1-SNAPSHOT.jar</span><br><span class="line"></span><br><span class="line">production:</span><br><span class="line">  stage: deploy</span><br><span class="line">  script:</span><br><span class="line">  - curl --location "https://cli.run.pivotal.io/stable?release=linux64-binary&amp;source=github" | tar zx</span><br><span class="line">  - ./cf login -u $CF_USERNAME -p $CF_PASSWORD -a api.run.pivotal.io</span><br><span class="line">  - ./cf push</span><br><span class="line">  only:</span><br><span class="line">  - master</span><br></pre></td></tr></table></figure>
+
+<h2 id="gitlab-runner-相关知识"><a href="#gitlab-runner-相关知识" class="headerlink" title="gitlab runner 相关知识"></a>gitlab runner 相关知识</h2><p>当你读完上节内容中一个示例后，你会想你在<code>.gitlab-ci.yml</code>中定义的脚本到底是在哪里执行的，换言之，是什么提供了你执行这些<code>stage</code>的资源。是的，这就是<code>gitlab runner</code>所做的。它会同<code>gitlab-ci</code>协同工作，<code>gitlab runner</code>用于运行<code>stage</code>中定义的<code>job</code>（<code>job</code>是<code>runner</code>执行的最小单位）。在阐述<code>runner</code>在<code>k8s</code>中的安装流程之前，让我们先来了解下<code>gitlab runner</code>的基本知识。</p>
+<p>当你<a href="https://docs.gitlab.com/runner/#install-gitlab-runner" target="_blank" rel="noopener">安装<code>gitlab runner</code></a>并<a href="https://docs.gitlab.com/runner/register/" target="_blank" rel="noopener">将它注册到某个项目</a>后（当然你可以使用<code>shared runner</code>，在这种情况下，此<code>runner</code>就不会隶属于某个项目，而是被一组或所有的项目所共享使用），你可以使用它来执行你在<code>.gitlab-ci.yml</code>中定义的<code>job</code>，只要<code>runner</code>能够访问<code>gitlab server</code>所在的网络，则<code>gitlab</code>和<code>runner</code>就能通过<code>api</code>进行网络通信，准确而言，是<code>runner</code>会定期轮询<code>gitlab server</code>是否有等待被执行的<code>pipeline</code>。从本质上而言，<code>runner</code>只是一个使用<code>go</code>语言编写的进程，当利用它来执行<code>.gitlab-ci.yml</code>中定义的<code>pipeline</code>时，它会<code>clone</code>对应的项目，然后执行你预定义在<code>job</code>中的脚本。</p>
+<p>前面提到，当多个项目共享同一个<code>runner</code>时，则称此<code>runner</code>为<code>shared runner</code>，且理想状况下，<code>runner</code>不应该同<code>gitlab server</code>安装在同一台机器上，这会影响<code>gitlab</code>的正常工作。且<code>gitlab admin</code>只能注册<code>shared runner</code>。具体而言，<code>runner</code>主要包括如下三种：</p>
+<ul>
+<li><code>shared runner</code>，它主要服务于多个项目中具有类似需求的<code>job</code>，显然，使用<code>shared runner</code>可以不需要为每一个项目配置单独的<code>runner</code>，且通常来说，<code>shared runner</code>与项目是多对多的关系，类似于资源池。<code>shared runner</code>采用<a href="https://docs.gitlab.com/ee/ci/runners/README.html#how-shared-runners-pick-jobs" target="_blank" rel="noopener"><code>fair useage queue</code></a>来调度<code>job</code>，这可以防止某个项目由于定义了过多的<code>job</code>而独占整个可用的<code>shared runner</code>集合。</li>
+<li><code>specific runner</code>，它主要服务于具有特殊需求的项目，通常会结合<code>tag</code>来将<code>specific runner</code>与项目进行绑定，<code>specific runner</code>采用<code>FIFO</code>的方式调度<code>job</code>。值得注意的是，<code>specific runner</code>也可服务于多个项目，只是你需要显式的为每个项目<code>enable</code>它们。</li>
+<li><code>group runner</code>，定义在<code>group runner</code>集合中的<code>runner</code>会服务于一组项目，与<code>shared runner</code>不同的是，它也采用的是<code>FIFO</code>的方式来调度<code>job</code>，这意味着一个定义了较多<code>job</code>的项目可能会长时间独占所有<code>runner</code>。</li>
+</ul>
+<p>最后，通过一个示例来简要阐述<code>shared runner</code>是如何调度<code>job</code>的，即<code>fair useage queue</code>的原理，这些内容基本来自于<a href="https://docs.gitlab.com/ee/ci/runners/README.html#how-shared-runners-pick-jobs" target="_blank" rel="noopener">官方文档</a>。示例如下：若我们为<code>project 1</code>定义了3个<code>job</code>，为<code>project 2</code>定义了2个<code>job</code>，为<code>project 3</code>定义了1个<code>job</code>，则一个典型的调度流程如下：首选会调度<code>p1-j1(job 1 of project 1)</code>，因为此时它是所有不存在正运行的<code>job</code>的项目中编号最小的<code>job</code>，这句话很重要。然后调度<code>p2-j4</code>，因为此时<code>porject 1</code>有一个正运行的作业<code>job 1</code>。再调度<code>p3-j6</code>，原因是类似的。其次，调度<code>p1-j2</code>，因为它是存在正在运行<code>job</code>的项目中，包含最少运行的<code>job</code>数（每个项目都有1个）的项目的尚未运行的<code>job</code>的编号。接下来的调度依次是<code>p2-j5</code>、<code>p1-j3</code>。需要注意的是，上面描述的调度顺序的前提是每个被调度的<code>job</code>都一直处于运行状态。因为，若当我们调度<code>p1-j1</code>时，它立刻完成了，则下一个调度的<code>job</code>则仍然从<code>project 1</code>中挑选，即为<code>p1-j2</code>。因此，总结一下，当调度<code>job</code>时，首先看哪个<code>project</code>存在最少的处于运行状态的<code>job</code>数量，然后在此<code>project</code>中选择尚未运行的<code>job</code>集合中编号最小的<code>job</code>。</p>
+<p>此小节阐述了<code>gitlab runner</code>的基本原理，以及不同类型的<code>runner</code>的适用情形，同时通过一个示例来阐述<code>shared runner</code>是如何调度<code>job</code>的。更多详细内容可参考<a href="https://docs.gitlab.com/ee/ci/runners/README.html" target="_blank" rel="noopener">官方文档</a>。</p>
+<h2 id="k8s-中安装gitlab-runner-的详细流程"><a href="#k8s-中安装gitlab-runner-的详细流程" class="headerlink" title="k8s 中安装gitlab runner 的详细流程"></a>k8s 中安装<code>gitlab runner</code> 的详细流程</h2><p>本小节侧重实践，详细阐述在<code>k8s</code>中安装<code>gitlab runner</code>的整个过程。其中，<code>gitlab</code>的版本是<code>GitLab Community Edition 9.4.2</code>，<code>minikube</code>的版本是<code>v1.2.0</code>，<code>Kubernetes</code>的版本是<code>v1.15.0</code>，最后<code>Docker</code>的版本是<code>18.09.6</code>。具体而言，主要包括两个方面的内容：一是<code>minikube</code>安装的注意事项，其次是在<code>k8s</code>中部署<code>gitlab runner</code>的详细流程。基本都是参考官方文档。</p>
+<h3 id="minikube-安装注意事项"><a href="#minikube-安装注意事项" class="headerlink" title="minikube 安装注意事项"></a>minikube 安装注意事项</h3><p>需要说明的是，在这之前你应该有一个<code>kubernetes</code>集群，笔者的实验环境是<code>VMware® Workstation 15 Pro</code>安装<code>ubuntu18.04 desktop</code>系统，然后搭建了<code>minikube</code>（单节点）的<code>k8s</code>环境，<code>vm driver</code>采用的是<code>kvm2</code>。</p>
+<blockquote>
+<p>笔者之前尝试过<code>virtualbox hypervisor</code>，并以<code>virtualbox</code>和<code>kvm2</code>作为<code>vm driver</code>，但都没有成功。简单说，<code>virtualbox hypervisor</code>不支持对硬件的虚拟化。相关的<code>issue</code>可以看<a href="https://github.com/kubernetes/minikube/issues/4348" target="_blank" rel="noopener">这里</a>和<a href="https://github.com/kubernetes/minikube/issues/2991" target="_blank" rel="noopener">这里</a>，<code>virtualbox</code>官方一个相关说明，在<a href="https://www.virtualbox.org/ticket/4032" target="_blank" rel="noopener">这里</a>。如果有读者在<code>virtualbox hypervisor</code>下成功安装<code>kvm2</code>或<code>virtual</code>作为<code>vm driver</code>，还请留言。</p>
+</blockquote>
+<p>关于<code>minikube</code>的安装，直接参考<a href="https://kubernetes.io/docs/tasks/tools/install-minikube/" target="_blank" rel="noopener">官方文档</a>即可。但需要注意GFW，若不能上外网，可以尝试通过拉取国内镜像源来安装，参考<a href="https://yq.aliyun.com/articles/221687" target="_blank" rel="noopener">这里</a>。另外一个在安装前需要关注的操作是：<code>egrep --color &#39;vmx|svm&#39; /proc/cpuinfo</code>，必须确保此命令的输出不为空，否则，表明你的系统不支持虚拟化。安装完之后，可以执行一个<code>hello world</code>，参考<a href="https://github.com/kubernetes/minikube" target="_blank" rel="noopener">这里</a>，以确认<code>minkube</code>已经成功安装。</p>
+<h3 id="k8s-中安装gitlab-runner"><a href="#k8s-中安装gitlab-runner" class="headerlink" title="k8s 中安装gitlab runner"></a>k8s 中安装<code>gitlab runner</code></h3><p>前述提到<code>gitlab runner</code>只是一个使用<code>go</code>编写的程序。因此，理论上在任何安装了<code>go</code>的环境都能安装<code>gitlab runner</code>，不仅仅局限于<code>k8s</code>的环境，详解可参考<a href="https://docs.gitlab.com/runner/install/" target="_blank" rel="noopener">这里</a>。但若将<code>runner</code>安装在<code>k8s</code>中，其原理与其它方式还是略有区别，这个在后面阐述。另外，在前一小节中提到，<code>runner</code>会周期性的轮询<code>gitlab server</code>以确认当前是否有需要执行的<code>pipeline</code>，换言之，<code>runner</code>是可以安装在你本地环境的（不需要一个外网能够访问的ip），但<code>gitlab server</code>若安装在本地环境（主机或<code>docker</code>），你要确保它能够被<code>runner</code>访问到。</p>
+<p>官方提供的在<code>k8s</code>安装<code>runner</code>的<a href="https://docs.gitlab.com/runner/install/kubernetes.html" target="_blank" rel="noopener">最新教程</a>采用了<a href="https://helm.sh/docs/" target="_blank" rel="noopener"><code>helm</code></a>，因此，在安装<code>runner</code>前需要提前在<code>k8s</code>集群中安装<code>helm</code>。简单而言，<code>helm</code>是一个在<code>k8s</code>环境下的软件包管理工具，类似于<code>ubuntu</code>下的<code>apt-get</code>或<code>centos</code>下的<code>yum</code>。<code>helm</code>会为我们管理一个软件包所包含的一系列配置文件，通过使用<code>helm</code>，应用发布者可以很方便地打包(<code>pakcage</code>)应用、管理应用依赖关系和应用版本，并将其发布应用到软件仓库。另外，<code>helm</code>还提供了<code>k8s</code>上的软件部署和卸载、应用回滚等高阶功能。<code>helm</code>是一个典型的<code>cs</code>架构，为了让<code>helm</code>帮助我们管理<code>k8s</code>中的软件包，它会将<code>tiller server</code>安装在<code>k8s</code>集群中，然后使用<code>helm client</code>与之通信来完成指定功能。在<code>helm</code>安装过程中，需要注意的就是<code>helm</code>的权限(<code>RBAC</code>)的配置，在笔者的实验中，为了方便测试，给予了<code>tiller</code>这个<code>ServiceAccount</code>的<code>role</code>为<code>cluster-admin</code>。图2为<code>helm</code>的相关安装配置。更多关于<code>helm</code>的中文资料可以参考<a href="https://zhaohuabing.com/2018/04/16/using-helm-to-deploy-to-kubernetes/" target="_blank" rel="noopener">这里</a>和<a href="https://whmzsu.github.io/helm-doc-zh-cn/quickstart/install-zh_cn.html" target="_blank" rel="noopener">这里</a>。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/install-runner-in-k8s/tiller.jpg" alt="helm"></p>
+<p>图2 <code>k8s</code>中安装<code>helm</code>的相关配置</p>
+<p>事实上，所谓的在<code>k8s</code>中安装<code>gitlab runner</code>，也就是将<code>gitlab runner</code>这个<code>helm chart</code>包安装在<code>k8s</code>中，<code>runner</code>具体是使用<code>kubernetes executor</code>执行<code>job</code>，<code>executor</code>会连接到<code>k8s</code>集群中的<code>kubernetes API</code>，并为每个<code>job</code>创建一个<code>pod</code>。<code>pod</code>是<code>k8s</code>中应用编排的最小单元（不是<code>container</code>），相当于一个逻辑/虚拟机主机，它包含了一组共享资源的<code>contaienr</code>，这些<code>container</code>共享相同的<code>network namespace</code>，可通过<code>localhost</code>通信，另外，这些<code>container</code>可声明共享同一个<code>volume</code>。通常而言，为<code>gitlab-ci</code>的每个<code>job</code>动态创建的<code>pod</code>至少包含两个<code>container</code>（也有三个的情况），分别是<code>build container</code>和<code>service container</code>，其中<code>build container</code>即用于构建<code>job</code>，而当在<code>.gitlab-ci.yml</code>中定义了<a href="https://docs.gitlab.com/ce/ci/yaml/README.html#services" target="_blank" rel="noopener"><code>service</code>标签</a>时，就会此<code>service container</code>来运行对应的<code>service</code>，以连接到<code>build container</code>，并协助它完成指定功能。这同<code>docker</code>中的<a href="https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/" target="_blank" rel="noopener"><code>link container</code></a>原理类似。最后，当使用<code>docker/docker+machine/kubernetes</code>的<code>executors</code>时，<code>gitlab runner</code>会使用基于<a href="https://docs.gitlab.com/runner/configuration/advanced-configuration.html#helper-image" target="_blank" rel="noopener"><code>helper image</code></a>的<code>help container</code>，它的使用是处理<code>git</code>、<code>artifacts</code>以及<code>cache</code>相关操作。它包含了<code>gitlab-runner-helper</code>二进制包，提供了<code>git</code>、<code>git-lfs</code>、<code>SSL certificates store</code>等命令。但当使用<code>kubernetes executor</code>时，<code>runner</code>会临时从<code>gitlab/gitlab-runner-helper</code>下载镜像而并非从本地的归档文件中加载此二进制文件。</p>
+<p>现在可以执行正式的安装操作了。安装之前，通常我们需要配置<code>runner</code>，这通过在<a href="https://gitlab.com/charts/gitlab-runner/blob/master/values.yaml" target="_blank" rel="noopener"><code>values.yaml</code></a>中自定义特定选项来实现，以覆盖默认选项值。配置过程也较为简单，唯一必须配置的选项是<code>gitlabUrl</code>和<code>runnerRegistrationToken</code>，前者即为<code>gitlab server</code>的<code>url</code>，它可以是一个完整域名（如<code>https://example.gitlab.com</code>），也可以是一个<code>ip</code>地址（记得不要漏掉端口号），而后者则为你的<code>gitlab</code>的<code>token</code>，以表明你具备向<code>gitlab</code>添加<code>runner</code>的权限。这两个值可以从<code>gitlab-project-settings-pipelines</code>下获取到（注意因为笔者的<code>gitlab</code>帐户只是普通帐户，意味着只能注册<code>specific runner</code>，它与<code>admin</code>的稍有不同）。图3显示了这两个选项参数。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/install-runner-in-k8s/gitlab-url-token.jpg" alt="gitlaburl and token"></p>
+<p>图3 <code>runner</code>所需的<code>gitlabUrl</code>和<code>token</code>参数</p>
+<p>确认了这两个最核心的配置选项后，如果你不需要覆盖其它的默认选项值，就可以开始<a href="https://docs.gitlab.com/runner/install/kubernetes.html#installing-gitlab-runner-using-the-helm-chart" target="_blank" rel="noopener">安装</a>了，非常简单。仅有两个步骤：</p>
+<p>其一，将<code>gitlab</code>这个<code>repository</code>添加到<code>helm repository list</code>中。执行下面的命令即可：<br><code>helm repo add gitlab https://charts.gitlab.io</code><br>其二，使用<code>helm</code>来安装<code>gitlab runner chart</code>，如下：<br><code>helm install --namespace &lt;NAMESPACE&gt; --name gitlab-runner -f &lt;CONFIG_VALUES_FILE&gt; gitlab/gitlab-runner</code><br>其中<code>&lt;NAMESPACE&gt;</code>指定了你需要将<code>runner</code>安装在哪个<code>namespace</code>，因为，你很可能需要预先创建此<code>namespace</code>，这通过<code>kubectl create namespace &lt;NAMESPACE&gt;</code>命令来实现。而后一个参数则为你定义的<code>values.yml</code>配置文件的路径。</p>
+<p>附带介绍下，另外两个重要的操作——<code>gitlab runner</code>的升级以及卸载操作。升级操作同安装操作非常类似，<code>&lt;RELEASE-NAME&gt;</code>即为<code>gitlab runner</code>，<code>release</code>是<code>helm</code>的概念，表示安装在<code>k8s</code>中的一个软件：<br><code>helm upgrade --namespace &lt;NAMESPACE&gt; -f &lt;CONFIG_VALUES_FILE&gt; &lt;RELEASE-NAME&gt; gitlab/gitlab-runner</code></p>
+<p>最后的卸载操作可通过如下命令实现：<br><code>helm delete --namespace &lt;NAMESPACE&gt; &lt;RELEASE-NAME&gt;</code><br>值得注意的是，即使执行了此卸载操作，<code>helm</code>仍然保留已删除<code>release</code>的记录，这允许你回滚已删除的资源并重新激活它们。若要彻底删除，可以加上<code>--purge</code>选项。</p>
+<p>至此，最简版本的<code>gitlab runner</code>已经安装完毕。当执行<code>helm install</code>命令后，它会打印出此次安装所涉及的对象资源，如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">NAME:   gitlab-runner</span><br><span class="line">LAST DEPLOYED: Fri Jul  5 11:06:30 2019</span><br><span class="line">NAMESPACE: kube-gitlab-test</span><br><span class="line">STATUS: DEPLOYED</span><br><span class="line"></span><br><span class="line">RESOURCES:</span><br><span class="line">==&gt; v1/ConfigMap</span><br><span class="line">NAME                         DATA  AGE</span><br><span class="line">gitlab-runner-gitlab-runner  5     0s</span><br><span class="line"></span><br><span class="line">==&gt; v1/Pod(related)</span><br><span class="line">NAME                                          READY  STATUS    RESTARTS  AGE</span><br><span class="line">gitlab-runner-gitlab-runner-6f996b5464-8wwnz  0/1    Init:0/1  0         0s</span><br><span class="line"></span><br><span class="line">==&gt; v1/Secret</span><br><span class="line">NAME                         TYPE    DATA  AGE</span><br><span class="line">gitlab-runner-gitlab-runner  Opaque  2     0s</span><br><span class="line"></span><br><span class="line">==&gt; v1/ServiceAccount</span><br><span class="line">NAME                         SECRETS  AGE</span><br><span class="line">gitlab-runner-gitlab-runner  1        0s</span><br><span class="line"></span><br><span class="line">==&gt; v1beta1/Deployment</span><br><span class="line">NAME                         READY  UP-TO-DATE  AVAILABLE  AGE</span><br><span class="line">gitlab-runner-gitlab-runner  0/1    1           0          0s</span><br><span class="line"></span><br><span class="line">==&gt; v1beta1/Role</span><br><span class="line">NAME                         AGE</span><br><span class="line">gitlab-runner-gitlab-runner  0s</span><br><span class="line"></span><br><span class="line">==&gt; v1beta1/RoleBinding</span><br><span class="line">NAME                         AGE</span><br><span class="line">gitlab-runner-gitlab-runner  0s</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">NOTES:</span><br><span class="line"></span><br><span class="line">Your GitLab Runner should now be registered against the GitLab instance reachable at: &quot;http://*******/&quot;</span><br></pre></td></tr></table></figure>
+
+<p>你也可以执行如图4中的命令，以确认是否安装成功，甚至使用<code>-o yaml</code>选项来查看各对象配置的详细内容。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/install-runner-in-k8s/gitlab-runner.jpg" alt="gitlab runner install result"></p>
+<p>图4 <code>k8s</code>中安装的<code>gitlab ruuner</code>详情</p>
+<p>安装成功后，如图5所示，我们可以到<code>gitlab</code>管理上查看已经有一个<code>runner</code>实例可供特定的项目使用了，记得在这之前先在<code>gitlab</code>上创建一个示例项目，不然，你可能找不到此页面的位置。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/install-runner-in-k8s/gitlab-runner-list.jpg" alt="gitlab runner list"></p>
+<p>图5 <code>gitlab</code> 特定项目所关联的 <code>runner</code> 列表</p>
+<p>在本小节的最后，我们来看一下<code>values.yml</code>文件中定义的核心配置选项。其它的配置在下一小节阐述。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">## The GitLab Server URL (with protocol) that want to register the runner against</span></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/commands/README.html#gitlab-runner-register</span></span><br><span class="line"><span class="comment">## gitlab server 的地址</span></span><br><span class="line"><span class="attr">gitlabUrl:</span> <span class="attr">https://gitlab.example.com/</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## The registration token for adding new Runners to the GitLab server. This must</span></span><br><span class="line"><span class="comment">## be retrieved from your GitLab instance.</span></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/ee/ci/runners/</span></span><br><span class="line"><span class="comment">## 向 gitlab server 添加 runner 的令牌</span></span><br><span class="line"><span class="attr">runnerRegistrationToken:</span> <span class="string">""</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Set the certsSecretName in order to pass custom certificates for GitLab Runner to use</span></span><br><span class="line"><span class="comment">## Provide resource name for a Kubernetes Secret Object in the same namespace,</span></span><br><span class="line"><span class="comment">## this is used to populate the /etc/gitlab-runner/certs directory</span></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/tls-self-signed.html#supported-options-for-self-signed-certificates</span></span><br><span class="line"><span class="comment">## 当需要向 gitlab runner 提供自定义证书时，可在此附上证书对应的secret名称</span></span><br><span class="line"><span class="comment">##（secret 需提前安装在k8s）</span></span><br><span class="line"><span class="comment">#certsSecretName:</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Configure the maximum number of concurrent jobs</span></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-global-section</span></span><br><span class="line"><span class="comment">## 使用所有注册的 runner 能并行执行的 job 数量的上限，0 表示不限制</span></span><br><span class="line"><span class="attr">concurrent:</span> <span class="number">10</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Defines in seconds how often to check GitLab for a new builds</span></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-global-section</span></span><br><span class="line"><span class="comment">## runner 轮询 gitlab server 来查询是否有待执行的 pipeline 的间隔时间/s</span></span><br><span class="line"><span class="attr">checkInterval:</span> <span class="number">30</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## For RBAC support:</span></span><br><span class="line"><span class="comment">## runner 的 RBAs 权限配置（RBAC是kubernetes 1.6版本默认使用的权限机制）。</span></span><br><span class="line"><span class="comment">## 若你想 helm 为你创建对应角色、权限及角色绑定，则设置为 true，否则若你已额外创建，则设置为false</span></span><br><span class="line"><span class="attr">rbac:</span></span><br><span class="line"><span class="attr">  create:</span> <span class="literal">true</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Run the gitlab-bastion container with the ability to deploy/manage containers of jobs</span></span><br><span class="line">  <span class="comment">## cluster-wide or only within namespace</span></span><br><span class="line">  <span class="comment">## false 表示创建的角色是隶属于某个 namespace,反之属于 cluster 范围内，后者权限更大</span></span><br><span class="line"><span class="attr">  clusterWideAccess:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## If RBAC is disabled in this Helm chart, use the following Kubernetes Service Account name.</span></span><br><span class="line">  <span class="comment">## 若你额外创建了 RBAC 相关配置，则在这里指定 ServiceAccount 的名称</span></span><br><span class="line">  <span class="comment">## default 是每个 namespace 中自带的一个帐户，但其拥有的角色可能不具备执行某些操作的权限</span></span><br><span class="line">  <span class="comment"># serviceAccountName: default</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Configuration for the Pods that the runner launches for each new job</span></span><br><span class="line"><span class="comment">## 配置 runner 为每一个 job 动态创建的 pod</span></span><br><span class="line"><span class="attr">runners:</span></span><br><span class="line">  <span class="comment">## Default container image to use for builds when none is specified</span></span><br><span class="line">  <span class="comment">## 基础容器所使用的镜像</span></span><br><span class="line"><span class="attr">  image:</span> <span class="attr">ubuntu:18.04</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Run all containers with the privileged flag enabled</span></span><br><span class="line">  <span class="comment">## This will allow the docker:stable-dind image to run if you need to run Docker</span></span><br><span class="line">  <span class="comment">## commands. Please read the docs before turning this on:</span></span><br><span class="line">  <span class="comment">## ref: https://docs.gitlab.com/runner/executors/kubernetes.html#using-docker-dind</span></span><br><span class="line">  <span class="comment">## 这个选项对于 ci/cd 应用场景至关重要。简单而言，true 表示启用 pod 中容器的特权，</span></span><br><span class="line">  <span class="comment">## 此时，容器几乎具有容器外运行在宿主机的进程完全相同的权限，可以访问所有的设备，存在一定风险</span></span><br><span class="line">  <span class="comment">## 但是开启此选项是实现 docker-in-docker 的前提，后面会详细阐述 dind</span></span><br><span class="line"><span class="attr">  privileged:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Namespace to run Kubernetes jobs in (defaults to 'default')</span></span><br><span class="line">  <span class="comment">## 配置 runner 为每个 job 创建的 pod 所运行的 namespace</span></span><br><span class="line">  <span class="comment"># namespace:</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Build Container specific configuration</span></span><br><span class="line">  <span class="comment">## build 容器，用作 stage 中的基础容器</span></span><br><span class="line"><span class="attr">  builds:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span> <span class="comment"># 基础 cpu 占用量，表示 0.1 的cpu，m 表示 Milli 毫</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span> <span class="comment"># 基础内存占用量，表示 128M 的内存</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Service Container specific configuration</span></span><br><span class="line">  <span class="comment">## service 容器，通过 link build 容器，以协助 build 容器完成特定功能</span></span><br><span class="line"><span class="attr">  services:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Helper Container specific configuration</span></span><br><span class="line">  <span class="comment">## helper 容器，用于执行 git, git-lfs, SSL certificates store 等命令</span></span><br><span class="line"><span class="attr">  helpers:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于在<code>k8s</code>中安装<code>gitlab runner</code>的完整流程已经阐述完毕。事实上，后面的版本中使用<code>helm</code>来安装<code>gitlab runner</code>是非常便捷的。但同时，它也向我们隐藏了相关的配置细节，为了更好的理解<code>runner</code>在<code>k8s</code>中的运行原理，有必要详细了解相关的配置文件。最后，值得注意的是，<code>runner</code>使用<code>kubernetes executor</code>的原理也是值得关注的。</p>
+<h2 id="gitlab-runner-配置详解"><a href="#gitlab-runner-配置详解" class="headerlink" title="gitlab runner 配置详解"></a>gitlab runner 配置详解</h2><p>为了进一步理解<code>gitlab ruuner</code>的相关原理，本小节会详细解读有关其<a href><code>value.yml</code></a>配置选项，在正式的生产环境中，我们可能需要自定义其中的大部分的配置选项的值。其中，核心配置选项已在上一节中详细阐述。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">## GitLab Runner Image</span></span><br><span class="line"><span class="comment">##</span></span><br><span class="line"><span class="comment">## ref: https://hub.docker.com/r/gitlab/gitlab-runner/tags/</span></span><br><span class="line"><span class="comment">## gitlab runner 的默认镜像</span></span><br><span class="line"><span class="comment"># image: gitlab/gitlab-runner:alpine-v11.6.0</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images</span></span><br><span class="line"><span class="comment">## gitlab runner 镜像的拉取策略，Never/IfNotPresent/Always</span></span><br><span class="line"><span class="attr">imagePullPolicy:</span> <span class="string">IfNotPresent</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/commands/README.html#gitlab-runner-register</span></span><br><span class="line"><span class="comment">## gitlab server 的地址</span></span><br><span class="line"><span class="comment"># gitlabUrl: http://gitlab.your-domain.com/</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/ce/ci/runners/README.html</span></span><br><span class="line"><span class="comment">## 向 gitlab server 添加 runner 的令牌</span></span><br><span class="line"><span class="comment"># runnerRegistrationToken: ""</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## The Runner Token for adding new Runners to the GitLab Server. This must</span></span><br><span class="line"><span class="comment">## be retrieved from your GitLab Instance. It is token of already registered runner.</span></span><br><span class="line"><span class="comment">## ref: (we don't yet have docs for that, but we want to use existing token)</span></span><br><span class="line"><span class="comment">## 已注册的 runner 的token。不是特别清楚此选项的意义，感觉同上一个选项类似</span></span><br><span class="line"><span class="comment"># runnerToken: ""</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/commands/README.html#gitlab-runner-unregister</span></span><br><span class="line"><span class="comment">## 当 runner 被重新创建时，会导致 gitlab server 引用一个不存在的 runner，因此，开启此选项表示在</span></span><br><span class="line"><span class="comment">## runner 关闭时会自动从 gitlab server 取消注册</span></span><br><span class="line"><span class="attr">unregisterRunners:</span> <span class="literal">true</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/tls-self-signed.html#supported-options-for-self-signed-certificates</span></span><br><span class="line"><span class="comment">## 当需要向 gitlab runner 提供自定义证书时，可在此附上证书对应的secret名称</span></span><br><span class="line"><span class="comment">##（secret 需提前安装在k8s）</span></span><br><span class="line"><span class="comment"># certsSecretName:</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-global-section</span></span><br><span class="line"><span class="comment">## 使用所有注册的 runner 能并行执行的 job 数量的上限，0 表示不限制</span></span><br><span class="line"><span class="attr">concurrent:</span> <span class="number">10</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-global-section</span></span><br><span class="line"><span class="comment">## runner 轮询 gitlab server 来查询是否有待执行的 pipeline 的间隔时间/s</span></span><br><span class="line"><span class="attr">checkInterval:</span> <span class="number">30</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-global-section</span></span><br><span class="line"><span class="comment">## gitlab runner 的日志级别</span></span><br><span class="line"><span class="comment"># logLevel:</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## runner 的 RBAs 权限配置（RBAC是kubernetes 1.6版本默认使用的权限机制）。</span></span><br><span class="line"><span class="comment">## 若你想 helm 为你创建对应角色、权限及角色绑定，则设置为 true，否则若你已额外创建，则设置为false</span></span><br><span class="line"><span class="attr">rbac:</span></span><br><span class="line"><span class="attr">  create:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## false 表示创建的角色是隶属于某个 namespace,反之属于 cluster 范围内，后者权限更大</span></span><br><span class="line"><span class="attr">  clusterWideAccess:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 若你额外创建了 RBAC 相关配置，则在这里指定 ServiceAccount 的名称</span></span><br><span class="line">  <span class="comment">## default 是每个 namespace 中自带的一个帐户，但其拥有的角色可能不具备执行某些操作的权限</span></span><br><span class="line">  <span class="comment"># serviceAccountName: default</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/monitoring/#configuration-of-the-metrics-http-server</span></span><br><span class="line"><span class="comment">## 是否开启 metric 数据记录器，使用的是 Prometheus metrics exporter</span></span><br><span class="line"><span class="attr">metrics:</span></span><br><span class="line"><span class="attr">  enabled:</span> <span class="literal">true</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## 配置 runner 为每一个 job 动态创建的 pod 相关选项</span></span><br><span class="line"><span class="attr">runners:</span></span><br><span class="line">  <span class="comment">## 基础容器(build container)默认使用的镜像</span></span><br><span class="line"><span class="attr">  image:</span> <span class="attr">ubuntu:18.04</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/</span></span><br><span class="line">  <span class="comment">## 当从私有 registry 拉取镜像时，需要预先在 k8s 中创建对应的 secret，并在这里填写对应的 secret</span></span><br><span class="line">  <span class="comment"># imagePullSecrets: []</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 镜像拉取策略，Never/IfNotPresent/Always</span></span><br><span class="line">  <span class="comment"># imagePullPolicy: ""</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## Defines number of concurrent requests for new job from GitLab</span></span><br><span class="line">  <span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html#the-runners-section</span></span><br><span class="line">  <span class="comment">## gitlab-ci 能够并发请求的 job 数量</span></span><br><span class="line">  <span class="comment"># requestConcurrency: 1</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 此 runner 是否与特定项目绑定</span></span><br><span class="line">  <span class="comment"># locked: true</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://docs.gitlab.com/ce/ci/runners/#using-tags</span></span><br><span class="line">  <span class="comment">## runner 所运行的 pod 所关联的 tag</span></span><br><span class="line">  <span class="comment"># tags: ""</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://docs.gitlab.com/runner/executors/kubernetes.html#using-docker-dind</span></span><br><span class="line">  <span class="comment">## 这个选项对于 ci/cd 应用场景至关重要。简单而言，true 表示启用 pod 中容器的特权，</span></span><br><span class="line">  <span class="comment">## 此时，容器几乎具有容器外运行在宿主机的进程完全相同的权限，可以访问所有的设备，存在一定风险</span></span><br><span class="line">  <span class="comment">## 但是开启此选项是实现 docker-in-docker 的前提，后面会详细阐述 dind</span></span><br><span class="line"><span class="attr">  privileged:</span> <span class="literal">false</span></span><br><span class="line"></span><br><span class="line">  <span class="comment"># gitlab runner 为 runner-token and runner-registration-token 创建的 secret 的名称</span></span><br><span class="line">  <span class="comment"># secret: gitlab-runner</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 配置 runner 为每个 job 创建的 pod 所运行的 namespace</span></span><br><span class="line">  <span class="comment"># namespace:</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://gitlab.com/gitlab-org/gitlab-runner/blob/master/docs/configuration/autoscale.md#distributed-runners-caching</span></span><br><span class="line">  <span class="comment">## 分布式 runner 缓存相关的配置，这里暂且忽略</span></span><br><span class="line"><span class="attr">  cache:</span> <span class="string">&#123;&#125;</span></span><br><span class="line">    <span class="comment">## General settings</span></span><br><span class="line">    <span class="comment"># cacheType: s3</span></span><br><span class="line">    <span class="comment"># cachePath: "gitlab_runner"</span></span><br><span class="line">    <span class="comment"># cacheShared: true</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">## S3 settings</span></span><br><span class="line">    <span class="comment"># s3ServerAddress: s3.amazonaws.com</span></span><br><span class="line">    <span class="comment"># s3BucketName:</span></span><br><span class="line">    <span class="comment"># s3BucketLocation:</span></span><br><span class="line">    <span class="comment"># s3CacheInsecure: false</span></span><br><span class="line">    <span class="comment"># secretName: s3access</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">## GCS settings</span></span><br><span class="line">    <span class="comment"># gcsBucketName:</span></span><br><span class="line">    <span class="comment">## Use this line for access using access-id and private-key</span></span><br><span class="line">    <span class="comment"># secretName: gcsaccess</span></span><br><span class="line">    <span class="comment">## Use this line for access using google-application-credentials file</span></span><br><span class="line">    <span class="comment"># secretName: google-application-credentials</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## build 容器，用作 stage 中的基础容器</span></span><br><span class="line"><span class="attr">  builds:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span> <span class="comment"># 基础 cpu 占用量，表示 0.1 的cpu，m 表示 Milli 毫</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span> <span class="comment"># 基础内存占用量，表示 128M 的内存</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## service 容器，通过 link build 容器，以协助 build 容器完成特定功能</span></span><br><span class="line"><span class="attr">  services:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## helper 容器，用于执行 git, git-lfs, SSL certificates store 等命令</span></span><br><span class="line"><span class="attr">  helpers:</span></span><br><span class="line">    <span class="comment"># cpuLimit: 200m</span></span><br><span class="line">    <span class="comment"># memoryLimit: 256Mi</span></span><br><span class="line"><span class="attr">    cpuRequests:</span> <span class="number">100</span><span class="string">m</span></span><br><span class="line"><span class="attr">    memoryRequests:</span> <span class="number">128</span><span class="string">Mi</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## runner 动态创建的 pod 所关联的 ServiceAccount 的名称，它可能需要被赋予特定角色</span></span><br><span class="line">  <span class="comment"># serviceAccountName:</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## If Gitlab is not reachable through $CI_SERVER_URL</span></span><br><span class="line">  <span class="comment">##</span></span><br><span class="line">  <span class="comment"># cloneUrl:</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/</span></span><br><span class="line">  <span class="comment">## 限制 gitlab-ci 的 pod 只能被调度在指定 node 上</span></span><br><span class="line">  <span class="comment"># nodeSelector: &#123;&#125;</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 指定 gitlab-ci 的 pod 所包含的 labels</span></span><br><span class="line">  <span class="comment"># podLabels: &#123;&#125;</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## 指定 gitlab-ci 的 pod 所包含的 annotations</span></span><br><span class="line">  <span class="comment"># podAnnotations: &#123;&#125;</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">## ref: https://docs.gitlab.com/runner/commands/#gitlab-runner-register</span></span><br><span class="line">  <span class="comment">## 为 gitlab-ci runner 注入指定的环境变量，注意不是 runner 动态创建的 pod 的环境变量</span></span><br><span class="line">  <span class="comment"># env:</span></span><br><span class="line">  <span class="comment">#   NAME: VALUE</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: http://kubernetes.io/docs/user-guide/compute-resources/</span></span><br><span class="line"><span class="comment">## 为 runner 配置资源限制</span></span><br><span class="line"><span class="attr">resources:</span> <span class="string">&#123;&#125;</span></span><br><span class="line">  <span class="comment"># limits:</span></span><br><span class="line">  <span class="comment">#   memory: 256Mi</span></span><br><span class="line">  <span class="comment">#   cpu: 200m</span></span><br><span class="line">  <span class="comment"># requests:</span></span><br><span class="line">  <span class="comment">#   memory: 128Mi</span></span><br><span class="line">  <span class="comment">#   cpu: 100m</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity</span></span><br><span class="line"><span class="comment">## 配置 runner 所在 pod 的亲和性，同 label的作用类似，都用于指定 pod的调度策略，</span></span><br><span class="line"><span class="comment">## 但其功能更加强大，它可以设置简单的逻辑组合，不单单是 label 所局限的简单的相等匹配</span></span><br><span class="line"><span class="attr">affinity:</span> <span class="string">&#123;&#125;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## Ref: https://kubernetes.io/docs/user-guide/node-selection/</span></span><br><span class="line"><span class="comment">## gitlab runner 的节点选择器，即指定只能运行在哪些节点上</span></span><br><span class="line"><span class="attr">nodeSelector:</span> <span class="string">&#123;&#125;</span></span><br><span class="line">  <span class="comment"># node-role.kubernetes.io/worker: "true"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## List of node taints to tolerate (requires Kubernetes &gt;= 1.6)</span></span><br><span class="line"><span class="comment">## Ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/</span></span><br><span class="line"><span class="comment">## tolerations 与 taints 相关。一个被标记为 Taints 的节点，除非 pod 也被标识为可以容忍污点节点，</span></span><br><span class="line"><span class="comment">## 否则该 Taints 节点不会被调度 pod。</span></span><br><span class="line"><span class="comment">## 典型的，在 kubernetes 集群，Master 节点通过被标记为 taints 以保留给 Kubernetes 系统组件使用</span></span><br><span class="line"><span class="comment">## 但若仍然希望某个 pod 调度到 taint 节点上，则必须在 Spec 中做出Toleration定义，才能调度到该节点</span></span><br><span class="line"><span class="attr">tolerations:</span> <span class="string">[]</span></span><br><span class="line">  <span class="comment"># Example: Regular worker nodes may have a taint, thus you need to tolerate the taint</span></span><br><span class="line">  <span class="comment"># when you assign the gitlab runner manager with nodeSelector or affinity to the nodes.</span></span><br><span class="line">  <span class="comment"># - key: "node-role.kubernetes.io/worker"</span></span><br><span class="line">  <span class="comment">#   operator: "Exists"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## ref: https://docs.gitlab.com/runner/configuration/advanced-configuration.html</span></span><br><span class="line"><span class="comment">## 环境变量，在执行 register 命令时使用，以进一步控制注册的过程和 config.toml 配置文件</span></span><br><span class="line"><span class="comment"># envVars:</span></span><br><span class="line"><span class="comment">#   - name: RUNNER_EXECUTOR</span></span><br><span class="line"><span class="comment">#     value: kubernetes</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## 主机名与ip的映射，它们可以被注入到 runner 所在 pod 的 host 文件</span></span><br><span class="line"><span class="attr">hostAliases:</span> <span class="string">[]</span></span><br><span class="line">  <span class="comment"># Example:</span></span><br><span class="line">  <span class="comment"># - ip: "127.0.0.1"</span></span><br><span class="line">  <span class="comment">#   hostnames:</span></span><br><span class="line">  <span class="comment">#   - "foo.local"</span></span><br><span class="line">  <span class="comment">#   - "bar.local"</span></span><br><span class="line">  <span class="comment"># - ip: "10.1.2.3"</span></span><br><span class="line">  <span class="comment">#   hostnames:</span></span><br><span class="line">  <span class="comment">#   - "foo.remote"</span></span><br><span class="line">  <span class="comment">#   - "bar.remote"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">## 附加在 runner 所在 pod 上的 annotations</span></span><br><span class="line"><span class="attr">podAnnotations:</span> <span class="string">&#123;&#125;</span></span><br><span class="line">  <span class="comment"># Example:</span></span><br><span class="line">  <span class="comment"># iam.amazonaws.com/role: &lt;my_role_arn&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>最后强调下关于<code>namespace</code>和<code>ServerAccount</code>的权限的问题。事实上<code>gitlab runner</code>会存在于某一个<code>namespace</code>，同时它会关联一个<code>ServiceAccount</code>，此<code>sa</code>决定了其为每个<code>job</code>动态创建的<code>pod</code>操作的权限问题。典型的，若其<code>sa</code>只具备某个<code>namespace</code>下的所有权限，则它不能在集群范围内其它<code>namespace</code>中创建<code>pod</code>。且动态创建的<code>pod</code>所在的<code>namespace</code>可以与<code>runner</code>所在<code>namespace</code>不同。最后，由<code>runner</code>动态创建出来的<code>pod</code>，也会关联一个<code>sa</code>，此<code>sa</code>所绑定的<code>role</code>决定了在对应的<code>job</code>中能够执行的脚本操作，比如，在<code>job</code>中又创建一个<code>pod</code>（我们后面的<code>ci/cd</code>方案中就属于此种情况），那么，此<code>pod</code>所处的<code>namespace</code>也可以和<code>job</code>对应的<code>pod</code>所处的<code>namespace</code>不同，这取决于<code>job</code>所关联的<code>sa</code>的权限。读者若有兴趣，完全可以自己尝试一下这些配置会带来什么影响。</p>
+<p>至此，关于<code>runner</code>的相关的配置已经讲解完毕。大部分还是容易理解的，读者可以通过实验来验证它们的功能。在生产环境中，可能需要覆盖大多默认配置选项。</p>
+<p>简单小结，本文详细分析了在<code>k8s</code>中安装<code>gitlab runner</code>的完整流程。在阐述具体的安装操作前，先是阐述了<code>gitlab-ci/cd</code>的核心概念和基本原理，这有助于了解<code>gitlab-ci</code>到底是如何工作。其次，阐述了<code>gitlab runner</code>的相关知识，<code>gitlab runner</code>才是定义在<code>.gitlab-ci.yml</code>的脚本的执行器，但它并不特殊，只是一个使用<code>go</code>写的应用程序而已。然后，重点阐述了<code>k8s</code>中安装<code>gitlab runner</code>的详细步骤，附带阐述了<code>kubernetes executor</code>的原理和<code>helm</code>的基本作用。同时，详细解释了<code>gitlab runner chart</code>包的<code>values.yml</code>配置文件的核心配置选项。最后，为了更深入了解<code>gitlab runner</code>的运行原理，简述了<code>values.yml</code>中几乎所有的配置选项。</p>
+<p>需要提醒读者的是，整篇文件比较长。涉及到的内容也较多，提供的参考资料也挺多。但只要耐心跟随整个流程，在<code>k8s</code>中安装<code>gitlab runner</code>是完全没有问题的。</p>
+<p>参考文献</p>
+<p><code>minikube</code><br>[1].<a href="https://kubernetes.io/docs/tasks/tools/install-minikube/" target="_blank" rel="noopener">https://kubernetes.io/docs/tasks/tools/install-minikube/</a><br>[2].<a href="https://github.com/kubernetes/minikube" target="_blank" rel="noopener">https://github.com/kubernetes/minikube</a><br>[3].<a href="https://github.com/kubernetes/minikube/issues/2991" target="_blank" rel="noopener">https://github.com/kubernetes/minikube/issues/2991</a></p>
+<p><code>gitlab-ci/cd</code><br>[1].<a href="https://docs.gitlab.com/ee/ci/" target="_blank" rel="noopener">https://docs.gitlab.com/ee/ci/</a><br>[2].<a href="https://docs.gitlab.com/ee/ci/introduction/index.html#how-gitlab-cicd-works" target="_blank" rel="noopener">https://docs.gitlab.com/ee/ci/introduction/index.html#how-gitlab-cicd-works</a><br>[3].<a href="https://docs.gitlab.com/ee/ci/yaml/README.html" target="_blank" rel="noopener">https://docs.gitlab.com/ee/ci/yaml/README.html</a><br>[4].<a href="https://gitlab.com/gitlab-examples" target="_blank" rel="noopener">https://gitlab.com/gitlab-examples</a></p>
+<p><code>gitlab runner</code><br>[1].<a href="https://docs.gitlab.com/ee/ci/runners/README.html" target="_blank" rel="noopener">https://docs.gitlab.com/ee/ci/runners/README.html</a><br>[2].<a href="https://docs.gitlab.com/runner/" target="_blank" rel="noopener">https://docs.gitlab.com/runner/</a><br>[3].<a href="https://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service" target="_blank" rel="noopener">https://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service</a></p>
+<p><code>helm</code><br>[1].<a href="https://helm.sh/docs/" target="_blank" rel="noopener">https://helm.sh/docs/</a><br>[2].<a href="https://zhaohuabing.com/2018/04/16/using-helm-to-deploy-to-kubernetes/" target="_blank" rel="noopener">https://zhaohuabing.com/2018/04/16/using-helm-to-deploy-to-kubernetes/</a><br>[3].<a href="https://www.qikqiak.com/post/first-use-helm-on-kubernetes/" target="_blank" rel="noopener">https://www.qikqiak.com/post/first-use-helm-on-kubernetes/</a></p>
+<p><code>kubernetes executor</code><br>[1].<a href="https://docs.gitlab.com/runner/executors/kubernetes.html" target="_blank" rel="noopener">https://docs.gitlab.com/runner/executors/kubernetes.html</a></p>
+<p><code>install runner in k8s</code><br>[1].<a href="https://docs.gitlab.com/runner/install/kubernetes.html" target="_blank" rel="noopener">https://docs.gitlab.com/runner/install/kubernetes.html</a><br>[2].<a href="https://docs.gitlab.com/runner/configuration/advanced-configuration.html" target="_blank" rel="noopener">https://docs.gitlab.com/runner/configuration/advanced-configuration.html</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/k8s/" rel="tag"><i class="fa fa-tag"></i> k8s</a>
+              <a href="/tags/gitlab-ci/" rel="tag"><i class="fa fa-tag"></i> gitlab-ci</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/06/23/Shell%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="next" title="Shell学习笔记">
+                  <i class="fa fa-chevron-left"></i> Shell学习笔记
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/07/07/%E6%B5%85%E6%9E%90-docker-in-docker-%E5%92%8C-socket-binding/" rel="prev" title="浅析 docker-in-docker 和 socket-binding">
+                  浅析 docker-in-docker 和 socket-binding <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#gitlab-ci-核心概念和基本原理"><span class="nav-number">1.</span> <span class="nav-text">gitlab-ci 核心概念和基本原理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#gitlab-runner-相关知识"><span class="nav-number">2.</span> <span class="nav-text">gitlab runner 相关知识</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#k8s-中安装gitlab-runner-的详细流程"><span class="nav-number">3.</span> <span class="nav-text">k8s 中安装gitlab runner 的详细流程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#minikube-安装注意事项"><span class="nav-number">3.1.</span> <span class="nav-text">minikube 安装注意事项</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#k8s-中安装gitlab-runner"><span class="nav-number">3.2.</span> <span class="nav-text">k8s 中安装gitlab runner</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#gitlab-runner-配置详解"><span class="nav-number">4.</span> <span class="nav-text">gitlab runner 配置详解</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

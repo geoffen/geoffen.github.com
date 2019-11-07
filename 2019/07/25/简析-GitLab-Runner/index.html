@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="原计划本文是作为此系列文章的最后一篇，即整合Kubernetes和GitLab CI并构建持续集成流程。但由于后面对GitLab Runner作了进一步的了解，因此，在此作下记录，同时方便有需要的同学。上两篇文章的主题分别是在Kubernetes中安装GitLab Runner以及Docker-in-Docker &amp;amp; Socket-Binding这两种可以实现在容器中执行容器命令的方法。本">
+<meta name="keywords" content="gitlab-ci">
+<meta property="og:type" content="article">
+<meta property="og:title" content="简析 GitLab Runner">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;07&#x2F;25&#x2F;%E7%AE%80%E6%9E%90-GitLab-Runner&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="原计划本文是作为此系列文章的最后一篇，即整合Kubernetes和GitLab CI并构建持续集成流程。但由于后面对GitLab Runner作了进一步的了解，因此，在此作下记录，同时方便有需要的同学。上两篇文章的主题分别是在Kubernetes中安装GitLab Runner以及Docker-in-Docker &amp;amp; Socket-Binding这两种可以实现在容器中执行容器命令的方法。本">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;GitLab-Runner&#x2F;GitLab-Runer.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;GitLab-Runner&#x2F;shared-runner-1.gif">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;GitLab-Runner&#x2F;shared-runner-2_1.gif">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;GitLab-Runner&#x2F;Runner%26GitLabServer_meitu_1.jpg">
+<meta property="og:updated_time" content="2019-10-24T05:43:40.841Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;GitLab-Runner&#x2F;GitLab-Runer.png">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/07/25/%E7%AE%80%E6%9E%90-GitLab-Runner/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>简析 GitLab Runner | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/07/25/%E7%AE%80%E6%9E%90-GitLab-Runner/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          简析 GitLab Runner
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-07-25 22:34:02" itemprop="dateCreated datePublished" datetime="2019-07-25T22:34:02+08:00">2019-07-25</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:43:40" itemprop="dateModified" datetime="2019-10-24T13:43:40+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%8C%81%E7%BB%AD%E9%9B%86%E6%88%90/" itemprop="url" rel="index">
+                    <span itemprop="name">持续集成</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>9.1k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>8 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>原计划本文是作为此系列文章的最后一篇，即整合<code>Kubernetes</code>和<code>GitLab CI</code>并构建持续集成流程。但由于后面对<code>GitLab Runner</code>作了进一步的了解，因此，在此作下记录，同时方便有需要的同学。上两篇文章的主题分别是在<code>Kubernetes</code>中安装<code>GitLab Runner</code>以及<code>Docker-in-Docker &amp; Socket-Binding</code>这两种可以实现在容器中执行容器命令的方法。本文侧重于对<code>GitLab Runner</code>相关内容作一个补充。本文内容主要来源于两个地方：一部分是来提炼于官方文档，另一部分是通过查阅源码，归纳总结出来的核心操作的逻辑。因此，如果大家对<code>GitLab Runner</code>有兴趣或者学习/工作有需要，可以仔细查阅<a href="https://docs.gitlab.com/runner/" target="_blank" rel="noopener">官方文档</a>，和追踪它的<a href="https://gitlab.com/gitlab-org/gitlab-ce/tree/master" target="_blank" rel="noopener">源码</a>。这篇文章主要阐述三个方面的内容，一是关于<code>GitLab Runner</code>的知识，其二是强调和细化一下<code>Executors</code>这个概念，最后，通过阅读源码，概要阐述<code>GitLab Runner</code>和<code>GitLab Server</code>二者的基本交互逻辑。</p>
+<a id="more"></a>
+
+<p>不是不说，有些概念官方也没有说地特别清楚（个人观点，至少对于新手而言不太友好），需要自己去实践才能彻底明白其中的原理或用法。<code>GitLab Runner</code>的源代码是用<code>Golang</code>写的，总体而言，各模块代码组织结构比较清晰，而且也不会难以读懂，强烈建议有兴趣的读者可以翻看下。下面对这三方面一一展开介绍。</p>
+<h2 id="关于-GitLab-Runner"><a href="#关于-GitLab-Runner" class="headerlink" title="关于 GitLab Runner"></a>关于 GitLab Runner</h2><p>有一个最基本的概念需要清楚——<code>GitLab Runner</code>到底是做什么的？事实上，<code>GitLab Runner(Runner)</code>并不负责最终执行我们在<code>.gitlab-ci.yml</code>中定义的各个<code>stage</code>中的脚本（真奇怪，明明都被称为是<code>Runner</code>了）。意识到这一点很重要。因此，对于<code>Job</code>的构建效率与<code>Runner</code>本身的配置没有直接关联（但是<code>Runner</code>确实会影响到<code>CI</code>流程的构建效率，这在后面阐述）。</p>
+<p>另外，需要提醒的是，<code>GitLab Runner</code>允许以<code>rpm</code>包、<code>debian</code>包（<code>yum</code>源、<code>apt-get</code>）安装在 <code>Linux</code>,、<code>macOS</code>或<code>FreeBSD</code>上，甚至可以通过二进制文件安装在<code>Windows</code>上，当然也可以通过拉取镜像安装在<code>Docker</code>或 <code>Kubernetes</code>中。<code>Runner</code>本身没有任何特殊之处，它也只是一个使用<code>Golang</code>编写的程序而已，因此，理论上它可以安装在任何具有<code>Golang</code>环境的机器上。</p>
+<p>另外一个问题是，很多时候如果你的<code>GitLab CI</code>工作流程跑得比较慢（这很常见），或者说构建效率较低。此时，一般而言，可以从三个方面来调整解决：</p>
+<ul>
+<li>调整你的<code>.gitlab-ci.yml</code>文件内容（确保自己熟悉<a href="https://docs.gitlab.com/ce/ci/yaml/" target="_blank" rel="noopener"><code>.gitlab-ci.yml</code></a>各选项），实施一些优化操作。典型地，让各<code>stage</code>之间共享缓存。</li>
+<li>优化你的<code>GitLab Runner</code>的配置和<code>Job</code>调度策略。这包括两个方面，其一是<code>Runner</code>的配置，比如，<code>concurrent</code>参数决定了你的项目中同时可以构建的<code>Job</code>的数量，另外还有其它的几个相关的选项。其二是<code>Runner</code>调度<code>Job</code>的策略，不同的调度策略会影响到你提交的<code>Job</code>的构建情况。典型地，若某个<code>Project</code>包含很多个<code>Job</code>，那么它很有可能会占居大量的<code>Runner</code>资源，而<code>Shared Runner</code>采用的<code>Fair Usage Queue</code>调度策略就可以缓解此问题。<code>Runner</code>的调度策略与<a href="https://docs.gitlab.com/ee/ci/runners/#shared-specific-and-group-runners" target="_blank" rel="noopener"><code>Runner</code>的类型</a>相关，其中<code>Specific/Group Runner</code>使用的是<code>FIFO</code>，注意，此<code>FIFO</code>针对的是<code>Job</code>，而不是<code>Project</code>。而<code>Shared Runner</code>使用的是<code>Fair Usage Queue</code>这种调度策略，官方文档给了<a href="https://docs.gitlab.com/ee/ci/runners/#how-shared-runners-pick-jobs" target="_blank" rel="noopener">两个例子</a>来解释。在后面，我有一张<code>PPT</code>有阐述<code>Fair Usage Queue</code>策略具体是怎样，另外有两张<code>GIF</code>分别对应官方文档的两个示例。</li>
+<li>最后，当然，你也可以升级<code>Runner</code>的物理硬件资源配置，这种方法就不多阐述了。</li>
+</ul>
+<p>关于<code>GitLab Runner</code>的最佳实践，这是<code>GitLab</code>官方论坛的<a href="https://forum.gitlab.com/t/best-practices-for-ci-with-gitlab/5169" target="_blank" rel="noopener">讨论贴</a>。这是网上的一个关于<a href="https://www.digitalocean.com/community/tutorials/an-introduction-to-ci-cd-best-practices" target="_blank" rel="noopener"><code>GitLab Best Practices</code>的建议</a>。若有需要，大家可以参考下。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/GitLab-Runner/GitLab-Runer.png" alt="GitLab-Runner"></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/GitLab-Runner/shared-runner-1.gif" alt="Shared Runner - Fair Usage Queue-1"></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/GitLab-Runner/shared-runner-2_1.gif" alt="Shared Runner - Fair Usage Queue-2"></p>
+<p>最后，通过阅读官方文档，本文整理一些关于<code>Runner</code>一些<code>tips</code>：</p>
+<ul>
+<li><p>关于<code>Runner</code></p>
+<ol>
+<li>你可以为多个<code>Project</code>注册同一个<code>Specific Runner</code>，与使用<code>Shared Runner</code>注册给多个<code>Project</code>的区别是：你需要显式地在每个<code>Project</code>下 enable 这个<code>Specific Runner</code>；</li>
+<li>注意<code>Specific Runner</code>不会为会<code>forked project</code>自动开启，因此，你需要显式注册绑定；</li>
+<li>GitLab admin 只能注册<code>Shared Runner</code>，当然你也可以在<code>Shared Runner</code>被注册后，主动为某个<code>Project</code>取消注册此 <code>Shared Runner</code>；</li>
+<li><code>Specific Runner</code>可以被 lock 到某个<code>Project</code>。这样其它项目不能使用此<code>Runner</code>；</li>
+<li>注册<code>Specific Runner</code>有两种方法：<br>a.  一是直接通过<code>gitlabUrl</code>和 <code>registerToken</code>。注意此 <code>registerToken</code> 是同<code>Project</code>绑定的！<br>b.  另一种是将<code>Shared Runner</code>转换成<code>Specific Runner</code>。此操作是一次性的，且只有 admin 才能操作。</li>
+<li>你可以通过使用<code>protected branches</code>或<code>protected tags</code>来关联拥有这些信息的<code>protected project</code>和 <code>protected Runner</code>。因为考虑到实际生产环境有些 Runner 可能包含私密信息；</li>
+<li>实践建议：尝试给<code>Runner</code>使用<code>tag</code>，同时给<code>Project</code>打上 <code>tag</code>； 为<code>Runner</code>设置执行<code>Job</code>的超时时间。</li>
+</ol>
+</li>
+<li><p>注册<code>Runner</code>是否与<code>Project</code>有关，例如<code>registerUrl</code> 和 <code>token</code> 跟项目是相关的？<br>注册<code>Specific Runner</code>与<code>Project</code>相关。必须使用<code>gitlabUrl</code>以及此项目下的<code>registerToken</code>才能将此 <code>Runner</code>注册到此<code>project</code>下。若没有提供正确的<code>registerToken</code>（但这个<code>registerToken</code>确实合法的，比如选择了其它 <code>Project</code>的<code>registerToken</code>），则也可以显式地在这些<code>Project</code>下手动 enable 此 <code>Runner</code>，前提是你是这些项目的<code>maintainer</code>。</p>
+<p><strong>TODO</strong>: 你可以实践一个错误的<code>registerToken</code>，即它不与任何<code>Project</code>关联（<code>Kubernetes Executor</code>）。<br><strong>实践结果</strong>：<code>Runner</code>所在的<code>Pod</code>启动失败，容器就绪探针有问题。因此，验证了前述逻辑。</p>
+</li>
+<li><p>关于<code>Runner Token</code>的问题？<br>有两种类型的<code>Token</code>。一个是<code>Registration Token</code>，用于<code>Runner</code>注册时使用。另一个是<code>Authentication Token</code>，用于<code>Runner</code>向<code>GitLab</code>提供认证。这个<code>Token</code>可以在使用<code>Registration Token</code>注册到<code>GitLab</code>时自动获取到（由 <code>GitLab Server</code>返回）；然后，<code>Runner</code>会将它放在<code>Runner</code>的配置文件中。 或者是手动在<code>Runner</code>配置文件 的<code>[[runners]] section</code>下设置<code>token=&quot;&lt;authentication_token&gt;&quot;</code>。之后，<code>GitLab Server</code> 和 <code>Runner</code>就能正常建立连接。</p>
+</li>
+</ul>
+<h2 id="关于-Executor"><a href="#关于-Executor" class="headerlink" title="关于 Executor"></a>关于 Executor</h2><p>既然<code>Runner</code>不是<code>Job</code>的执行体，那究竟是谁负责执行<code>Job</code>呢？事实上，这与<code>Executor</code>密切相关。总而言之，<code>Runner</code>是借助<code>Executor</code>来创建具体的执行我们<code>Job</code>的资源实体，官方文档把它称为<code>Runner</code>，有点尴尬，但是读者必须清楚二者的区别。那<a href="https://docs.gitlab.com/runner/executors/" target="_blank" rel="noopener"><code>Executor</code></a>又是什么呢？我个人的理解是，所谓的<code>Executor</code>是一个抽象的概念，它为<code>GitLab CI</code>构建过程提供资源环境。引入<code>Executor</code>这个概念，可以使得<code>Runner</code>使用不同的 <code>Executor</code>（<code>SSH</code>、<code>Shell</code>和<code>Kubernetes</code>等）来执行<code>Job</code>构建过程。典型地，在具体某个环境中，比如在<code>Kubernets</code>中，就由 <a href="https://docs.gitlab.com/runner/executors/kubernetes.html" target="_blank" rel="noopener"><code>Kuberentes Executor</code></a>来请求<code>Kubernetes API Server</code>动态创建<code>Pod</code>，动态创建出来的<code>Pod</code>才负责<code>Job</code>的执行（关于<code>Pod</code>的含义读者可以参考<code>Kubernetes</code>文档）。</p>
+<p>最后，<code>Runner</code>所安装的地方并不会与最终<code>Job</code>的执行体绑定，我们姑且称这个执行体为<code>Executor</code>吧，可能不是很准确。比如，如果我们使用<code>Kubernetes Executor</code>，则我们可以将<code>Runner</code>安装在<code>Windows</code>上，但却将它远程连接到<code>Kubernetes</code>集群，并通过<code>Kubernetes Executor</code>来为<code>Job</code>的构建动态创建<code>Pod</code>，但这种方式不是最简便或最合理的，个人是将<code>Runner</code>同样安装在<code>Kubernetes</code>中，这是官方的推荐做法，一方面，因为最终的应用是部署在<code>Kubernetes</code>中，因此，这会带来便利；另外，也会省去<code>Runner</code>连接集群的一些认证等过程。当然，如果选择将<code>Runner</code>安装在<code>Windows</code>中，这是最简单朴素的方式，此时<code>Runnre</code>会直接在本地为每一个<code>Job</code>动态启动一个进程，是的，这就是<code>Shell Executor</code>。更准确而言，应该是<code>PowerShell Executor</code>。下面是个人翻译整理官方文档的一些关于各种<code>Executor</code>的基本情况：</p>
+<ul>
+<li><a href="https://docs.gitlab.com/runner/executors/ssh.html" target="_blank" rel="noopener"><code>SSH</code></a><ul>
+<li>通过<code>ssh</code>连接到远程主机，然后在远程主机上启动一个进程来执行<code>GitLab CI</code>构建过程。连接时需指定<code>url、port、user、password/identity_file</code>等参数；</li>
+<li>若想要上传<code>artificate</code>，需要将<code>Runner</code>安装在<code>ssh</code> 连接到的远程主机上。</li>
+</ul>
+</li>
+<li><a href="https://docs.gitlab.com/runner/executors/shell.html" target="_blank" rel="noopener"><code>Shell</code></a><ul>
+<li>使用安装<code>Runner</code>的同一台主机启动一个进程来执行<code>GitLab CI</code>构建过程。凡是支持安装<code>Runner</code>的机器类型，都可以用使用<code>shell</code>的方式。这意味着<code>Windows PowerShell</code>、<code>Bash</code>、<code>Sh</code>和<code>CMD</code>都是可以的。</li>
+</ul>
+</li>
+<li><a href="https://docs.gitlab.com/runner/executors/virtualbox.html" target="_blank" rel="noopener"><code>VirtualBox/Parallel</code></a><ul>
+<li>通过<code>ssh</code>远程连接到虚拟机，在虚拟机中执行<code>GitLab CI</code>构建过程，可能会创建虚拟机快照以加速下一次构建。类似地，需指定<code>user、password/identity_file</code>；</li>
+<li>同<code>SSH</code>方式类似，若想要上传<code>artificate</code>，需要将<code>Runner</code>安装在<code>VirtualBox</code>的虚拟机中；</li>
+<li>正式开启<code>CI</code>流程前，需提前在<code>VirtualBox</code>中创建或导入一个<code>Base Virtual Machine</code>，并在其中安装 <code>OpenSSH Server</code>以及依赖等。</li>
+</ul>
+</li>
+<li><a href="https://docs.gitlab.com/runner/executors/docker.html" target="_blank" rel="noopener"><code>Docker</code></a><ul>
+<li>将<code>Executor</code>连接到<code>Docker Daemon</code>，并在一个单独容器中跑每一次的构建过程，并使用在<code>.gitlab-ci.yml</code>文件中定义的镜像，<code>Docker Executor</code>具体是通过<code>config.toml</code>文件来配置的。</li>
+</ul>
+</li>
+<li><a href="https://docs.gitlab.com/runner/executors/kubernetes.html" target="_blank" rel="noopener"><code>Kuberentes</code></a><ul>
+<li>让<code>Runner</code>连接到连<code>Kubernetes API Server</code>，为每一个<code>Job</code>动态创建一个<code>Pod</code>来执行<code>GitLab CI</code>构建过程。</li>
+<li>且此<code>Pod</code>除了包含固有的<code>Infra Container</code>外，还一定会包含<code>Build Container</code>和<code>Help Container</code>，另外，可能包含<code>Service Container</code>。简单而言，<code>Build Container</code>用于执行<code>.gitlab-ci.yml</code>文件中在<code>stage</code>标签中定义的脚本。<code>Help Container</code>则用于辅助<code>Build Container</code>的执行构建工作，具体是负责<code>git</code>和<code>certificate store</code>相关的操作。最后<code>Service Container</code>的用途则对应着<code>.gitlab-ci.yml</code>文件中定义的<code>service</code>标签，即一个辅助容器，为<code>Build Container</code>提供服务，其基本实现原理是<code>Docker Link</code>。</li>
+<li>最后，每一个<code>Job</code>都会包含四个阶段（<code>Job</code>构建过程的生命周期）：<code>Prepare</code>、<code>Pre-Build</code>、<code>Build</code>和<code>Post-Build</code>。这几个阶段的具体作用，我在这里就不阐述了，比较简单，可以阅读<a href="https://docs.gitlab.com/runner/executors/kubernetes.html#workflow" target="_blank" rel="noopener">这里</a>，也可以在源码中找到。</li>
+</ul>
+</li>
+</ul>
+<p>关于<code>Executor</code>就阐述到这里，<code>Executor</code>的概念非常重要，也比较抽象。</p>
+<h2 id="关于-GitLab-Server-同-GitLab-Runner-的交互"><a href="#关于-GitLab-Server-同-GitLab-Runner-的交互" class="headerlink" title="关于 GitLab Server 同 GitLab Runner 的交互"></a>关于 GitLab Server 同 GitLab Runner 的交互</h2><p>这一小节简要阐述下<code>GitLab Server</code>同<code>GitLab Runner</code>的交互过程，基本是通过阅读源码总结而来，但并未详细阅读源码，只是大概理清整个交互逻辑。因此，如果读者没有跟随源码，下面的描述中涉及到源码的部分可能会有点不模糊，不过没有关系，若读者只想了解二者交互的大概过程，只需要把下面的二者的交互图搞清楚即可。但若读者有兴趣，个人还是建议，可以翻看下源码，会更清楚一些。</p>
+<p>下面从四个重要操作展开叙述，分别是：</p>
+<ul>
+<li><strong><code>Register Runner</code></strong>，<code>Runner</code>注册过程，即将<code>Runner</code>绑定到<code>GitLab Server</code>实例的过程；</li>
+<li><strong><code>Polling Job</code></strong>，<code>Runner</code>轮询<code>Job</code>的过程，当<code>Runner</code>从<code>GitLab Server</code>获取到<code>Authetication Token</code>后，它会定期去向<code>GitLab Server</code>轮询是否有等待构建的<code>Job</code>；</li>
+<li><strong><code>Handle Job</code></strong>，<code>Runner</code>一旦轮询到<code>Job</code>后，它会启动构建过程，即开始上述四个阶段：<code>Prepare、Pre-Build、Build和Post-Build</code>。（对于<code>Kubernetes Executor</code>而言）。</li>
+<li><strong><code>Patch Job</code></strong>，在构建<code>Job</code>的过程中，会定期将<code>Job Trace</code>日志信息发送给<code>GitLab Server</code>；</li>
+</ul>
+<h3 id="Register-Runner"><a href="#Register-Runner" class="headerlink" title="Register Runner"></a>Register Runner</h3><p><strong><code>Register Runner</code></strong>。当执行客户端执行<code>register</code>命令(<code>gitlab-runner register ...</code>)并提供一些配置信息时，如<code>gitlabUrl、executors、token</code>和<code>tag</code>等，会触发对应的<code>Runner</code>注册过程。源码中对应的方法是 <code>commands/register.go#Execute</code>，然后会继续调用<code>register.askRunner</code>方法来配置<code>Runner</code>，在构造所需参数后，将调用<code>network/gitlab.RegisterRunner</code>方法来注册<code>Runner</code>。在此方法中，最终通过<code>http POST /runners</code>来完成向<code>GitLab Server</code>发送注册请求，同时处理注册请求的返回结果。其中，注册请求的重要参数包括 <code>registrationToken</code>，<code>locked</code>，<code>maximum_timeout</code>，<code>tag_list</code>等（这需要在配置时填写的）。而注册请求的响应内容包含一个<code>token</code>，正如前文所述，在此之后，当<code>Runner</code>向<code>GitLab Server</code>请求<code>Job</code>信息时，需携带此 <code>token</code>。最后，需要提醒的是，<a href="https://gitlab.example.com/api/v4/runners" target="_blank" rel="noopener">此接口</a>是公开的，换言之，你可以使用程序调用此接口。</p>
+<h3 id="Polling-Job"><a href="#Polling-Job" class="headerlink" title="Polling Job"></a>Polling Job</h3><p><strong><code>Polling Job</code></strong>。当<code>Runner</code>注册成功后，其会定期（默认是<code>3</code>秒，可配置）向<code>GitLab</code>请求<code>Job</code>信息。这在源码中对应的是<code>commands/multi.go#processRunner</code>方法，然后调<code>multi.requestJob</code>法，进一步调用 <code>network.RequestJob</code>（即<code>GitLabClient.RequestJob</code>）请求<code>Job</code>。最终通过<code>http POST /jobs/request</code>接口 来完成轮询<code>Job</code>请求。此请求的重要参数包括<code>token</code>和<code>RunnerInfo</code>等 。而响应内容包括<code>jobInfo、gitInfo</code>等。当然，若没有没有等待构建的<code>Job</code>信息，则返回<code>204 StatusNoContent</code>。最后，此接口似乎没有公开。</p>
+<p>关于<code>Polling Job</code>的具体源码体现。在<code>commands/multi.go#Run</code>方法中，异步开启一个<code>goroutine</code>，执行 <code>multi.feedRunners(runners)</code>方法，此方法会判断是否在可用的<code>runners</code>，若存在，则遍历所有可用的 <code>runner</code>，并周期性地（默认，每隔<code>CheckInterval=3s</code>）往<code>runners</code> 通道中压入<code>runner</code>。需要注意的是，若有多个<code>runners</code>，则实际的周期是<code>CheckInterval / len(runners)</code>。接着会调用方法链： <code>multi.startWorkers -&gt; multi.processRunners</code>，在此方法中通过<code>select case</code>结构从<code>runners</code>取前面压入的<code>runner</code>实例，一旦取出成功，则调用<code>multi.processRunner</code>方法，随后的步骤如前所述。</p>
+<p>需要注意的是，在正式调用<code>multi.requestJob</code>方法前，会先通过<code>common.GetExecutor</code>获取<code>executor</code>，同时还要为<code>runner</code>申请足够资源 <code>(multi.acquireRunnerResources)</code>。</p>
+<p>另外，最终构建<code>Job</code>是通过方法链完成的：<code>common/build.go#build.Run(mr.config, trace) -&gt; build.run(context, executor) -&gt; build.executeScript(runContext, executor)</code>。关于构建的四个阶段，对应的源码内容也比较清楚，在<code>build.executeScript</code>方法中存在如下代码调用：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">prepare -&gt; build.executeStage(ctx, BuildStagePrepare, executor)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">pre-build -&gt; build.attemptExecuteStage(ctx, </span><br><span class="line">BuildStageGetSources|BuildStageRestoreCache|BuildStageDownloadArtifacts, executor, </span><br><span class="line">b.GetGetSourcesAttempts()</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">build -&gt; build.executeStage(ctx, BuildStageUserScript, </span><br><span class="line">executor) 和 build.executeStage(timeoutContext, </span><br><span class="line">BuildStageAfterScript, executor)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">post-build -&gt; build.executeStage(ctx, BuildStageArchiveCache, </span><br><span class="line">executor) 和 b.executeUploadArtifacts(ctx, err, executor</span><br></pre></td></tr></table></figure>
+
+<h3 id="Handle-Job"><a href="#Handle-Job" class="headerlink" title="Handle Job"></a>Handle Job</h3><p><strong><code>Handle Job</code></strong>。当成功获取<code>Job</code>息后，<code>Runner</code>就开始处理<code>Job</code>的构建过程。这在源码中对应的是 <code>commands/multi.go#requestJob</code>方法，然后调用<code>network.ProcessJob</code>方法。在这之前会构造 <code>jobCredentials{ID, Token}</code>，接着通过<code>trace.newJobTrace</code>创建<code>Job Trace</code>即<code>Job</code>处理日志，在构造函数中指定了<code>Job Trace</code>更新的周期，默认是<code>UpdateInterval=3s</code>，然后调用<code>trace.start</code>方法开启 Job Trace 输出。</p>
+<h3 id="Patch-Job"><a href="#Patch-Job" class="headerlink" title="Patch Job"></a>Patch Job</h3><p><strong><code>Patch Job</code></strong>。在<code>Job</code>被正式构建时，是通过调用<code>trace.start</code>方法来调用<code>trace.watch</code>以周期性地<code>patch Job trace</code>。在源码中是通过<code>trace.incrementalUpdate -&gt; trace.sendPatch -&gt; network.PatchTrace</code>方法链来完成调用的，最终通过<code>http PATCH /jobs/{JobId}/trace</code>来完成<code>patch Job trace</code>请求。其中重要参数即为<code>job trace content</code>，且为增量输出，在请求的<code>headers</code>中需要设置<code>Job token</code>。若请求发送成功，则返回 <code>StatusAccepted 202</code>响应码。同时，每隔<code>forceSendInterval</code>（默认<code>30s</code>） 的时间还要更新<code>Job</code>执行状态信息（<code>pending、running、failed</code>和<code>success</code>），在源码中是通过方法链<code>trace.touchJob -&gt; network.UpdateJob</code>来完成，最后通过<code>http  PUT /jobs/{JobId}</code>完成请求的发送，其中重要参数包括<code>runnerInfo、JobToken、JobState</code> 等。但需要注意的是，若<code>Job</code>执行失败，则会附带上失败原因<code>FailureReason</code>，若<code>Job Status</code>更新成功，则返回<code>UpdateSucceeded 200</code>响应码。</p>
+<p>下面是一张完整的<code>GitLab Server</code>同<code>GitLab Runner</code>的交互图。其中，最左边的表示客户端执行的<code>Runner</code>的命令（注册，启动和取消注册）。中间用红色标示的表示各个详细的阶段。右边中绿色标注的表示<code>Runner</code>同<code>GitLab Server</code>的<code>Http</code>通信细节，这个是最重要的。右边的黑色和蓝色标示的表示<code>Runner</code>自身内部执行的一些操作。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/GitLab-Runner/Runner%26GitLabServer_meitu_1.jpg" alt="Runner-GitLab-communication"></p>
+<p>简单小结，本文主要阐述了三个方面的内容：一是阐述<code>Runner</code>相关的知识，特别要清楚<code>Runner</code>的本质是什么，以及提高<code>GitLab CI</code>构建效率的三个方面的知识，最后补充了<code>Runner</code>相关的细节知识点；二是阐述<code>Executor</code>相关的知识，包括<code>Executor</code>的本质，与<code>Runner</code>的关系，并且简要阐述了各种<code>Executor</code>，需要重点关注<code>Kubernetes Executor</code>。最后，阐述<code>GitLab Server</code>同<code>GitLab Runner</code>基本交互逻辑，主要是包括四个阶段（没包括最后的取消注册），这几个阶段都挺重要，读者可以借助二者的交互图来理解，重点关注二者之间的<code>Http</code>交互的各阶段。这有助于理解<code>Runner</code>的执行原理。</p>
+<p>参考文献</p>
+<p>[1].<a href="https://docs.gitlab.com/runner/" target="_blank" rel="noopener">https://docs.gitlab.com/runner/</a><br>[2].<a href="https://forum.gitlab.com/t/best-practices-for-ci-with-gitlab/5169" target="_blank" rel="noopener">https://forum.gitlab.com/t/best-practices-for-ci-with-gitlab/5169</a><br>[3].<a href="https://docs.gitlab.com/runner/executors/" target="_blank" rel="noopener">https://docs.gitlab.com/runner/executors/</a><br>[4].<a href="https://docs.gitlab.com/runner/executors/kubernetes.html" target="_blank" rel="noopener">https://docs.gitlab.com/runner/executors/kubernetes.html</a><br>[5].<a href="https://docs.gitlab.com/ee/api/" target="_blank" rel="noopener">https://docs.gitlab.com/ee/api/</a><br>[6].<a href="https://gitlab.com/gitlab-org/gitlab-ce/tree/master" target="_blank" rel="noopener">https://gitlab.com/gitlab-org/gitlab-ce/tree/master</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/gitlab-ci/" rel="tag"><i class="fa fa-tag"></i> gitlab-ci</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/07/07/%E6%B5%85%E6%9E%90-docker-in-docker-%E5%92%8C-socket-binding/" rel="next" title="浅析 docker-in-docker 和 socket-binding">
+                  <i class="fa fa-chevron-left"></i> 浅析 docker-in-docker 和 socket-binding
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/07/29/GitHub-%E5%A6%82%E4%BD%95%E5%90%91%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE%E6%8F%90PR/" rel="prev" title="GitHub 如何向开源项目提PR">
+                  GitHub 如何向开源项目提PR <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#关于-GitLab-Runner"><span class="nav-number">1.</span> <span class="nav-text">关于 GitLab Runner</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关于-Executor"><span class="nav-number">2.</span> <span class="nav-text">关于 Executor</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关于-GitLab-Server-同-GitLab-Runner-的交互"><span class="nav-number">3.</span> <span class="nav-text">关于 GitLab Server 同 GitLab Runner 的交互</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Register-Runner"><span class="nav-number">3.1.</span> <span class="nav-text">Register Runner</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Polling-Job"><span class="nav-number">3.2.</span> <span class="nav-text">Polling Job</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Handle-Job"><span class="nav-number">3.3.</span> <span class="nav-text">Handle Job</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Patch-Job"><span class="nav-number">3.4.</span> <span class="nav-text">Patch Job</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章详细阐述在k8s中安装gitlab runner的整个流程，并且也阐明了其中涉及的原理。原计划这一篇博文紧接着叙述基于k8s并集成gitlab-ci的持续集成部署方案的第二阶段——研究集成gitlab-ci和k8s来实现一个以build-&amp;gt;test-&amp;gt;deploy为核心的持续集成部署流程。第一阶段只是搭建好了环境，显然第二阶段要更重要。但考虑到个人在第二阶段实验过程涉及到至关">
+<meta name="keywords" content="docker">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浅析 docker-in-docker 和 socket-binding">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;07&#x2F;07&#x2F;%E6%B5%85%E6%9E%90-docker-in-docker-%E5%92%8C-socket-binding&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章详细阐述在k8s中安装gitlab runner的整个流程，并且也阐明了其中涉及的原理。原计划这一篇博文紧接着叙述基于k8s并集成gitlab-ci的持续集成部署方案的第二阶段——研究集成gitlab-ci和k8s来实现一个以build-&amp;gt;test-&amp;gt;deploy为核心的持续集成部署流程。第一阶段只是搭建好了环境，显然第二阶段要更重要。但考虑到个人在第二阶段实验过程涉及到至关">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;practice-privileged-1.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;practice-previliged.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;practice-privileged-3.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;docker-in-docker-in-docker.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;dokcer-as-as-service.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;docker-as-a-servce-1.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;docker-as-a-service-2.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-1.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-2.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-3.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-4.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-5.png">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;socket-binding-6.png">
+<meta property="og:updated_time" content="2019-10-24T05:44:04.931Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;raw&#x2F;hexo&#x2F;static&#x2F;dind%26socket-binding&#x2F;practice-privileged-1.png">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/07/07/%E6%B5%85%E6%9E%90-docker-in-docker-%E5%92%8C-socket-binding/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>浅析 docker-in-docker 和 socket-binding | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/07/07/%E6%B5%85%E6%9E%90-docker-in-docker-%E5%92%8C-socket-binding/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          浅析 docker-in-docker 和 socket-binding
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-07-07 06:08:17" itemprop="dateCreated datePublished" datetime="2019-07-07T06:08:17+08:00">2019-07-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:44:04" itemprop="dateModified" datetime="2019-10-24T13:44:04+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%8C%81%E7%BB%AD%E9%9B%86%E6%88%90/" itemprop="url" rel="index">
+                    <span itemprop="name">持续集成</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>7.3k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>7 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章详细阐述在<code>k8s</code>中安装<code>gitlab runner</code>的整个流程，并且也阐明了其中涉及的原理。原计划这一篇博文紧接着叙述基于<code>k8s</code>并集成<code>gitlab-ci</code>的持续集成部署方案的第二阶段——研究集成<code>gitlab-ci</code>和<code>k8s</code>来实现一个以<code>build-&gt;test-&gt;deploy</code>为核心的持续集成部署流程。第一阶段只是搭建好了环境，显然第二阶段要更重要。但考虑到个人在第二阶段实验过程涉及到至关重要的一个问题，因此，打算单独开一篇博文总结一些看过的资料，并基于个人的理解与认识将此问题解释清楚。是的，这个问题是：若我们想在<code>docker</code>中运行<code>docker</code>应该如何实现呢？简单而言，在一个<code>docker</code>容器内能够安装<code>docker daemon</code>，以使得我们能够执行<code>docker build/push</code>等命令。这个问题在<code>ci/cd</code>中很典型，无论是采用<code>Jenkins</code>还是<code>gitlab-ci</code>同<code>docker</code>或<code>k8s</code>结合。比如，对于<code>gitlab-ci</code>而言，它的每一个<code>stage</code>都跑在一个容器中的，而若想在某个<code>stage</code>中执行<code>docker</code>命令（典型的，在服务构建阶段会涉及到<code>docker build</code>），默认是不支持的。我们将此种需求概略地称为在容器中运行容器。在本博文中主要讨论实现此需求的两种实现方式，但事实上，也可能不仅仅这两种方式。</p>
+<a id="more"></a>
+
+<p>本文不会过多阐述<a href="https://docs.docker.com/" target="_blank" rel="noopener"><code>docker</code></a>基本原理，但这两种实现方式确实会涉及到<code>docker</code>的一些知识。因此，你需要具备<code>docker</code>基本原理的基础。若要在一个容器中安装另外一个容器，从技术上而言，这是可以实现的。似乎在<code>Docker 0.6</code>版就添加了这个新特性，且从使用上而言，也较为简单，我们暂且称之<code>docker-in-docker(dind)</code>。但它涉及到一些安全问题，也可能会引起一些奇怪的问题。具体你可以参考<a href="http://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/" target="_blank" rel="noopener">这里</a>。因此，自然而然就诞生了其它更为合理的方式——<code>socket-binding</code>，它实际上并非严格意义上的<code>docker-in-docker</code>，但它可以实现类似在容器中执行容器相关命令的效果。并且它还具备其它的优势，典型的，可以让子容器，孙子容器等等共享镜像缓存，这在某些情况下是非常合适的。下面详细介绍这两种实现方式，都遵循从实践到理论的阐述思路。</p>
+<h2 id="docker-in-docker"><a href="#docker-in-docker" class="headerlink" title="docker-in-docker"></a>docker-in-docker</h2><p><code>docker-in-docker</code>这种模式从最初作为新特性被引入<code>docker</code>，到当前的版本，功能确实日趋完善。但在这里仍旧只涉及其核心部分的实践及原理。</p>
+<h3 id="docker-in-docker-初步实践"><a href="#docker-in-docker-初步实践" class="headerlink" title="docker-in-docker 初步实践"></a>docker-in-docker 初步实践</h3><p>在<code>0.6</code>版的<code>Docker</code>在执行<code>docker run</code>命令时，增加了一项新特性——<code>privileged</code>选项参数，可以说就是此参数真正实现了在容器中运行容器的功能。如图1，当你执行如下命令：</p>
+<p><code>docker run --privileged -it jpetazzo/dind</code></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/practice-privileged-1.png" alt="run-jpetazzo/dind-with-privileged"></p>
+<p>它会从<a href="https://hub.docker.com/r/jpetazzo/dind/" target="_blank" rel="noopener"><code>docker hub</code></a>下载一个特殊的<code>docker image</code>，此镜像包含了<code>docker client</code>和<code>docker daemon</code>，并且指明以特权模式来执行它，然后它启动一个本地<code>docker daemon</code>，并进入容器交互式<code>shell</code>。在此特殊容器中，你可以继续执行<code>docker run</code>启动容器：</p>
+<p><code>docker run -it ubuntu bash</code></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/practice-previliged.png" alt="run-in-dind"></p>
+<p>仔细观察你的容器<code>ID</code>，你的<code>hostname</code>发生了变化，说明你已经从外层容器进入到了内层容器了！值得注意的是，此时，内层容器与外层容器依然是隔离的。我们可以简单验证一下。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/practice-privileged-3.png" alt="dind-islotation"></p>
+<h3 id="docker-in-docker-in-docker"><a href="#docker-in-docker-in-docker" class="headerlink" title="docker-in-docker-in-docker?"></a>docker-in-docker-in-docker?</h3><p>有读者可能会思考，既然我可以在容器中启动容器，即<code>docker-in-docker</code>，那么我是否可以做到<code>docker-in-docker-in-docker</code>呢？是的，这完全可以实现，甚至，理论上你可以无限递归下去，只要你在启动下一层容器时，开启特权选项即可。你可以实践下图的操作内容，观察容器<code>ID</code>，说明你确实做到了容器递归嵌套容器。而且你会发现每次执行<code>docker run</code>命令时，它都会去下载<code>jpetazzo/dind</code>这个镜像，这说明了各个层级的容器不会共享<code>image</code>，这也间接证明了各层级的容器确实处于隔离状态。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/docker-in-docker-in-docker.png" alt="docker-in-docker-docker"></p>
+<h3 id="关于-privileged-特权模式"><a href="#关于-privileged-特权模式" class="headerlink" title="关于 privileged 特权模式"></a>关于 privileged 特权模式</h3><p>关于<code>privileged</code>特权模式。我们知道<code>linux</code>进程包括<code>priviledged process</code>，即<code>root</code>用户（或者说<code>pid=0</code>的用户）创建的进程，和<code>unpriviledged process</code>，即普通用户创建的进程。<code>--privileged</code>选项实际上就是创建<code>priviledged container</code>进程。考虑到默认情况下<code>docker</code>容器运行模式为<code>unprivileged</code>，这使得在一个<code>docker</code>容器中跑另外一个<code>docker daemon</code>不被允许，因为容器不能访问宿主机的任何<code>device</code>。但一个具备<code>privileged</code>特权的容器则允许访问所有<code>device</code><a href="https://www.kernel.org/doc/Documentation/cgroup-v1/devices.txt" target="_blank" rel="noopener"><code>(cgroup device)</code></a>，即可以访问<code>/dev</code>下所有的目录。换言之，当容器被配置成<code>privileged</code>模式时，容器对宿主机的所有<code>device</code>具有完全控制权，同时通过修改<code>AppArmor</code>及<code>SELinux</code>相关的配置，使得容器几乎相当于运行在宿主机上的进程一样，具有完全访问宿主机的权限。</p>
+<p>虽然，在<code>Docker 0.6</code>版，纯粹只添加了<code>--privileged</code>选项。但当前的版本(<code>18.09.6</code>)其实限制容器对宿主机设备的访问权限的粒度已经控制得比较精确了。换言之，如果只想让容器访问部分设备，可以使用<code>--device</code>选项，这使得默认情况下，容器对这些设备具有<code>read</code>、<code>write</code>、和<code>mknod</code>权限，但可使用<code>:rwm</code>作出限制。</p>
+<p>除了使用<code>privileged</code>选项，也可使用<code>--cap-add</code>和<code>--cap-drop</code>选项以更细粒度的控制容器对宿主机访问的某些方面的权限。更多可参考<code>docker</code><a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank" rel="noopener">官方文档</a>。</p>
+<h3 id="jpetazzo-dind-基本原理"><a href="#jpetazzo-dind-基本原理" class="headerlink" title="jpetazzo-dind 基本原理"></a>jpetazzo-dind 基本原理</h3><p>现在，我们来讨论一下<code>jpetazzo/dind</code>这个镜像的特殊之处。主要参考的是<a href="https://blog.docker.com/2013/09/docker-can-now-run-within-docker/" target="_blank" rel="noopener">这篇文章</a>。事实上，这个镜像也没有什么太大不同，也是由<code>Dockerfile</code>构建，下面是它的<code>Dockerfile</code>内容：</p>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> ubuntu:<span class="number">14.04</span></span><br><span class="line"><span class="keyword">MAINTAINER</span> jerome.petazzoni@docker.com</span><br><span class="line"></span><br><span class="line"><span class="comment"># Let's start with some basic stuff.</span></span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> apt-get update -qq &amp;&amp; apt-get install -qqy \</span></span><br><span class="line"><span class="bash">    apt-transport-https \</span></span><br><span class="line"><span class="bash">    ca-certificates \</span></span><br><span class="line"><span class="bash">    curl \</span></span><br><span class="line"><span class="bash">    lxc \</span></span><br><span class="line"><span class="bash">    iptables</span></span><br><span class="line">    </span><br><span class="line"><span class="comment"># Install Docker from Docker Inc. repositories.</span></span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> curl -sSL https://get.docker.com/ | sh</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Install the magic wrapper.</span></span><br><span class="line"><span class="keyword">ADD</span><span class="bash"> ./wrapdocker /usr/<span class="built_in">local</span>/bin/wrapdocker</span></span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> chmod +x /usr/<span class="built_in">local</span>/bin/wrapdocker</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Define additional metadata for our image.</span></span><br><span class="line"><span class="keyword">VOLUME</span><span class="bash"> /var/lib/docker</span></span><br><span class="line"><span class="keyword">CMD</span><span class="bash"> [<span class="string">"wrapdocker"</span>]</span></span><br></pre></td></tr></table></figure>
+
+<p><code>Dockerfile</code>所包含的内容并不复杂，主要做了如下四几件事情：</p>
+<ul>
+<li>安装一些<code>docker daemon</code>依赖软件包，包括<code>lxc</code>和<code>iptables</code>。另外，当<code>docker daemon</code>同<code>docker index/registry</code>通信时，需要校验其<code>SSL</code>认证，因此需安装<code>ca-certificates</code>和<code>apt-transport-https</code>等。</li>
+<li>挂载<code>/var/lib/docker volume</code>。因为容器文件系统是基于<code>AUFS</code>的挂载点(<code>mountpoint</code>)，而构成<code>AUFS</code>的分层文件系统应为正常的文件系统。 换言之，<code>/var/lib/docker</code>这个用于存储它创建的容器的目录不能是<code>AUFS</code>文件系统。因此，将此目录以<code>volume</code>的形式挂载到宿主机。这使得后面在容器中创建的内层容器的数据真正存储宿主机的<code>/var/lib/docker/volumns</code>目录下。</li>
+<li>通过脚本快速安装一个最新的<a href="https://github.com/docker/docker-install" target="_blank" rel="noopener"><code>docker</code></a>二进制镜像文件。</li>
+<li>执行一个<a href="https://github.com/jpetazzo/dind/blob/master/wrapdocker" target="_blank" rel="noopener"><code>helper</code></a>脚本。脚本主要操作包括如下三个方面：<ul>
+<li>确保<code>cgroup</code>伪文件系统已经被正确挂载，若没有挂载，则依据宿主机中<code>cgroup</code>层级文件系统的形式对它进行挂载，因为<code>docker(lxc-start)</code>需要它。</li>
+<li>关闭宿主机上多余的文件描述符。否则可能会造成文件描述符资源泄露。虽然这不是严格必需，但目前我们关闭它可以避免一些奇怪的行为（副作用）。</li>
+<li>检测你是否在命令行中通过<code>-e PORT=...</code>指定了一个<code>PORT</code>环境变量。如果你确实指定了，<code>docker daemon</code>将会在前台启动，并在指定<code>TCP</code>端口监听<code>API</code>请求。反之，它会在后台启动<code>docker daemon</code>进程，并且为你提供一个交互式的<code>shell</code>。</li>
+</ul>
+</li>
+</ul>
+<h3 id="docker-as-a-service"><a href="#docker-as-a-service" class="headerlink" title="docker-as-a-service"></a>docker-as-a-service</h3><p>最后，需要补充的一点是，若你想使用<code>docker-in-docker</code>来作为一个服务（上述已提到<code>helper</code>脚本中最后一个操作，即判定<code>docker deamon</code>是监听指定端口，还是提供一个临时<code>shell</code>），即计划提供一个<code>Docker-as-a-Service</code>，注意不是<code>Containers-as-a-Service</code>，这两者在概念上是有区别的。因为我们提供的服务是一个<code>docker</code>实例。我们可以通过如下命令，通过让容器运行于后台模式，并对外暴露一个端口来实现：</p>
+<p><code>docker run --privileged -d -p 1234 -e PORT=1234 jpetazzo/dind</code></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/dokcer-as-as-service.png" alt="docker-as-a-service"></p>
+<p>如上的命令可以获取到容器的<code>ip</code>和<code>port</code>，如此便可为第三方提供<code>docker</code>实例的服务。简单而言，它们可直接连接到<code>docker</code>实例(<code>docker daemon</code>)执行与容器相关的操作。我们简单运行一个只安装了<code>docker clinet</code>的容器，然后设置其<code>DOCKER_HOST</code>为此提供<code>docker daemon</code>的容器的地址，然后简单实验一下是否成功连接，并使用作为服务的<code>docker daemon</code>。当然，你也可以参考<a href="https://hub.docker.com/_/docker" target="_blank" rel="noopener">这里</a>，使用<code>docker link</code>来做实验完成类似的效果。同样，考虑到此<code>docker</code>实例服务是以<code>priviliged</code>模式运行的，因此，它可能会因为获取了特权而造成不可预料的风险。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/docker-as-a-servce-1.png" alt="dind-host"></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/docker-as-a-service-2.png" alt="dind-docker"></p>
+<h2 id="socket-binding"><a href="#socket-binding" class="headerlink" title="socket-binding"></a>socket-binding</h2><p><code>docker-in-docker</code>的方式可以实现在容器中启动另一个容器，但它确实存在安全风险，而且，也存在潜在的棘手问题，具体可以参考这篇<a href="http://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/" target="_blank" rel="noopener">博文</a>。值得一提的是，使用<code>dind</code>的方式，无法让各内层容器之间或容器与主机之间共享缓存，这在基于<code>k8s</code>集成<code>gitlab</code>实现持续集成部署方案的用例中是一个比较严重的问题。因此，笔者考虑使用<code>socket-binding</code>的方式（<code>socket-binding</code>称呼源自<code>gitlab</code><a href="https://docs.gitlab.com/runner/executors/kubernetes.html#exposing-varrundockersock" target="_blank" rel="noopener">官方文档</a>，也可称之为<a href="https://docs.docker.com/storage/bind-mounts/" target="_blank" rel="noopener"><code>bind-mount</code></a>）。</p>
+<h3 id="socket-binding-实践"><a href="#socket-binding-实践" class="headerlink" title="socket-binding 实践"></a>socket-binding 实践</h3><p>事实上，很多情况下，我们并不真正需要在一个容器中运行另外一个容器（或许存在特例）。我们需要的可能只是想在<code>docker</code>容器中能够继续执行<code>docker</code>相关操作（如<code>docker build/pull/push</code>等），至少在笔者的使用案例中是这样的。因此，使用<code>dind</code>的方式是否显得小题大做了？事实上若要达到我们的目的（在容器中执行<code>docker</code>相关命令操作）是很简单的——在启动容器时使用<code>-v</code>选项以绑定挂载的方式(<code>binding mount</code>)将宿主机的<code>docker socket</code>挂载到容器，即执行如下命令：</p>
+<p><code>docker run -it -v /var/run/docker.sock:/var/run/docker.sock some-docker-image /bin/bash</code></p>
+<p>且此<code>docker run</code>命令中的使用的<code>some-docker-image</code>镜像则不必为<code>jpetazzo/dind</code>，它没有任何特殊之处。当然，此镜像必须包含<code>docker client</code>，而可以不用包含<code>docker engine</code>。因为，当我们以<code>socket-binding</code>的形式来<code>run</code>一个容器时，它实际上是将宿主机的<code>/var/run/docker.sock</code>挂载到了容器中<code>/var/run/docker.sock</code>，这使得在容器中执行<code>docker build/push/pull</code>命令真正使用的是宿主机的<code>docker daemon</code>，换言之，我们使用容器中的<code>docker client</code>和容器外的宿主机的<code>docker daemon</code>进行通信。这不同于<code>dind</code>，它并非真正实现了在容器中运行容器的功能。当使用<code>socket-binding</code>的方式时，所创建的容器和执行<code>docker</code>命令的当前容器处于同一层级（不是父子关系，而是兄弟关系），都是直接隶属于宿主机下的一层。因此，你可以推理得到，正因为所有的”内层”容器实际上都使用的是宿主机的<code>docker daemon</code>，这使得宿主机和所有有的容器可以共享镜像缓存！最后，同<code>docker-in-docker-in-docker...</code>类似，<code>socket-binding</code>的方式理论上也可以无限递归。我们简单通过如下的操作过程简单实践：</p>
+<p>先使用下面的<code>Dockerfile</code>构建我们的实验镜像，注意，我们在容器中只安装了<code>docker client</code>。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-1.png" alt="sc-dockerfile"></p>
+<p>然后，构建一个名为<code>dind-sc</code>的镜像。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-2.png" alt="sc-image-build"></p>
+<p>使用<code>run</code>命令启动容器，并进入到容器中，执行<code>docker version</code>命令，可以同时输出了<code>docker client</code>和<code>docker engine</code>的信息！另外，执行<code>docker image</code>命令，发现输出一堆<code>image</code>，是的，这是宿主机上的镜像。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-3.png" alt="sc-docker-run"></p>
+<p>我们再一次在当前容器中基于此<code>Dockerfile</code>构建（有没有发现这次构建非常快，是的，使用了上一次的镜像缓存），然后运行此容器……，重复上述的操作。可以发现，所启动的容器的地位其实是一样的，它们都在同一个层级。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-4.png" alt="sc-dind-build"></p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-5.png" alt="sc-docker-2"></p>
+<p>最后，实验验证宿主机同各容器共享镜像<code>cache</code>。可以看到，我们在宿主机中构建的镜像可以在容器中看到，而在容器中拉到的<code>nginx</code>镜像，也能在宿主机中看到。</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/raw/hexo/static/dind%26socket-binding/socket-binding-6.png" alt="sc-docker-cache"></p>
+<h3 id="关于-docker-volume"><a href="#关于-docker-volume" class="headerlink" title="关于 docker volume"></a>关于 docker volume</h3><p>基于<code>socket-binding</code>来实现在容器中执行容器相关操作的命令的原理其实就是<code>docker volume</code>。<code>docker</code>为了能够保存（持久化）数据以及共享容器间的数据，引入了<code>volume</code>机制。简单而言，<code>volume</code>就是目录或者文件，它可以绕过默认的由多个只读层及一个读写层叠加而成的联合文件系统(<code>union file system</code>)，而以正常的文件或者目录的形式存在于宿主机上。<code>volume</code>机制隔离了容器自身与数据，这是为了保证数据对于容器的生命周期来说是持久化的，换言之，即使你删除了停止的容器数据也还在（除非显式加上<code>-v</code>选项）。</p>
+<p><code>volume</code>可以通过两种方式来创建：其一是在<code>Dockerfile</code>中指定<code>VOLUME /some/dir</code>；其二是执行<code>docker run -v /some/dir</code>命令来指定。这两种方式都是让<code>Docker</code>在主机上创建一个目录，注意默认情况下是在<code>/var/lib/docker</code>下的。并将其挂载到我们指定的路径(<code>/some/dir</code>)，当此路径在容器中不存在时，默认会自动创建它。值得注意的是，我们也可以显式指定将宿主机的某个目录或文件挂载到容器的指定位置（在上述实践环节正是这样操作的，这种方式也被称为是<code>bind-mount</code>）。最后强调一点，当删除使用<code>volume</code>的容器时，<code>volume</code>本身不受影响。</p>
+<p>更多关于<code>volume</code>的操作请查看<a href="https://docs.docker.com/storage/volumes/" target="_blank" rel="noopener">官方文档</a>。</p>
+<p>简单小结，本文阐述了两种实现在容器中运行容器的方法——<code>docker-in-docker</code>和<code>socket-binding</code>。对于<code>docker-in-docker</code>这种方式，虽然它存在不少问题，但它确实实现了在容器中运行容器。围绕<code>docker-in-docker</code>，先简单演示了其基本用法，然后进一步推广出<code>docker-in-docker-in-docker...</code>模式，这在理论上都是可行的。紧接从<code>privileged</code>选项切入阐述<code>dind</code>的相关原理，重点解释了<code>jpetazzo/dind</code>此特殊镜像的构建过程，最后描述了生产环境中<code>dind</code>的实践方式，即以<code>docker-as-a-service</code>的模式以将<code>docker</code>实例通过端口暴露给外部使用。另一种巧妙实现在容器中执行容器命令的方法是<code>socket-binding</code>。可以说，<code>dind</code>能够实现的，它基本都能实现，而且，它解决了各内层容器同宿主机共享镜像缓存的问题。且<code>socket-binding</code>的用法也较为简单，其原理简单而言，就是采用<code>bind-mount</code>通过<code>-v</code>选项将宿主机的<code>docker daemon</code>挂载到容器中，使得只需在容器中安装<code>docker client</code>（事实上，也可不安装<code>docker client</code>，而直接将宿主机的<code>/usr/bin/docker</code>挂载到容器中，同时安装<code>docker</code>执行所需的依赖文件即可）即可执行<code>docker pull/push/build</code>命令。</p>
+<p>参考文献</p>
+<p><code>docker-in-docker</code><br>[1].<a href="https://hub.docker.com/_/docker" target="_blank" rel="noopener">https://hub.docker.com/_/docker</a><br>[2].<a href="https://github.com/jpetazzo/dind/" target="_blank" rel="noopener">https://github.com/jpetazzo/dind/</a><br>[3].<a href="https://blog.docker.com/2013/09/docker-can-now-run-within-docker/" target="_blank" rel="noopener">https://blog.docker.com/2013/09/docker-can-now-run-within-docker/</a><br>[4].<a href="https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities" target="_blank" rel="noopener">https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities</a></p>
+<p><code>socket-binding</code><br>[1].<a href="https://docs.docker.com/storage/volumes/" target="_blank" rel="noopener">https://docs.docker.com/storage/volumes/</a><br>[2].<a href="http://dockone.io/article/128" target="_blank" rel="noopener">http://dockone.io/article/128</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/docker/" rel="tag"><i class="fa fa-tag"></i> docker</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/07/06/k8s-%E4%B8%AD%E5%AE%89%E8%A3%85-gitlab-runner/" rel="next" title="k8s 中安装 gitlab runner">
+                  <i class="fa fa-chevron-left"></i> k8s 中安装 gitlab runner
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/07/25/%E7%AE%80%E6%9E%90-GitLab-Runner/" rel="prev" title="简析 GitLab Runner">
+                  简析 GitLab Runner <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#docker-in-docker"><span class="nav-number">1.</span> <span class="nav-text">docker-in-docker</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#docker-in-docker-初步实践"><span class="nav-number">1.1.</span> <span class="nav-text">docker-in-docker 初步实践</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#docker-in-docker-in-docker"><span class="nav-number">1.2.</span> <span class="nav-text">docker-in-docker-in-docker?</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#关于-privileged-特权模式"><span class="nav-number">1.3.</span> <span class="nav-text">关于 privileged 特权模式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#jpetazzo-dind-基本原理"><span class="nav-number">1.4.</span> <span class="nav-text">jpetazzo-dind 基本原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#docker-as-a-service"><span class="nav-number">1.5.</span> <span class="nav-text">docker-as-a-service</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#socket-binding"><span class="nav-number">2.</span> <span class="nav-text">socket-binding</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#socket-binding-实践"><span class="nav-number">2.1.</span> <span class="nav-text">socket-binding 实践</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#关于-docker-volume"><span class="nav-number">2.2.</span> <span class="nav-text">关于 docker volume</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

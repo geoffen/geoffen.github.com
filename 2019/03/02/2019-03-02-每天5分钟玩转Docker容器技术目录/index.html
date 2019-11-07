@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="写在最前面{:target=”_blank”} 容器生态系统{:target=”_blank”} 容器生态系统 (续){:target=”_blank”} 运行第一个容器{:target=”_blank”} 【视频】运行第一个容器{:target=”_blank”} 容器 What, Why, How{:target=”_blank”}">
+<meta name="keywords" content="docker">
+<meta property="og:type" content="article">
+<meta property="og:title" content="每天5分钟玩转Docker容器技术目录">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;03&#x2F;02&#x2F;2019-03-02-%E6%AF%8F%E5%A4%A95%E5%88%86%E9%92%9F%E7%8E%A9%E8%BD%ACDocker%E5%AE%B9%E5%99%A8%E6%8A%80%E6%9C%AF%E7%9B%AE%E5%BD%95&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="写在最前面{:target=”_blank”} 容器生态系统{:target=”_blank”} 容器生态系统 (续){:target=”_blank”} 运行第一个容器{:target=”_blank”} 【视频】运行第一个容器{:target=”_blank”} 容器 What, Why, How{:target=”_blank”}">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-11-06T00:48:19.646Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/03/02/2019-03-02-%E6%AF%8F%E5%A4%A95%E5%88%86%E9%92%9F%E7%8E%A9%E8%BD%ACDocker%E5%AE%B9%E5%99%A8%E6%8A%80%E6%9C%AF%E7%9B%AE%E5%BD%95/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>每天5分钟玩转Docker容器技术目录 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/03/02/2019-03-02-%E6%AF%8F%E5%A4%A95%E5%88%86%E9%92%9F%E7%8E%A9%E8%BD%ACDocker%E5%AE%B9%E5%99%A8%E6%8A%80%E6%9C%AF%E7%9B%AE%E5%BD%95/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          每天5分钟玩转Docker容器技术目录
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-03-02 17:03:50" itemprop="dateCreated datePublished" datetime="2019-03-02T17:03:50+08:00">2019-03-02</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-11-06 08:48:19" itemprop="dateModified" datetime="2019-11-06T08:48:19+08:00">2019-11-06</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/" itemprop="url" rel="index">
+                    <span itemprop="name">后端开发</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>5.6k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>5 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <ol>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6693772.html" target="_blank" rel="noopener">写在最前面</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6706546.html" target="_blank" rel="noopener">容器生态系统</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6718464.html" target="_blank" rel="noopener">容器生态系统 (续)</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6727146.html" target="_blank" rel="noopener">运行第一个容器</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6740469.html" target="_blank" rel="noopener">【视频】运行第一个容器</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6751516.html" target="_blank" rel="noopener">容器 What, Why, How</a>{:target=”_blank”}<a id="more"></a></li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6763789.html" target="_blank" rel="noopener">Docker 架构详解</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6774519.html" target="_blank" rel="noopener">Docker 组件如何协作？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6788841.html" target="_blank" rel="noopener">最小的镜像</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6799197.html" target="_blank" rel="noopener">base 镜像</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6806193.html" target="_blank" rel="noopener">镜像的分层结构</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6821332.html" target="_blank" rel="noopener">构建镜像</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6830067.html" target="_blank" rel="noopener">Dockerfile 构建镜像</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6839420.html" target="_blank" rel="noopener">镜像的缓存特性</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6853329.html" target="_blank" rel="noopener">调试 Dockerfile</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6864000.html" target="_blank" rel="noopener">Dockerfile 常用指令</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6875834.html" target="_blank" rel="noopener">RUN vs CMD vs ENTRYPOINT</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6885700.html" target="_blank" rel="noopener">镜像命名的最佳实践</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6896488.html" target="_blank" rel="noopener">使用公共 Registry</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6902325.html" target="_blank" rel="noopener">搭建本地 Registry</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6913993.html" target="_blank" rel="noopener">Docker 镜像小结</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6921132.html" target="_blank" rel="noopener">如何运行容器？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6928772.html" target="_blank" rel="noopener">两种进入容器的方法</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6942370.html" target="_blank" rel="noopener">运行容器的最佳实践</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6952115.html" target="_blank" rel="noopener">容器常用操作</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6961665.html" target="_blank" rel="noopener">一张图搞懂容器所有操作</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/6986499.html" target="_blank" rel="noopener">限制容器对内存的使用</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7003199.html" target="_blank" rel="noopener">限制容器对CPU的使用</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7016050.html" target="_blank" rel="noopener">限制容器的 Block IO</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7045784.html" target="_blank" rel="noopener">实现容器的底层技术</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7053617.html" target="_blank" rel="noopener">none 和 host 网络的适用场景</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7066851.html" target="_blank" rel="noopener">学容器必须懂 bridge 网络</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7077198.html" target="_blank" rel="noopener">如何自定义容器网络？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7087765.html" target="_blank" rel="noopener">理解容器之间的连通性</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7096731.html" target="_blank" rel="noopener">容器间通信的三种方式</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7107407.html" target="_blank" rel="noopener">容器如何访问外部世界？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7118860.html" target="_blank" rel="noopener">外部世界如何访问容器？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7127843.html" target="_blank" rel="noopener">Docker 的两类存储资源</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7142150.html" target="_blank" rel="noopener">Data Volume 之 bind mount</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7152775.html" target="_blank" rel="noopener">docker managed volume</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7163399.html" target="_blank" rel="noopener">如何共享数据？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7188479.html" target="_blank" rel="noopener">用 volume container 共享数据</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7203285.html" target="_blank" rel="noopener">data-packed volume container</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7214828.html" target="_blank" rel="noopener">volume 生命周期管理</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7223599.html" target="_blank" rel="noopener">安装 Docker Machine</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7237420.html" target="_blank" rel="noopener">创建 Machine</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7248188.html" target="_blank" rel="noopener">管理 Machine</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7259266.html" target="_blank" rel="noopener">跨主机网络概述</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7270551.html" target="_blank" rel="noopener">准备 overlay 网络实验环境</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7280787.html" target="_blank" rel="noopener">创建 overlay 网络</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7294501.html" target="_blank" rel="noopener">在 overlay 中运行容器</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7305989.html" target="_blank" rel="noopener">overlay 如何实现跨主机通信？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7341487.html" target="_blank" rel="noopener">overlay 是如何隔离的？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7352620.html" target="_blank" rel="noopener">准备 macvlan 环境</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7364332.html" target="_blank" rel="noopener">创建 macvlan 网络</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7383919.html" target="_blank" rel="noopener">macvlan 网络结构分析</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7400580.html" target="_blank" rel="noopener">macvlan 网络隔离和连通</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7412150.html" target="_blank" rel="noopener">flannel 概述</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7424858.html" target="_blank" rel="noopener">安装配置 flannel</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7441188.html" target="_blank" rel="noopener">在 Docker 中使用 flannel</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7447716.html" target="_blank" rel="noopener">flannel 的连通与隔离</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7457653.html" target="_blank" rel="noopener">如何使用 flannel host-gw backend？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7471162.html" target="_blank" rel="noopener">如何使用 Weave 网络？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7482035.html" target="_blank" rel="noopener">Weave 网络结构分析</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7491831.html" target="_blank" rel="noopener">容器在 Weave 中如何通信和隔离？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7500550.html" target="_blank" rel="noopener">Weave 如何与外网通信？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7509975.html" target="_blank" rel="noopener">如何部署 Calico 网络？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7520164.html" target="_blank" rel="noopener">Calico 的网络结构是什么？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7536746.html" target="_blank" rel="noopener">Calico 的默认连通性</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7552618.html" target="_blank" rel="noopener">如何定制 Calico 网络 Policy</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7571272.html" target="_blank" rel="noopener">如何定制 Calico 的 IP 池？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7587532.html" target="_blank" rel="noopener">一文搞懂各种 Docker 网络</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7594225.html" target="_blank" rel="noopener">新书发布《每天5分钟玩转Docker容器技术》</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7595437.html" target="_blank" rel="noopener">如何实现跨 Docker 主机存储？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7607705.html" target="_blank" rel="noopener">如何安装和配置 Rex-Ray？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7617211.html" target="_blank" rel="noopener">配置 VirtualBox backend</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7624556.html" target="_blank" rel="noopener">创建 Rex-Ray volume</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7630205.html" target="_blank" rel="noopener">跨主机使用 Rex-Ray volume</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7637361.html" target="_blank" rel="noopener">Docker 最常用的监控方案</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7646995.html" target="_blank" rel="noopener">监控利器 sysdig</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7655294.html" target="_blank" rel="noopener">Weave Scope 容器地图</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7674011.html" target="_blank" rel="noopener">Weave Scope 多主机监控</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7683190.html" target="_blank" rel="noopener">数据收集利器 cAdvisor</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7692765.html" target="_blank" rel="noopener">Prometheus 架构</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7709970.html" target="_blank" rel="noopener">Prometheus 到底 NB 在哪里？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7724576.html" target="_blank" rel="noopener">如何快速部署 Prometheus？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7736176.html" target="_blank" rel="noopener">一张表搞懂各种 Docker 监控方案</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7749304.html" target="_blank" rel="noopener">日志管理之 Docker logs</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7762369.html" target="_blank" rel="noopener">Docker 如何支持多种日志方案？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7770916.html" target="_blank" rel="noopener">初探 ELK</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7787870.html" target="_blank" rel="noopener">ELK 完整部署和使用</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7798224.html" target="_blank" rel="noopener">万能日志数据收集器 Fluentd</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7808708.html" target="_blank" rel="noopener">部署 Graylog 日志系统</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7821817.html" target="_blank" rel="noopener">如何用 Graylog 管理日志？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7834113.html" target="_blank" rel="noopener">预告 — 容器平台技术</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7845365.html" target="_blank" rel="noopener">Docker Swarm 中最重要的概念</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7862254.html" target="_blank" rel="noopener">如何创建 Swarm 集群？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7874609.html" target="_blank" rel="noopener">运行第一个 Service</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7885667.html" target="_blank" rel="noopener">如何实现 Service 伸缩？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7898245.html" target="_blank" rel="noopener">Swarm 如何实现 Failover？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7909136.html" target="_blank" rel="noopener">如何访问 Service？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7930321.html" target="_blank" rel="noopener">神奇的 routing mesh </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7967419.html" target="_blank" rel="noopener">Service 之间如何通信？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/7988455.html" target="_blank" rel="noopener">如何滚动更新 Service？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8000906.html" target="_blank" rel="noopener">Swarm 如何存储数据？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8016994.html" target="_blank" rel="noopener">验证 Swarm 数据持久性 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8028712.html" target="_blank" rel="noopener">replicated mode vs global mode </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8038799.html" target="_blank" rel="noopener">用 Label 控制 Service 的位置 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8053323.html" target="_blank" rel="noopener">如何配置 Health Check？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8068057.html" target="_blank" rel="noopener">如何使用 Secret？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8082429.html" target="_blank" rel="noopener">Secret 的使用场景 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8098761.html" target="_blank" rel="noopener">通过案例学习 Secret </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8119150.html" target="_blank" rel="noopener">什么是 stack？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8135714.html" target="_blank" rel="noopener">如何使用 stack？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8157391.html" target="_blank" rel="noopener">stack 的优势 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8178483.html" target="_blank" rel="noopener">学习 Kubernetes 的 Why 和 How </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8194895.html" target="_blank" rel="noopener">5 秒创建 k8s 集群 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8231789.html" target="_blank" rel="noopener">k8s 核心功能 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8252204.html" target="_blank" rel="noopener">k8s 重要概念 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8269620.html" target="_blank" rel="noopener">部署 k8s Cluster（上）</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8282367.html" target="_blank" rel="noopener">部署 k8s Cluster（下）</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8294766.html" target="_blank" rel="noopener">Kubernetes 架构（上）</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8308334.html" target="_blank" rel="noopener">Kubernetes 架构（下）</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8323420.html" target="_blank" rel="noopener">通过例子理解 k8s 架构 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8336904.html" target="_blank" rel="noopener">用 Deployment 运行应用 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8351975.html" target="_blank" rel="noopener">k8s 创建资源的两种方式 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8370501.html" target="_blank" rel="noopener">读懂 Deployment YAML </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8383356.html" target="_blank" rel="noopener">如何 Scale Up/Down Deployment？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8400717.html" target="_blank" rel="noopener">k8s 如何 Failover？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8440366.html" target="_blank" rel="noopener">用 label 控制 Pod 的位置 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8445954.html" target="_blank" rel="noopener">DaemonSet 典型应用场景 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8449209.html" target="_blank" rel="noopener">DaemonSet 案例分析 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8452453.html" target="_blank" rel="noopener">运行自己的 DaemonSet </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8454758.html" target="_blank" rel="noopener">用 k8s 运行一次性任务 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8457932.html" target="_blank" rel="noopener">Job 失败了怎么办？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8468533.html" target="_blank" rel="noopener">并行执行 Job </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8476883.html" target="_blank" rel="noopener">定时执行 Job </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8486913.html" target="_blank" rel="noopener">通过 Service 访问 Pod </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8503685.html" target="_blank" rel="noopener">Service IP 原理 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8512231.html" target="_blank" rel="noopener">DNS 访问 Service </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8526293.html" target="_blank" rel="noopener">外网如何访问 Service？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8543006.html" target="_blank" rel="noopener">Rolling Update </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8553331.html" target="_blank" rel="noopener">回滚 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8571325.html" target="_blank" rel="noopener">Health Check </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8594143.html" target="_blank" rel="noopener">Liveness 探测 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8606866.html" target="_blank" rel="noopener">Readiness 探测 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8621305.html" target="_blank" rel="noopener">在 Scale Up 中使用 Health Check </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8642831.html" target="_blank" rel="noopener">在 Rolling Update 中使用 Health Check </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8655279.html" target="_blank" rel="noopener">数据管理 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8667779.html" target="_blank" rel="noopener">hostPath Volume </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8685547.html" target="_blank" rel="noopener">外部 Storage Provider </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8705515.html" target="_blank" rel="noopener">PV &amp; PVC </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8721078.html" target="_blank" rel="noopener">NFS PersistentVolume </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8742573.html" target="_blank" rel="noopener">回收 PV </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8776073.html" target="_blank" rel="noopener">PV 动态供给 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8806237.html" target="_blank" rel="noopener">MySQL 如何使用 PV 和 PVC？</a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8848295.html" target="_blank" rel="noopener">用 k8s 管理机密信息 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8861341.html" target="_blank" rel="noopener">查看 Secret </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8868352.html" target="_blank" rel="noopener">volume 方式使用 Secret </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8905466.html" target="_blank" rel="noopener">环境变量方式使用 Secret </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8925374.html" target="_blank" rel="noopener">用 ConfigMap 管理配置 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8949347.html" target="_blank" rel="noopener">Why Helm? </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8970314.html" target="_blank" rel="noopener">Helm 架构 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8974338.html" target="_blank" rel="noopener">部署 Helm </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8983824.html" target="_blank" rel="noopener">使用 Helm </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/8997225.html" target="_blank" rel="noopener">chart 目录结构 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9006203.html" target="_blank" rel="noopener">chart 模板 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9017730.html" target="_blank" rel="noopener">再次实践 MySQL chart </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9030880.html" target="_blank" rel="noopener">开发自己的 chart </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9039236.html" target="_blank" rel="noopener">管理和安装 chart </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9048205.html" target="_blank" rel="noopener">网络模型 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9064712.html" target="_blank" rel="noopener">k8s 各种网络方案 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9073610.html" target="_blank" rel="noopener">Network Policy </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9085187.html" target="_blank" rel="noopener">实践 Network Policy </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9097274.html" target="_blank" rel="noopener">Kubernetes Dashboard </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9103197.html" target="_blank" rel="noopener">使用 Dashboard </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9118943.html" target="_blank" rel="noopener">用 Weave Scope 监控集群 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9127893.html" target="_blank" rel="noopener">用 Heapster 监控集群 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9141757.html" target="_blank" rel="noopener">Prometheus Operator </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9148723.html" target="_blank" rel="noopener">Prometheus Operator 架构 </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9162353.html" target="_blank" rel="noopener">部署 Prometheus Operator </a>{:target=”_blank”}</li>
+<li><a href="https://www.cnblogs.com/CloudMan6/p/9173360.html" target="_blank" rel="noopener">Kubernetes 集群日志管理 </a>{:target=”_blank”}</li>
+</ol>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/docker/" rel="tag"><i class="fa fa-tag"></i> docker</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/03/01/2019-03-01-Docker%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="next" title="Docker学习笔记">
+                  <i class="fa fa-chevron-left"></i> Docker学习笔记
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/03/07/Java-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/" rel="prev" title="Java 内存模型">
+                  Java 内存模型 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="分布式系统中，将数据块冗余到不同节点使得系统具备容错能力，但其代价是必须要保证各数据副本间的一致性。同样，我们可以将计算（执行）分发到不同节点，以更有效地利用节点并行处理能力，但其代价是必须要对各节点的执行进行协调，以产生应用程序期望的结果。换言之，我们需要推断出节点内部执行的正确性，以保证应用程序可见的语义。而数据库通常能提供涉及事务(transaction)和可序列化(serializabil">
+<meta name="keywords" content="分布式事务,并发控制,原子提交,二阶段提交">
+<meta property="og:type" content="article">
+<meta property="og:title" content="浅析分布式事务">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;12&#x2F;11&#x2F;%E6%B5%85%E6%9E%90%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="分布式系统中，将数据块冗余到不同节点使得系统具备容错能力，但其代价是必须要保证各数据副本间的一致性。同样，我们可以将计算（执行）分发到不同节点，以更有效地利用节点并行处理能力，但其代价是必须要对各节点的执行进行协调，以产生应用程序期望的结果。换言之，我们需要推断出节点内部执行的正确性，以保证应用程序可见的语义。而数据库通常能提供涉及事务(transaction)和可序列化(serializabil">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:40:34.524Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/12/11/%E6%B5%85%E6%9E%90%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>浅析分布式事务 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/12/11/%E6%B5%85%E6%9E%90%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          浅析分布式事务
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-12-11 19:57:15" itemprop="dateCreated datePublished" datetime="2018-12-11T19:57:15+08:00">2018-12-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:40:34" itemprop="dateModified" datetime="2019-10-24T13:40:34+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>6.4k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>6 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>分布式系统中，将数据块冗余到不同节点使得系统具备容错能力，但其代价是必须要保证各数据副本间的一致性。同样，我们可以将计算（执行）分发到不同节点，以更有效地利用节点并行处理能力，但其代价是必须要对各节点的执行进行协调，以产生应用程序期望的结果。换言之，我们需要推断出节点内部执行的正确性，以保证应用程序可见的语义。而数据库通常能提供涉及事务(<code>transaction</code>)和可序列化(<code>serializability</code>)的相对较强的语义。因此，对于分布式系统而言，此种语义的正确性可以通过分布式事务(<code>distributed transaction</code>)来保证，其通常涉及两个或多个在物理上分离且通过网络连接的主机的数据库事务。</p>
+<a id="more"></a>
+
+<p>正式而言，分布式事务包含两个方面：并发控制(<code>concurrency control</code>)及原子提交(<code>atomic commit</code>)。并发控制描述事务并发执行的正确性，而原子提交表示事务包含的一组操作要么全部执行，要么全部不执行，这通常与失败(<code>failure</code>)相关。本文会依次阐述分布式事务的并发控制、原子提交相关内容。</p>
+<h2 id="并发控制"><a href="#并发控制" class="headerlink" title="并发控制"></a>并发控制</h2><p>我们以一个例子来展开对并发控制的讨论。考虑一个银行转账的场景：有两个银行账户<code>x</code>和<code>y</code>，且<code>x</code>与<code>y</code>仅次于不同的服务器上，<code>x</code>与<code>y</code>账户初始数目都是 10 。客户端<code>c1</code>将从<code>x</code>账户转账1到<code>y</code>账户，同时，<code>c2</code>是一个审计者以检查银行各账户的钱是否有丢失。因此，抽象化<code>c1</code>及<code>c2</code>的操作为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">c1:             c2:</span><br><span class="line">add(x, 1)       tmp1 = get(x)</span><br><span class="line">add(y, -1)      tmp2 = get(y)</span><br><span class="line">                print tmp1, tmp2</span><br></pre></td></tr></table></figure>
+
+<p>我们（应用程序）期待最终的结果为：<code>x=11, y=9</code>，同时<code>c2</code>打印 <code>10, 10</code>或者<code>11, 9</code>。但并发执行的操作可能并不会按照应用期待的结果输出。比如，若<code>c2</code>的两个操作完全运行在<code>c1</code>的两个操作之间，导致最终的结果为：<code>x=11, y=9</code>，同时打印<code>11, 10</code>。显然，对于此应用场景而言，我们并不希望出现后者。因此我们需要对并发执行的操作进行协调，以保证其操作结果的语义能够符合应用程序。</p>
+<p>先引出一个概念<code>before-or-after atomicity</code>，其定义如下。</p>
+<blockquote>
+<p>Concurrent actions have the before-or-after property if their effect from the point of view of their invokers is the same as if the actions occurred either completely before or completely after one another. </p>
+</blockquote>
+<p>显然，若并发操作能<code>before-or-after atomicity</code>属性，则此转账应用产生的结果是正确的。基于此，我们尝试给出一个能够保证应用程序的正确性的论断。</p>
+<blockquote>
+<p>Coordination among concurrent actions can be considered to be correct if every result is guaranteed to be one that could have been obtained by some purely serial application of those same actions. </p>
+</blockquote>
+<p>可以通过如下几个步骤来认证此观点的正确性：考虑一个系统被应用（可能是并发执行的）操作之后从一个状态转换到另一个状态，如果系统的初始状态是正确的（由具体应用程序确定），并且操作正确地被执行应用到系统，则系统新的状态也是正确的。并且此论述独立于应用程序。同样，如果如果是多个操作并发执行，则上述的论断变更为，若系统最终所处的状态是应用到系统的并发操作集的某个顺序执行后系统的状态，那么此时系统的新的状态也是正确的。换言之，结合<code>before-or-after atomicity</code>属性，可以得出这样的结论：若协调并发操作的规则遵循<code>before-or-after atomicity</code>，则这些并发操作是可序列化的，即存在某些并发事务构成的串行执行顺序，若遵循这些顺序，将导致系统处于相同的终止状态，此时并发操作的结果是正确的。这同样是传统数据事务正确性定义——<code>serializability</code>所要求的。</p>
+<p>理论上而言，并发操作的中间过程是不重要的，因为只要保证并发操作所产生的系统新的状态与按照某一个顺序顺序执行所有的“单个”的原子操作所产生的系统新的状态相同，我们并不关心具体与哪一个操作顺序相同，甚至，我们都不要求所谓的顺序操作的中间状态是否真实存在（如图所示，即若操作执行的中间状态的路径是按照虚线进行的），只要此中间状态不会被外部应用程序所观察到，那么我们同样认为这样的操作具备<code>before-or-after atomicity</code>属性，即符合<code>serializability</code>的要求。值得注意的是，对系统应用并发操作的目的是提高性能，但具备<code>before-or-after atomicity</code>属性，或满足<code>serializability</code>的并发操作并不保证系统具备最佳的执行性能。另外，满足<code>serializability</code>特性的并发操作，对编程人员是友好的，因为，我们不必关心并发操作细节。</p>
+<h2 id="基于锁的-before-or-after-atomicity-属性的实现"><a href="#基于锁的-before-or-after-atomicity-属性的实现" class="headerlink" title="基于锁的 before-or-after atomicity 属性的实现"></a>基于锁的 before-or-after atomicity 属性的实现</h2><p>基于锁来实现事务的并发控制可以分为两个类别：悲观锁(<code>pessimistic</code>)及乐观锁(<code>optimistic</code>)。前者会在操作共享对象之前获取锁，如果在获取锁时，锁已经被其它事务占用了，则必须等待。而后者并不要求在操作共享对象之前获取锁，它会先将对象进行拷贝，然后操作对象，在提交事务的时候检查原始对象是否有被更改过，若没有，则提交事务，否则中止事务，换言之，在获取锁失败时，乐观并发控制(<code>optimistic cocurrency controll</code>)采用的是<code>abort+retry</code>的模式来操作共享对象，因为它没有直接给对象加锁，因此若对象访问没有冲突时，它比悲观锁要快，反之，若在一个充满锁竞争的事务环境下，乐观锁的效果一种会比悲观锁要差。而本节下面提到的基于锁的<code>before-or-after atomicity</code>属性（或<code>serializability</code>）的实现都属于悲观锁的实现。</p>
+<p><code>system-wide lock</code>，即系统级锁。这是基于锁实现的<code>before-or-after atomicity</code>属性最简单的版本。顾名思义，它在系统开始运行时便在内存中创建一个（唯一一个）锁对象，并且必须在事务执行的开始与结束位置插入获取锁与释放锁的代码。显然，<code>system-wide lock</code>一次只允许运行单个事务，它会将所有的事务按照其获取锁的顺序依次执行，不支持事务的并发执行。因为<code>system-wide lock</code>锁住孙事务涉及的所有对象，因此在某些场合其是不必根据，换言之，其锁的粒度（范围）过大。</p>
+<p><code>simple locking</code>，即简单锁。它满足两个规则：其一，每个事务在对某一对象执行实际的读写操作时，必须提前获取此对象的锁。其二，当事务所有操作完成后被提交或者事务被中断时才释放锁。其中，<code>lock point</code>被定义为事务获取其范围内操作所有对象的锁的时刻。而<code>lock set</code>被定义为截止<code>lock point</code>时间点，其所获取的锁的集合。因此，为了保证能正确地协调事务的并发执行，应用程序在执行其每个事务前必须获取事务所对应的<code>lock set</code>，同样，在事务执行完成时释放<code>lock set</code>中的锁。下面简单证明<code>simple locking</code>的策略能够保证<code>before-or-after atomicity</code>。</p>
+<blockquote>
+<p>假定有一个外部观察者维护一个事务标识符的列表，并且一旦某个事务到达其<code>lock point</code>，其标识符就会被添加到此列表，并在事务执行完毕即将释放锁时将其从列表中移除。<code>simple locking</code>能够保证：每个事务都不会在其被添加到列表之前读或写任何对象，并且列表中此事务前面的所有事务都已经通过其对应的<code>lock point</code>。由于任意两个事务<code>lock set</code>不会出现相同的数据对象，因此任何事务的<code>lock set</code>中的数据对象都不会出现在列表中它前面的事务的<code>lock set</code>中，所以也不会出现在列表中更早的事务的<code>lock set</code>中。因此，此事务的输入所涉及的对象内容与列表中的其前一个事务<code>commit</code>（事务顺利完成）或<code>abort</code>（事务中止）后的输出的对象的内容相同。因此，<code>simple locking</code>规则保证此事务<code>before-or-after atomicity</code>属性。</p>
+</blockquote>
+<p>显然，<code>simple locking</code> 所提供的并发粒度也过大，因为，它必须对事务可能涉及到的每一个共享对象加锁，因此它有可能锁住那些原本并不需要的对象。</p>
+<p><code>two-phase locking</code>(<code>2PL</code>)，即两阶段锁。相比于<code>simple locking</code>，它并不要求事务在操作共享对象之前获取其所涉及到的所有对象的锁（准确而言，对于<code>simple locking</code>，一旦事务操作任一共享对象，都需要获取所有对象的锁，而<code>two-phase locking</code>只有等到事务真正操作某一对象时，才去尝试获取此对象对应的锁，因此其锁的粒度要比<code>simple locking</code>要小）。典型地，<code>2PL</code>包括两个过程：1. 扩展锁阶段(<code>expanding phase</code>)，根据操作共享对象的顺序依次获取锁，在此过程中不会有锁被释放。2. 收缩锁阶段(<code>shrinking phase</code>)，锁逐渐被释放，并且在此过程不会尝试获取锁（如果阶段一没有明确的完成标志，那么为了保证事务安全，会等到事务提交或者事务中止时，才会一次性释放所有锁）。但同<code>simple locking</code>类似的是，<code>2PL</code>也允许应用程序并发执行事务，其也会保证所有事务的执行所产生的结果同它们以某一个顺序（到达<code>lock point</code>的顺序）执行所产生的结果相同（因此，<code>2PL</code>有可能导致死锁）。虽然，同<code>simple locking</code>相比，<code>2PL</code>提供更强的事务并发执行能力，但其同样会导致原本允许并发执行的事务的串行顺序执行。参考文献[1]还讨论了当事务执行失败时，锁与日志的交互如何保证事务的顺序执行。</p>
+<h2 id="原子提交"><a href="#原子提交" class="headerlink" title="原子提交"></a>原子提交</h2><p>若构成事务的操作分布在不同机器上，为了确保事务被正确执行，则必须保证事务原子性提交，即分布在不同机器上的事务要么全部执行，要么都不执行。</p>
+<p><code>Two-phase commit</code>(<code>2PC</code>)，两阶段提交。它被用于解决分布式事务原子提交问题（但并没有完全解决）。先简要阐述经典的<code>2PC</code>协议，整个事务由一个事务协调者(<code>transaction coordinator</code>及若干事务参与者(<code>participant</code>)构成，协议的执行大致可以分为如下两个阶段：</p>
+<ul>
+<li><code>prepare</code>阶段：客户端向<code>TC</code>发送事务提交请求，<code>TC</code>开始执行两阶段提交。它首先通过<code>RPC</code>向所有的<code>participant</code>发送<code>prepare</code>消息，若<code>participant</code>当前能够执行事务，则向<code>TC</code>回复<code>prepare</code>成功(<code>YES</code>)，并且锁定事务执行所需要的锁与资源，否则回复<code>NO</code>。</li>
+<li><code>commit</code>阶段：若<code>TC</code>收到所有<code>participant</code>回复的<code>YES</code>消息，则开始正式<code>commit</code>事务。它会给所有的<code>participant</code>发送<code>commit</code>消息。<code>participant</code>收到<code>commit</code>消息后，释放事务过程中持有的锁和其他资源，并将事务在本地提交，然后向<code>TC</code>回复<code>commit</code>成功，即<code>YES</code>，否则回复<code>NO</code>。<code>TC</code>收到所有<code>participant</code>回复的<code>commit</code>成功的消息后，向客户端返回成功。反之，一旦<code>TC</code>收到某个<code>participant</code>对<code>preapre</code>消息回复了<code>NO</code>消息，则向所有的<code>participant</code>回复<code>abort</code>消息。</li>
+</ul>
+<p>显然，若整个过程无任何故障发生，<code>2PC</code>能够保证分布式事务提交的原子性，因为所有事务参与者对事务的提交都是经由事务协调者来协调决定，因此它们要么全部提交事务要么都不会提交事务。</p>
+<p>上述为正常条件下协议执行流程，即没有节点宕机，也没有网络故障。下面讨论若发生失败，会有怎样的情况：</p>
+<ul>
+<li>事务参与者宕机，然后重启。若此<code>participant</code>在宕机前对<code>TC</code>的<code>prepare</code>消息回复了<code>YES</code>，那么它必须在宕机前对日志记录。因为其它的<code>participant</code>也有可能同意了<code>prepare</code>消息。具体而言，如果<code>participant</code>重启后，其日志文件记录了<code>prepare</code>的<code>YES</code>消息，但其并没有<code>commit</code>事务，此时它必须主动发消息给<code>TC</code>，或者等待<code>TC</code>重新向它发送<code>commit</code>消息。且在整个过程中，<code>participant</code>必须一直保持对资源及锁的占用。</li>
+<li>事务协调者宕机，然后重启。因为<code>TC</code>可能在宕机前对所有协调者发送了<code>commit</code>消息，因此它也必须对此作日志记录。因为或许某个<code>participant</code>已经执行了事务的<code>commit</code>。如果其在重启后，收到了<code>participant</code>的询问消息，必须重新发送<code>commit</code>消息（或者等待一段超时时间后，重新发送<code>commit</code>消息）。</li>
+<li>事务协调者一直未收到事务参与者的对<code>prepare</code>消息的回复。可能此时<code>participant</code>已经宕机并且没有重启，也有可能网络发生了故障。因此<code>TC</code>必须设置超时机制，一旦超时未收到回复，则中止事务的提交（因为此时并没有发送<code>commit</code>消息，所有<code>participant</code>都不会提交，保证了事务提交的原子性）。</li>
+<li>事务参与者在收到<code>prepare</code>消息前宕机，或超时（一直未收到）。此时，因为<code>participant</code>并没有回复<code>prepare</code>消息（即未对<code>TC</code>作出事务执行的任何承诺），因此其允许单方面中止事务，释放锁及其它资源，此时可能是协议还未开始执行（自然而然，<code>participant</code>的宕机对协议是没有任何影响，直到下一次协议开始执行了，若此<code>participant</code>仍旧处于宕机状态，则将导致<code>abort</code>事务）。</li>
+<li>事务协调者在未发送<code>prepare</code>消息前宕机。此时，同上一种情况类似，协议很可能还未开始执行，因此<code>TC</code>的宕机并不影响事务正确性。</li>
+<li>事务参与者对<code>prepare</code>消息回复了<code>YES</code>，但是一直未收到<code>commit/abort</code>消息。此时，<code>participant</code>不能单方面中止事务，因为其已经向<code>TC</code>的<code>prepare</code>消息回复了<code>YES</code>，且其它<code>participant</code>也有可能向<code>TC</code>回复了<code>YES</code>，因此<code>TC</code>可能已经向除此<code>participant</code>之外的所有<code>participant</code>发送了<code>commit</code>消息，然后<code>TC</code>发生了宕机。但收到<code>commit</code>消息的<code>participant</code>可能已经<code>commit</code>本地事务。因此，此<code>participant</code>不能单方面<code>abort</code>事务（否则造成事务不一致）。同时，此<code>participant</code>也不能单方面的<code>commit</code>本地事务，因为同样，其它的<code>participant</code>也有可能对<code>TC</code>的<code>prepare</code>消息回复了<code>NO</code>，因此<code>TC</code>在收到所有的<code>prepare</code>消息的回复后，中止了事务的提交。总而言之，若<code>participant</code>对<code>TC</code>的<code>prepare</code>消息回复了<code>YES</code>，则它不能单方面作出任何决定，只能一直阻塞等待<code>TC</code>对事务的决定。</li>
+</ul>
+<p>因此，通过上述分述，经典的<code>2PC</code>协议存在明显的局限性：</p>
+<ul>
+<li>事务协调者宕机：<code>2PC</code>为一个阻塞式协议，一旦事务协调者宕机，则若有参与者处于执行<code>commit/abort</code>之前的任何阶段，事务进程都将会被阻塞，必须等待事务协调者重启后，事务才能继续执行。</li>
+<li>交互延迟：事务协调者必须将事务的<code>commit/abort</code>写日志后才能发送<code>commit/abort</code>‘消息。因此整个过程至少包含2次<code>RPC</code>(<code>prepare+commit</code>)，以及3次日志记录的延迟（<code>prepare</code>写日志+事务协调者状态持久化+<code>commit</code>写日志）。</li>
+</ul>
+<p>参考文献</p>
+<p>[1] <a href="https://en.wikipedia.org/wiki/Two-phase_locking" target="_blank" rel="noopener">https://en.wikipedia.org/wiki/Two-phase_locking</a><br>[2] Saltzer J H, Kaashoek M F. Principles of computer system design: an introduction[M]. Morgan Kaufmann, 2009.<br>[3]. <a href="https://zhuanlan.zhihu.com/p/22594180" target="_blank" rel="noopener">两阶段提交的工程实践</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="tag"><i class="fa fa-tag"></i> 分布式事务</a>
+              <a href="/tags/%E5%B9%B6%E5%8F%91%E6%8E%A7%E5%88%B6/" rel="tag"><i class="fa fa-tag"></i> 并发控制</a>
+              <a href="/tags/%E5%8E%9F%E5%AD%90%E6%8F%90%E4%BA%A4/" rel="tag"><i class="fa fa-tag"></i> 原子提交</a>
+              <a href="/tags/%E4%BA%8C%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4/" rel="tag"><i class="fa fa-tag"></i> 二阶段提交</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/12/07/2018-12-07-Spring%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/" rel="next" title="Spring全家桶注解概览">
+                  <i class="fa fa-chevron-left"></i> Spring全家桶注解概览
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/12/14/2018-12-14-Http%E4%B9%8B%E8%BD%AC%E5%8F%91%E4%B8%8E%E9%87%8D%E5%AE%9A%E5%90%91/" rel="prev" title="Http之转发与重定向">
+                  Http之转发与重定向 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#并发控制"><span class="nav-number">1.</span> <span class="nav-text">并发控制</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#基于锁的-before-or-after-atomicity-属性的实现"><span class="nav-number">2.</span> <span class="nav-text">基于锁的 before-or-after atomicity 属性的实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#原子提交"><span class="nav-number">3.</span> <span class="nav-text">原子提交</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="服务器返回的  响应报文  中第一行为状态行，包含了状态码以及原因短语，用来告知客户端请求的结果。      状态码 类别 原因短语    1XX Informational（信息性状态码） 接收的请求正在处理   2XX Success（成功状态码） 请求正常处理完毕   3XX Redirection（重定向状态码） 需要进行附加操作以完成请求   4XX Client Error（客户端错误">
+<meta name="keywords" content="HTTP">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Http之状态码">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2018&#x2F;05&#x2F;19&#x2F;2018-05-19-Http%E4%B9%8B%E7%8A%B6%E6%80%81%E7%A0%81&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="服务器返回的  响应报文  中第一行为状态行，包含了状态码以及原因短语，用来告知客户端请求的结果。      状态码 类别 原因短语    1XX Informational（信息性状态码） 接收的请求正在处理   2XX Success（成功状态码） 请求正常处理完毕   3XX Redirection（重定向状态码） 需要进行附加操作以完成请求   4XX Client Error（客户端错误">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.635Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2018/05/19/2018-05-19-Http%E4%B9%8B%E7%8A%B6%E6%80%81%E7%A0%81/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Http之状态码 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2018/05/19/2018-05-19-Http%E4%B9%8B%E7%8A%B6%E6%80%81%E7%A0%81/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Http之状态码
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2018-05-19 19:26:41" itemprop="dateCreated datePublished" datetime="2018-05-19T19:26:41+08:00">2018-05-19</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/" itemprop="url" rel="index">
+                    <span itemprop="name">后端开发</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.2k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>服务器返回的  <strong>响应报文</strong>  中第一行为状态行，包含了状态码以及原因短语，用来告知客户端请求的结果。  </p>
+<table>
+<thead>
+<tr>
+<th align="center">状态码</th>
+<th align="center">类别</th>
+<th align="center">原因短语</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1XX</td>
+<td align="center">Informational（信息性状态码）</td>
+<td align="center">接收的请求正在处理</td>
+</tr>
+<tr>
+<td align="center">2XX</td>
+<td align="center">Success（成功状态码）</td>
+<td align="center">请求正常处理完毕</td>
+</tr>
+<tr>
+<td align="center">3XX</td>
+<td align="center">Redirection（重定向状态码）</td>
+<td align="center">需要进行附加操作以完成请求</td>
+</tr>
+<tr>
+<td align="center">4XX</td>
+<td align="center">Client Error（客户端错误状态码）</td>
+<td align="center">服务器无法处理请求</td>
+</tr>
+<tr>
+<td align="center">5XX</td>
+<td align="center">Server Error（服务器错误状态码）</td>
+<td align="center">服务器处理请求出错</td>
+</tr>
+</tbody></table>
+<a id="more"></a>
+
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>状态码</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Accepted</td>
+<td>202</td>
+<td>Accepted 指示请求已被接受进行进一步处理。</td>
+</tr>
+<tr>
+<td>Ambiguous</td>
+<td>300</td>
+<td>Ambiguous 指示所需的信息有多种表示形式。 默认操作是将此状态视为一个重定向，并按照与此响应关联的位置标头的内容。</td>
+</tr>
+<tr>
+<td>BadGateway</td>
+<td>502</td>
+<td>BadGateway 指示中间代理服务器从另一个代理或原始服务器接收到错误响应。</td>
+</tr>
+<tr>
+<td>BadRequest</td>
+<td>400</td>
+<td>BadRequest 指示无法由服务器理解此请求。 BadRequest 如果没有其他错误适用，或者如果具体的错误是未知的或不具有其自己的错误代码发送。</td>
+</tr>
+<tr>
+<td>Conflict</td>
+<td>409</td>
+<td>Conflict 指示该请求可能不会执行由于在服务器上发生冲突。</td>
+</tr>
+<tr>
+<td>Continue</td>
+<td>100</td>
+<td>Continue 指示客户端可以继续其请求。</td>
+</tr>
+<tr>
+<td>Created</td>
+<td>201</td>
+<td>Created 指示请求导致已发送响应之前创建一个新的资源。</td>
+</tr>
+<tr>
+<td>ExpectationFailed</td>
+<td>417</td>
+<td>ExpectationFailed 指示无法由服务器满足 Expect 标头中给定。</td>
+</tr>
+<tr>
+<td>Forbidden</td>
+<td>403</td>
+<td>Forbidden 指示服务器拒绝无法完成请求。</td>
+</tr>
+<tr>
+<td>Found</td>
+<td>302</td>
+<td>Found 指示所需的信息位于的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。 当原始请求方法是 POST 时，重定向的请求将使用 GET 方法。</td>
+</tr>
+<tr>
+<td>GatewayTimeout</td>
+<td>504</td>
+<td>GatewayTimeout 指示中间代理服务器在等待来自另一个代理或原始服务器的响应时已超时。</td>
+</tr>
+<tr>
+<td>Gone</td>
+<td>410</td>
+<td>Gone 指示所请求的资源不再可用。</td>
+</tr>
+<tr>
+<td>HttpVersionNotSupported</td>
+<td>505</td>
+<td>HttpVersionNotSupported 指示服务器不支持请求的 HTTP 版本。</td>
+</tr>
+<tr>
+<td>InternalServerError</td>
+<td>500</td>
+<td>InternalServerError 表示在服务器上发生一般性错误。</td>
+</tr>
+<tr>
+<td>LengthRequired</td>
+<td>411</td>
+<td>LengthRequired 指示缺少必需的内容长度标头。</td>
+</tr>
+<tr>
+<td>MethodNotAllowed</td>
+<td>405</td>
+<td>MethodNotAllowed 指示请求方法 （POST 或 GET） 不允许对所请求的资源。</td>
+</tr>
+<tr>
+<td>Moved</td>
+<td>301</td>
+<td>Moved 指示已将所需的信息移动到的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。 当原始请求方法是 POST 时，重定向的请求将使用 GET 方法。</td>
+</tr>
+<tr>
+<td>MovedPermanently</td>
+<td>301</td>
+<td>MovedPermanently 指示已将所需的信息移动到的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。</td>
+</tr>
+<tr>
+<td>MultipleChoices</td>
+<td>300</td>
+<td>MultipleChoices 指示所需的信息有多种表示形式。 默认操作是将此状态视为一个重定向，并按照与此响应关联的位置标头的内容。</td>
+</tr>
+<tr>
+<td>NoContent</td>
+<td>204</td>
+<td>NoContent 指示已成功处理请求和响应是有意留为空白。</td>
+</tr>
+<tr>
+<td>NonAuthoritativeInformation</td>
+<td>203</td>
+<td>NonAuthoritativeInformation 指示返回的元信息来自而不是原始服务器的缓存副本，因此可能不正确。</td>
+</tr>
+<tr>
+<td>NotAcceptable</td>
+<td>406</td>
+<td>NotAcceptable 表示客户端已指定使用 Accept 标头，它将不接受任何可用的资源表示。</td>
+</tr>
+<tr>
+<td>NotFound</td>
+<td>404</td>
+<td>NotFound 指示所请求的资源不存在的服务器上。</td>
+</tr>
+<tr>
+<td>NotImplemented</td>
+<td>501</td>
+<td>NotImplemented 指示服务器不支持所请求的功能。</td>
+</tr>
+<tr>
+<td>NotModified</td>
+<td>304</td>
+<td>NotModified 指示客户端的缓存的副本是最新。 不会传输资源的内容。</td>
+</tr>
+<tr>
+<td>OK</td>
+<td>200</td>
+<td>OK 指示请求成功，且请求的信息包含在响应中。 这是要接收的最常见状态代码。</td>
+</tr>
+<tr>
+<td>PartialContent</td>
+<td>206</td>
+<td>PartialContent 指示根据包括字节范围的 GET 请求的请求的响应是部分响应。</td>
+</tr>
+<tr>
+<td>PaymentRequired</td>
+<td>402</td>
+<td>PaymentRequired 已保留供将来使用。</td>
+</tr>
+<tr>
+<td>PreconditionFailed</td>
+<td>412</td>
+<td>PreconditionFailed 表示失败，此请求的设置的条件，无法执行请求。 使用条件请求标头，如果匹配项，如设置条件无-If-match，或如果-修改-自从。</td>
+</tr>
+<tr>
+<td>ProxyAuthenticationRequired</td>
+<td>407</td>
+<td>ProxyAuthenticationRequired 指示请求的代理要求身份验证。 代理服务器进行身份验证标头包含如何执行身份验证的详细信息。</td>
+</tr>
+<tr>
+<td>Redirect</td>
+<td>302</td>
+<td>Redirect 指示所需的信息位于的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。 当原始请求方法是 POST 时，重定向的请求将使用 GET 方法。</td>
+</tr>
+<tr>
+<td>RedirectKeepVerb</td>
+<td>307</td>
+<td>RedirectKeepVerb 指示请求信息位于的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。 当原始请求方法是 POST 时，重定向的请求还将使用 POST 方法。</td>
+</tr>
+<tr>
+<td>RedirectMethod</td>
+<td>303</td>
+<td>RedirectMethod 自动将客户端重定向到的位置标头中指定作为公告的结果的 URI。 对指定的位置标头的资源的请求将会执行与 GET。</td>
+</tr>
+<tr>
+<td>RequestedRangeNotSatisfiable</td>
+<td>416</td>
+<td>RequestedRangeNotSatisfiable 指示从资源请求的数据范围不能返回，或者因为范围的开始处，然后该资源的开头或范围的末尾后在资源的结尾。</td>
+</tr>
+<tr>
+<td>RequestEntityTooLarge</td>
+<td>413</td>
+<td>RequestEntityTooLarge 指示请求来说太大的服务器能够处理。</td>
+</tr>
+<tr>
+<td>RequestTimeout</td>
+<td>408</td>
+<td>RequestTimeout 指示客户端的服务器预期请求的时间内没有未发送请求。</td>
+</tr>
+<tr>
+<td>RequestUriTooLong</td>
+<td>414</td>
+<td>RequestUriTooLong 指示 URI 太长。</td>
+</tr>
+<tr>
+<td>ResetContent</td>
+<td>205</td>
+<td>ResetContent 指示客户端应重置 （而不是重新加载） 的当前资源。</td>
+</tr>
+<tr>
+<td>SeeOther</td>
+<td>303</td>
+<td>SeeOther 自动将客户端重定向到的位置标头中指定作为公告的结果的 URI。 对指定的位置标头的资源的请求将会执行与 GET。</td>
+</tr>
+<tr>
+<td>ServiceUnavailable</td>
+<td>503</td>
+<td>ServiceUnavailable 指示将服务器暂时不可用，通常是由于高负载或维护。</td>
+</tr>
+<tr>
+<td>SwitchingProtocols</td>
+<td>101</td>
+<td>SwitchingProtocols 指示正在更改的协议版本或协议。</td>
+</tr>
+<tr>
+<td>TemporaryRedirect</td>
+<td>307</td>
+<td>TemporaryRedirect 指示请求信息位于的位置标头中指定的 URI。 当收到此状态时的默认操作是遵循与响应关联的位置标头。 当原始请求方法是 POST 时，重定向的请求还将使用 POST 方法。</td>
+</tr>
+<tr>
+<td>Unauthorized</td>
+<td>401</td>
+<td>Unauthorized 指示所请求的资源需要身份验证。 Www-authenticate 标头包含如何执行身份验证的详细信息。</td>
+</tr>
+<tr>
+<td>UnsupportedMediaType</td>
+<td>415</td>
+<td>UnsupportedMediaType 指示该请求是不受支持的类型。</td>
+</tr>
+<tr>
+<td>Unused</td>
+<td>306</td>
+<td>Unused 是对未完全指定的 HTTP/1.1 规范建议的扩展。</td>
+</tr>
+<tr>
+<td>UpgradeRequired</td>
+<td>426</td>
+<td>UpgradeRequired 指示客户端应切换到不同的协议，例如 TLS/1.0。</td>
+</tr>
+<tr>
+<td>UseProxy</td>
+<td>305</td>
+<td>UseProxy 指示该请求应使用的位置标头中指定的 uri 的代理服务器。</td>
+</tr>
+</tbody></table>
+<p>参考文献  </p>
+<p><a href="http://www.runoob.com/http/http-status-codes.html" target="_blank" rel="noopener">菜鸟教程（<strong>推荐</strong>）</a><br><a href="http://www.ruanyifeng.com/blog/2018/10/restful-api-best-practices.html" target="_blank" rel="noopener">RESTful API 最佳实践</a><br><a href="https://zh.wikipedia.org/wiki/HTTP%E7%8A%B6%E6%80%81%E7%A0%81" target="_blank" rel="noopener">HTTP状态码</a><br><a href="https://msdn.microsoft.com/zh-cn/library/system.net.httpstatuscode(v=vs.110).aspx" target="_blank" rel="noopener">文档来源</a>  </p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/HTTP/" rel="tag"><i class="fa fa-tag"></i> HTTP</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/02/03/2018-02-03-OAuth-Server/" rel="next" title="OAuth Server">
+                  <i class="fa fa-chevron-left"></i> OAuth Server
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2018/10/11/2018-10-11-Git%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/" rel="prev" title="Git学习笔记">
+                  Git学习笔记 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

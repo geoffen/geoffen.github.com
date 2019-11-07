@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="并发编程中，需要处理两个关键问题：线程之间如何通信及线程之间如何同步。通信是指线程之间以何种机制来交换信息。在命令式编程中，线程之间的通信机制有两种：共享内存和消息传递。Java语言是采用共享内存的方式来完成线程间通信的。为了保证共享内存的正确性（可见性、有序性、原子性），内存模型定义了共享内存系统中多线程程序读写操作行为的规范。因此，Java内存模型（Java Memory Model ,JMM">
+<meta name="keywords" content="并发编程,内存模型">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Java 内存模型">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;03&#x2F;07&#x2F;Java-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="并发编程中，需要处理两个关键问题：线程之间如何通信及线程之间如何同步。通信是指线程之间以何种机制来交换信息。在命令式编程中，线程之间的通信机制有两种：共享内存和消息传递。Java语言是采用共享内存的方式来完成线程间通信的。为了保证共享内存的正确性（可见性、有序性、原子性），内存模型定义了共享内存系统中多线程程序读写操作行为的规范。因此，Java内存模型（Java Memory Model ,JMM">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-24T05:36:53.575Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/03/07/Java-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Java 内存模型 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/03/07/Java-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Java 内存模型
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-03-07 10:38:14" itemprop="dateCreated datePublished" datetime="2019-03-07T10:38:14+08:00">2019-03-07</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-24 13:36:53" itemprop="dateModified" datetime="2019-10-24T13:36:53+08:00">2019-10-24</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E7%BC%96%E7%A8%8B%E8%AF%AD%E8%A8%80/" itemprop="url" rel="index">
+                    <span itemprop="name">编程语言</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>5.2k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>5 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>并发编程中，需要处理两个关键问题：线程之间如何通信及线程之间如何同步。通信是指线程之间以何种机制来交换信息。在命令式编程中，线程之间的通信机制有两种：共享内存和消息传递。<code>Java</code>语言是采用共享内存的方式来完成线程间通信的。为了保证共享内存的正确性（可见性、有序性、原子性），内存模型定义了共享内存系统中多线程程序读写操作行为的规范。因此，Java内存模型（<code>Java Memory Model ,JMM</code>）就是一种符合内存模型规范的，屏蔽了各种硬件和操作系统的访问差异的，保证了Java程序在各种平台下对内存的访问都能保证效果一致的机制及规范。</p>
+<a id="more"></a>
+
+<p>并发编程中为了保证数据的安全，需要满足以下三个特性：<br>(a) <strong>原子性</strong>是指在一个操作中就是 cpu 不可以在中途暂停然后再调度，既不被中断操作，要不执行完成，要不就不执行。<br>(b) <strong>可见性</strong>是指当多个线程访问同一个变量时，一个线程修改了这个变量的值，其他线程能够立即看得到修改的值。<br>(c) <strong>有序性</strong>即程序执行的顺序按照代码的先后顺序执行。<br>且实际上，<strong>缓存一致性问题</strong>其实就是<strong>可见性问题</strong>。<strong>处理器优化</strong>可以导致<strong>原子性问题</strong>。<strong>指令重排</strong>会导致<strong>有序性问题</strong>。<strong>为了保证共享内存的正确性（可见性、有序性、原子性），内存模型定义了共享内存系统中多线程程序读写操作行为的规范。</strong></p>
+<p><strong>Java内存模型（Java Memory Model ,JMM）就是一种符合内存模型规范的，屏蔽了各种硬件和操作系统的访问差异的，保证了Java程序在各种平台下对内存的访问都能保证效果一致的机制及规范。</strong><br>(a) <code>Java</code>内存模型规定所有的变量都存储在主内存中，每条线程还有自己的工作内存（本地内存），线程的工作内存中保存了该线程中是用到的变量的主内存副本拷贝，线程对变量的所有操作都必须在工作内存中进行，而不能直接读写主内存。不同线程之间也无法直接访问对方工作内存中的变量，线程间变量的传递需要自己的工作内存和主存之间进行数据同步进行。本地内存是 <code>JMM</code> 的一个抽象概念，并不真实存在。它涵盖缓存，写缓冲区，寄存器及其他硬件和编译器优化。<br>(b) <code>JMM</code>就作用于工作内存和主存之间数据同步过程。它规定了如何做数据同步以及什么时候做数据同步。因此，它决定一个线程对共享变量的写入何时对另一个线程可见。</p>
+<p><strong>重排序</strong>。从源代码到最终的指令序列，经历的重排序过程如下：源代码 -&gt; <strong>编译器优化重排序</strong> -&gt; <strong>指令级并行重排序</strong> -&gt; <strong>内存系统重排序</strong> -&gt; 最终执行的指令序列。<br>(a) 对于编译器，<code>JMM</code> 的编译器重排序规则会禁止特定类型的编译器重排序（不是所有的编译器重排序都要禁止）。对于处理器重排序，<code>JMM</code> 的处理器重排序规则会要求 <code>java</code> 编译器在生成指令序列时，插入特定类型的内存屏障指令，通过内存屏障指令来禁止特定类型的处理器重排序。<br>(b) 现代的多处理器大都支持<code>StoreLoad</code>屏障（其他 3 种类型的屏障不一定被所有处理器支持）。执行该屏障开销会很昂贵，因为当前处理器通常要把写缓冲区中的数据全部刷新到内存中。</p>
+<p><strong><code>happens-before</code></strong>。通过<code>happens-before</code>概念来阐述操作之间的内存可见性。如果一个操作执行的结果需要对另一个操作可见，那么这两个操作之间必须存在 <code>happens-before</code> 关系。与程序员密切相关的<code>happens-before</code>规则如下（另外的规则可以参考文献[2]或[3]）：<br>(1) <strong>程序顺序规则</strong>：一个线程中的每个操作，<code>happens-before</code> 于该线程中的任意后续操作。<br>(2) <strong>监视器锁规则</strong>：对一个监视器锁的解锁，<code>happens-before</code> 于随后对这个监视器锁的加锁。<br>(3) <strong><code>volatile</code> 变量规则</strong>：对一个 <code>volatile</code> 域的写，<code>happens-before</code> 于任意后续对这个 <code>volatile</code> 域的读。<br>(4) <strong>传递性</strong>：如果 A <code>happens-before</code> B，且 B happens-before C，那么 A <code>happens-before</code> C。<br>注意，两个操作之间具有 <code>happens-before</code> 关系，并不意味着前一个操作必须要在后一个操作之前执行！<code>happens-before</code> 仅仅要求前一个操作（执行的结果）对后一个操作可见，且前一个操作按顺序排在第二个操作之前。</p>
+<p><strong>重排序</strong>。如果两个操作访问同一个变量，且这两个操作中有一个为写操作，此时这两个操作之间就存在<strong>数据依赖性</strong>（读写、写写 和 写读三种情况）。<br>(a) 针对单个处理器中执行的指令序列和单个线程中执行的操作，编译器和处理器在重排序时，会遵守数据依赖性，编译器和处理器不会改变存在数据依赖关系的两个操作的执行顺序。<br>(b) 不管怎么重排序（为了提高并行度），（单线程）程序的执行结果不能被改变。即编译器，<code>runtime</code> 和处理器都必须遵守 <code>as-if-serial</code> 语义。为了遵守 <code>as-if-serial</code> 语义，编译器和处理器不会对存在数据依赖关系的操作做重排序，因为这种重排序会改变执行结果。但是，如果操作之间不存在数据依赖关系，这些操作可能被编译器和处理器重排序。<br>(c) 在单线程程序中，对存在控制依赖的操作重排序，不会改变执行结果（这也是 <code>as-if-serial</code> 语义允许对存在控制依赖的操作做重排序的原因）；但在多线程程序中，对存在控制依赖的操作重排序，可能会改变程序的执行结果。</p>
+<p><strong>顺序一致性</strong>。顺序一致性内存模型为程序员提供了极强的内存可见性保证：(1) 一个线程中的所有操作必须按照程序的顺序来执行。(2) （不管程序是否同步）所有线程都只能看到一个单一的操作执行顺序。在顺序一致性内存模型中，每个操作都必须原子执行且立刻对所有线程可见。<br>(a) <code>JMM</code> 对正确同步的多线程程序的内存一致性做了如下保证：如果程序是正确同步的，程序的执行将具有顺序一致性—— 即程序的执行结果与该程序在顺序一致性内存模型中的执行结果相同。换言之，未正确同步程序在 <code>JMM</code> 中不但整体的执行顺序是无序的，而且所有线程看到的操作执行顺序也可能不一致。<br>(b) 在顺序一致性模型中，所有操作完全按程序的顺序串行执行。而在 <code>JMM</code> 中，临界区内的代码可以重排序，以尽可能执行编译器和处理器优化（但 <code>JMM</code> 不允许临界区内的代码“逸出”到临界区之外，那样会破坏监视器的语义）。<br>(c) 对于未同步或未正确同步的多线程程序，<code>JMM</code> 只提供最小安全性：线程执行时读取到的值，要么是之前某个线程写入的值，要么是默认值。<code>JMM</code>不保证未同步程序的执行结果与该程序在顺序一致性模型中的执行结果一致。</p>
+<p><strong><code>volatile</code></strong>。对一个 <code>volatile</code> 变量的单个读 / 写操作，与对一个普通变量的读 / 写操作使用同一个监视器锁来同步，它们之间的执行效果相同。简而言之，<code>volatile</code> 变量自身具有下列特性：(1) 可见性。对一个 <code>volatile</code> 变量的读，总是能看到（任意线程）对这个 <code>volatile</code> 变量最后的写入。(2) 原子性：对任意单个 <code>volatile</code> 变量的读 / 写具有原子性，但类似于 <code>volatile++</code> 这种复合操作不具有原子性。<br>(a) 从内存语义的角度来说，<code>volatile</code> 与监视器锁有相同的效果：<code>volatile</code> 写和监视器的释放有相同的内存语义；<code>volatile</code> 读与监视器的获取有相同的内存语义。<br>(b) <code>volatile</code> 写的内存语义如下：当写一个 volatile 变量时，<code>JMM</code> 会把该线程对应的本地内存中的共享变量刷新到主内存。 <code>volatile</code> 读的内存语义如下：当读一个 volatile 变量时，<code>JMM</code> 会把该线程对应的本地内存置为无效。线程接下来将从主内存中读取共享变量。<br>(c) 若我们把 <code>volatile</code> 写和 <code>volatile</code> 读这两个步骤综合起来看的话，在读线程 B 读一个 <code>volatile</code> 变量后，写线程 A 在写这个 <code>volatile</code> 变量之前所有可见的共享变量的值都将立即变得对读线程 B 可见。<br>(d) JSR-133 专家组决定增强 <code>volatile</code> 的内存语义：严格限制编译器和处理器对 <code>volatile</code> 变量与普通变量的重排序，确保 <code>volatile</code> 的写 - 读和监视器的释放 - 获取一样，具有相同的内存语义。<br>(e) <code>JMM</code> 针对编译器制定的 <code>volatile</code> 重排序规则表：<br>(1) 当第二个操作是 <code>volatile</code> 写时，不管第一个操作是什么，都不能重排序。这个规则确保 <code>volatile</code> 写之前的操作不会被编译器重排序到 <code>volatile</code> 写之后。<br>(2) 当第一个操作是 <code>volatile</code> 读时，不管第二个操作是什么，都不能重排序。这个规则确保 volatile 读之后的操作不会被编译器重排序到 <code>volatile</code> 读之前。<br>(3) 当第一个操作是 <code>volatile</code> 写，第二个操作是 <code>volatile</code> 读时，不能重排序。</p>
+<p><strong>锁</strong>。当线程释放锁时，<code>JMM</code> 会把该线程对应的本地内存中的共享变量刷新到主内存中。当线程获取锁时，<code>JMM</code> 会把该线程对应的本地内存置为无效，从而使得被监视器保护的临界区代码必须要从主内存中去读取共享变量。<br>(a) <code>CAS</code> 同时具有 <code>volatile</code> 读和 <code>volatile</code> 写的内存语义。<br>(b) <code>AQS</code>，非阻塞数据结构和原子变量类（<code>java.util.concurrent.atomic</code> 包中的类）都是基于 <code>volatile</code>变量的读/写及 <code>CAS</code> 操作实现。而前三者又构成了<code>java</code>并发包中的同步器的基础。</p>
+<p> <strong><code>final</code></strong>。与前面介绍的锁和 <code>volatile</code> 相比较，对 <code>final</code> 域的读和写更像是普通的变量访问。对于 <code>final</code> 域，编译器和处理器要遵守两个重排序规则：(1) 在构造函数内对一个 <code>final</code> 域的写入，与随后把这个被构造对象的引用赋值给一个引用变量，这两个操作之间不能重排序。(2) 初次读一个包含 <code>final</code> 域的对象的引用，与随后初次读这个<code>final</code> 域，这两个操作之间不能重排序。<br>(a) 写 final 域的重排序规则会要求译编器在 <code>final</code> 域的写之后，构造函数 <code>return</code> 之前，插入一个 <code>StoreStore</code> 障屏。读 final 域的重排序规则要求编译器在读 <code>final</code> 域的操作前面插入一个 <code>LoadLoad</code> 屏障。<br>(b) 当<code>final</code> 域为一个引用类型，比如它引用一个 <code>int</code> 型的数组对象。此时写<code>final</code>域的重排序规则对编译器和处理器增加了如下约束：在构造函数内对一个 <code>final</code> 引用的对象的成员域的写入，与随后在构造函数外把这个被构造对象的引用赋值给一个引用变量，这两个操作之间不能重排序。<br>(c) JSR-133 专家组增强了 <code>final</code> 的语义。通过为 <code>final</code> 域增加写和读重排序规则，可以为 <code>java</code> 程序员提供初始化安全保证：只要对象是正确构造的（被构造对象的引用在构造函数中没有“逸出”），那么不需要使用同步（指 <code>lock</code> 和 <code>volatile</code> 的使用），就可以保证任意线程都能看到这个 <code>final</code> 域在构造函数中被初始化之后的值。</p>
+<p><strong>总结</strong>。<strong>(a)</strong> 由于常见的处理器内存模型比 <code>JMM</code> 要弱，<code>java</code> 编译器在生成字节码时，会在执行指令序列的适当位置插入内存屏障来限制处理器的重排序。同时，由于各种处理器内存模型的强弱并不相同，为了在不同的处理器平台向程序员展示一个一致的内存模型，<code>JMM</code> 在不同的处理器中需要插入的内存屏障的数量和种类也不相同。<br><strong>(b)</strong> 顺序一致性内存模型是一个理论参考模型，<code>JMM</code> 和处理器内存模型在设计时通常会把顺序一致性内存模型作为参照。<br><strong>(c)</strong> <code>JMM</code> 是一个语言级的内存模型，处理器内存模型是硬件级的内存模型，顺序一致性内存模型是一个理论参考模型。<br><strong>(d)</strong> 从 JMM 设计者的角度来说，在设计 <code>JMM</code> 时，需要考虑两个关键因素：<br>(1) 程序员对内存模型的使用。程序员希望内存模型易于理解，易于编程。程序员希望基于一个强内存模型来编写代码。<br>(2) 编译器和处理器对内存模型的实现。编译器和处理器希望内存模型对它们的束缚越少越好，这样它们就可以做尽可能多的优化来提高性能。编译器和处理器希望实现一个弱内存模型。<br>由于这两个因素互相矛盾，所以 JSR-133 专家组在设计 JMM 时的核心目标就是找到一个好的平衡点：一方面要为程序员提供足够强的内存可见性保证；另一方面，对编译器和处理器的限制要尽可能的放松。<br><strong>(e)</strong> Java 程序的内存可见性保证按程序类型可以分为下列三类：<br>(1) 单线程程序。单线程程序不会出现内存可见性问题。编译器，<code>runtime</code> 和处理器会共同确保单线程程序的执行结果与该程序在顺序一致性模型中的执行结果相同。<br>(2) 正确同步的多线程程序。正确同步的多线程程序的执行将具有顺序一致性（程序的执行结果与该程序在顺序一致性内存模型中的执行结果相同）。这是 <code>JMM</code> 关注的重点，<code>JMM</code> 通过限制编译器和处理器的重排序来为程序员提供内存可见性保证。<br>(3) 未同步 / 未正确同步的多线程程序。<code>JMM</code> 为它们提供了最小安全性保障：线程执行时读取到的值，要么是之前某个线程写入的值，要么是默认值。</p>
+<p>以上内容大部分自文献[1]，并整合了个人的思考。</p>
+<p>参考文献</p>
+<p>[1]. 深入理解Java内存模型  程晓明<br>[2]. JSR-133_JavaTM Memory Model and Thread Specification<br>[3]. 周志明. 深入理解 Java 虚拟机一 JVM 高级特性与最佳实践[J]. 2014.</p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/" rel="tag"><i class="fa fa-tag"></i> 并发编程</a>
+              <a href="/tags/%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B/" rel="tag"><i class="fa fa-tag"></i> 内存模型</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/03/02/2019-03-02-%E6%AF%8F%E5%A4%A95%E5%88%86%E9%92%9F%E7%8E%A9%E8%BD%ACDocker%E5%AE%B9%E5%99%A8%E6%8A%80%E6%9C%AF%E7%9B%AE%E5%BD%95/" rel="next" title="每天5分钟玩转Docker容器技术目录">
+                  <i class="fa fa-chevron-left"></i> 每天5分钟玩转Docker容器技术目录
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/03/25/2019-03-25-SpringCloud%E7%BB%84%E4%BB%B6%E6%A6%82%E8%A7%88/" rel="prev" title="SpringCloud组件概览">
+                  SpringCloud组件概览 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

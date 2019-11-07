@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="ZAB 协议是应用于 ZooKeeper 分布式协调框架中的可靠原子广播协议(atomic broadcast protocol)（或者称之为全局有序的广播协议totaly ordered broadcast protocol，二者基本等价），这使得ZooKeeper实现了一个主从(primary-backup)模式的架构以通过主服务器接受客户端的数据变更请求，并使用ZAB协议将数据变更请求增量的">
+<meta name="keywords" content="分布式系统,一致性协议,原子广播协议,选举算法">
+<meta property="og:type" content="article">
+<meta property="og:title" content="理解 ZAB 协议">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;01&#x2F;05&#x2F;%E7%90%86%E8%A7%A3-ZAB-%E5%8D%8F%E8%AE%AE&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="ZAB 协议是应用于 ZooKeeper 分布式协调框架中的可靠原子广播协议(atomic broadcast protocol)（或者称之为全局有序的广播协议totaly ordered broadcast protocol，二者基本等价），这使得ZooKeeper实现了一个主从(primary-backup)模式的架构以通过主服务器接受客户端的数据变更请求，并使用ZAB协议将数据变更请求增量的">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-01-06T03:22:24.000Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/01/05/%E7%90%86%E8%A7%A3-ZAB-%E5%8D%8F%E8%AE%AE/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>理解 ZAB 协议 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/01/05/%E7%90%86%E8%A7%A3-ZAB-%E5%8D%8F%E8%AE%AE/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          理解 ZAB 协议
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-01-05 15:03:24" itemprop="dateCreated datePublished" datetime="2019-01-05T15:03:24+08:00">2019-01-05</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-01-06 11:22:24" itemprop="dateModified" datetime="2019-01-06T11:22:24+08:00">2019-01-06</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index">
+                    <span itemprop="name">分布式系统</span>
+                  </a>
+                </span>
+                  ，
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/%E4%B8%80%E8%87%B4%E6%80%A7%E7%AE%97%E6%B3%95/" itemprop="url" rel="index">
+                    <span itemprop="name">一致性算法</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>11k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>10 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>ZAB</code> 协议是应用于 <code>ZooKeeper</code> 分布式协调框架中的可靠原子广播协议(<code>atomic broadcast protocol</code>)（或者称之为全局有序的广播协议<code>totaly ordered broadcast protocol</code>，二者基本等价），这使得<code>ZooKeeper</code>实现了一个主从(<code>primary-backup</code>)模式的架构以通过主服务器接受客户端的数据变更请求，并使用<code>ZAB</code>协议将数据变更请求增量的传播(<code>progpagate</code>)到集群副本节点。在一定程度上，原子广播协议等价于一致性算法(<code>consensus algorithm</code>)，但它们的侧重点有所不同。本质上而言，<code>ZooKeeper</code>依赖于<code>ZAB</code>协议为其它分布式应用提供诸如配置管理、分布式互斥锁以及<code>leader</code>选举等协调原语服务。另一方面，<code>ZooKeeper</code>之所以能提供高可用(<code>highly-available</code>)（比如支持支持崩溃恢复<code>efﬁcient crash-recovery</code>）及高性能(<code>highly-performance</code>)（包括低延迟<code>low latency</code>、高吞吐量<code>good throughput</code>）的协调服务，部分原因是<code>ZAB</code>协议的核心设计（区别于<code>paxos</code>）及工程实现上的优化。大致地，<code>ZAB</code>协议可以分为四个阶段：leader 选举(<code>leader election</code>)、发现(<code>Discovery</code>)、同步(<code>Synchronization</code>)以及广播(<code>Broadcast</code>)，论文中将阶段一与二合并了，<code>ZAB</code>的实际工程实现耦合了阶段二与三（与论文论述并发完全一致），因此也可以称之为三个阶段。</p>
+<a id="more"></a>
+
+<p>本文主要阐述自己对<code>ZAB</code>协议的理解，这源自于<code>ZAB</code>相关的三篇论文的总结，但并非对原论文的完整翻译，因此更准确、更完整且更正式的内容可以参考原论文。值得注意的是，本论文并非如原论文那般详细、正式且全面地阐述<code>ZAB</code>协议，因此读者最好先阅读原论文，可以参考本文的协议解读。另外，本文不会过多阐述<code>ZooKeeper</code>的关键原理及系统架构，读者有兴趣可以参考<a href="https://qqzeng.top/2018/12/04/%E7%90%86%E8%A7%A3%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%8F%E8%B0%83%E6%9C%8D%E5%8A%A1-ZooKeeper/" target="_blank" rel="noopener">文章</a>，以大致了解<code>ZooKeeper</code>协调服务，并从应用层面整体把握<code>ZAB</code>协议。本文先介绍<code>ZAB</code>协议与二阶段提交的关系及与<code>paxos</code>作简单地对比论述。然后按照<code>ZAB</code>协议的四个阶段展开论述。因为本人暂未详细阅读过 Apache <code>ZooKeeper/ZAB</code>的实现源码，因此本文基本不会涉及与实现相关的细节，最后，考虑到本人知识的局限性，如有论述不当之处，谢谢指正！</p>
+<p>在阅读<code>ZAB</code>相关之前，本人已初步了解过<code>raft</code>和<code>paxos</code>这两个一致性算法，如果你有了解过<code>raft</code>或者<code>paxos</code>，那么<code>ZAB</code>也较容易理解。直观上理解，<code>paxos</code>和<code>ZAB</code>都可以视作改进的二阶段提交的协议，因为原始的二阶段（包括三阶段）提交协议因为至少受到网络分区影响而不能称被直接应用于分布式系统构建。实际上，<code>ZAB</code>协议本质上是一个简化的二阶段协议，从协议构成的阶段形式上看，<code>leader</code>首先提出一个请求(称之为<code>request</code>或者<code>proposal</code>)，等待<code>follower</code>对请求的投票结果返回，最后综合投票结果以提交请求。但相比原始的二阶段提交，<code>ZAB</code>中<code>follower</code>（或者称<code>backup</code>，协议不同阶段的不同称呼）不会<code>abort</code>来自<code>leader</code>的请求，具体地，它只要么接受(<code>acknowledge</code>)<code>leader</code>的<code>proposal</code>，要么放弃此<code>leader</code>，重新进入新的一轮选举。另外，避免<code>abort</code>操作也意味着在<code>ZAB</code>协议中，<code>leader</code>提交请求并不需要经集群中所有的<code>follower</code>的同意，即只要<code>quorum</code>个<code>follower</code>给<code>leader</code>返回了<code>ACK</code>，则<code>leader</code>即请求已经在集群中达成一致。简化的二阶段提交也使得<code>ZAB</code>不得不面临<code>leader</code>失败的情况，因此，<code>ZAB</code>整个协议流程中必须考虑如何从<code>leader</code>失败中恢复的问题。在二阶段提交中，如果协调者失败，可以选择<code>abort</code>事务（准确而言是三阶段，在这里我们并不作严格区分）。</p>
+<p>那么对比于<code>paxos</code>算法，<code>ZAB</code>协议有什么优势（即利用<code>ZAB</code>可以方便、正确且高效实现或满足，但<code>paxos</code>则不能达到此要求）？这包括两个方面：其一，<code>ZAB</code>协议允许客户端并发地发送请求消息，换言之，<code>ZAB</code>（<code>ZAB</code>的<code>primary</code>）能够同时处理若干个消息请求，并能保证请求消息以客户端提出的顺序（请求消息的<code>FIFO</code>顺序）被广播到<code>backup</code>节点。事实上，<code>ZAB</code>的能够提供这样的保证的原因是，<code>ZAB</code>中所有的请求消息 （准确而言，所有的写请求消息，因为只有写请求消息才需要被广播，以保持数据的一致性）都由<code>ZAB</code>中的（唯一一个）<code>primary</code>进行广播。因此，<code>ZAB</code>需要保证协议的始终只存在一个<code>primary</code>节点。然而，<code>paxos</code>协议却不能简单直接地保证此属性。简单而言，在<code>paxos</code>协议中，若各<code>primary</code>并发地提出请求（请求之间遵循一定的依赖关系，即只能按照其提出的顺序应用到集群），那么<code>learner</code>并不能保证按照<code>primary</code>提出事务请求的顺序来学习（应用）消息请求。虽然可以一次性将多个<code>proposal</code>进行打包形成一个单独的<code>proposal</code>，即对这些请求进行批处理，但这会影响到整个算法的性能，而且单个打包的<code>proposal</code>数量也不能简单求得。</p>
+<p>其二，<code>ZAB</code>协议被设计成能够迅速从失败（可能是由于<code>leader</code>或<code>follower</code>崩溃或者网络故障而断连）中恢复，即<code>efficient recovery</code>。<code>ZAB</code>使用事务标识机制(<code>trasaction identification scheme</code>)来全局排序事务日志，并保证准<code>leader</code>(<code>prospective leader</code>)能够容易获知需要同步或截断的日志项。详细而言，<code>ZAB</code>采用<code>&lt;value, (epoch|counter)&gt;</code>来唯一标识一条事务日志，其中<code>value</code>为事务日志的内容。<code>epoch</code>（也被称为是<code>instance</code>）为<code>leader</code>的任期，每一个任期内保证只存在一个<code>leader</code>，每当重新进入<code>leader</code>选举时，需要递增此任期，事实上，任期可用于保证当上一任的<code>leader</code>失败重启后不会干扰到当前任期的<code>leader</code>的广播操作（这同<code>raft</code>类似，都采用了<code>epoch</code>以在一段逻辑时间内唯一标识<code>leader</code>）。<code>counter</code>为事务消息计数器，每次重新选举时，需要清空<code>counter</code>，此值随着客户端发送的请求消息而递增。<code>epoch</code>与<code>counter</code>各占 32 位以构成事务的<code>zxid</code>，即作为事务日志的标识。这提供了一种简单且方便的方式来比较事务日志的新旧：先比较<code>epoch</code>，<code>epoch</code>越大，日志越新，当<code>epoch</code>相等时，比较<code>counter</code>，<code>counter</code>越大，日志越新。在此种事务日志标识机制下，只有具备了最新的事务日志的节点才允许将其日志项拷贝到准<code>leader</code>。换言之，准<code>leader</code>只需从各节点返回的所有的日志中选择包含最新的日志的节点，以从此节点拷贝其缺失的事务日志（若需要的话）（需要注意的是，事实上这属于<code>Discover</code>阶段中的协议内容，若把此阶段的协议归并到<code>leader</code>选举中，则选举算法阶段会直接选择包含最新的事务日志的节点作为准<code>leader</code>，因此避免了准<code>leader</code>去包含最新的日志项的节点去拷贝操作）。而<code>paxos</code>协议并未要求失败恢复的高效执行。详细地，在其恢复阶段，只凭借拥有最大的日志编号（在<code>paxos</code>中<code>proposer</code>提出的每一条日志都有一个全局唯一的编号）并不能要求其对应的值被新的<code>leader</code>接受(<code>accpet</code>)（更多可以参考<code>paxos</code>论文或者<a href="https://qqzeng.top/2018/12/20/%E7%90%86%E8%A7%A3-Paxos-Made-Simple/" target="_blank" rel="noopener">这里</a> ），因此，新的<code>leader</code>必须为其缺少的日志编号所对应的日志项重新执行<code>paxos</code>协议阶段一的协议内容。</p>
+<p>另外值得注意的是，<code>ZAB</code>采用了<code>TCP</code>（可靠的）作为节点之间的通信协议，因此避免了部分网络故障问题（如消息乱序、重复及丢失），<code>TCP</code>协议能够保证消息能够按照其发出的顺序(<code>FIFO</code>)达到目标节点。但<code>paxos</code>和<code>raft</code>协议并不依赖此条件。</p>
+<p>在介绍<code>ZAB</code>协议的各阶段前，先简要声明一些术语。在<code>ZAB</code>协议中，每个节点可能处于三种状态中的一种：<code>following</code>、<code>leading</code>及<code>election</code>。所有的<code>leader</code>和<code>follower</code>都会依次循环执行前述的三个阶段：<code>Discover</code>（发现集群中全局最新的事务）、<code>Synchronization</code>（由<code>leader</code>向<code>follower</code>同步其缺失的事务日志）及<code>Broadcast</code>（由<code>leader</code>向<code>follower</code>广播复制客户端的事务日志），且在阶段一之前，节点处于<code>election</code>状态，当它通过执行<code>leader</code>选举流程后，它会判断自己是否有资格成为<code>leader</code>（收到<code>quorum</code>张选票），否则成为<code>follower</code>，我们暂且将<code>leader</code>选举作为协议的第零个阶段。显然，正常情况下，协议只循环在<code>Broadcast</code>阶段中执行，一旦发生<code>follower</code>与<code>leader</code>断连，则节点自动切换到选举阶段。在节点进入<code>Broadcast</code>前，必须保证集群的数据处于一致的状态。另外，在本文中节点、机器或者<code>server</code>同义；请求日志、事务日志、提案及日志命令等也作同义处理（不严谨，但读者需明白它们的细微区别）。下面各阶段涉及的术语：</p>
+<blockquote>
+<p>− <code>history</code>: 已被节点所接收的提案日志信息<br>− <code>acceptedEpoch</code>: 接收到的最后一个<code>NEWEPOCH</code>消息的<code>epoch</code>（由准<code>leader</code>生成的<code>epoch</code>）<br>− <code>currentEpoch</code>: 接收到的最后一个<code>NEWLEADER</code>消息的<code>epoch</code>（旧的<code>leader</code>的<code>epoch</code>）<br>− <code>lastZxid</code>: <code>history</code>中最后一个（最新的）事务提案的<code>Zxid</code>编号</p>
+</blockquote>
+<h2 id="Leader-Election"><a href="#Leader-Election" class="headerlink" title="Leader Election"></a>Leader Election</h2><p>在<code>leader</code>选举阶段，所有节点的初始状态为<code>election</code>，当选举结束后，节点将选举的结果持久化。在此阶段，若节点<code>p</code>给节点<code>q</code>投票，则节点<code>q</code>称节点<code>p</code>的准<code>leader</code>(<code>prospective leader</code>)，直至进入阶段三<code>Broadcast</code>，准<code>leader</code>才能被称为正式的<code>leader</code>(<code>estabilshed leader</code>)，同时它也会担任<code>primary</code>的角色（这样设计有许多优点）。<code>ZAB</code>协议中，<code>leader</code>与<code>primary</code>的称呼基本表示同一个节点，只不过它们是作为同一节点不同阶段（承担不同功能）的称呼。在<code>leader</code>选举过程中，所有的节点最开始都会为自己投票，若经过若干轮的投票广播后，发现自己不够”资格”成为<code>leader</code>时，就会转入<code>following</code>的状态，否则转为<code>leadering</code>状态。<code>leader</code>选举阶段需要为后面的阶段(<code>Broadcast</code>)提供一个后置条件(<code>postcondition</code>)，以保证在进入<code>Broadcast</code>阶段前，各节点的数据处于一致的状态，所谓的<code>postcondition</code>可以表述为<code>leader</code>必须包含所有已提交(<code>commit</code>)的事务日志。</p>
+<p>前文提到，部分<code>leader</code>选举实现会直接选择包含最新的日志的节点作为准<code>leader</code>，<code>FLP</code>(<code>Fast Leader Election</code>)正是这样一种选举算法的实现。它通过选择包含有最大的<code>lastZxid</code>（历史日志中最后一条日志记录的<code>zxid</code>）值的节点作为准<code>leader</code>（因为具有最大<code>lastZxid</code>日志的节点必定具有最全的历史日志提交记录），这可以为后阶段的事务广播提供<code>postcondition</code>保证，<code>FLE</code>由若干轮(<code>round</code>)选举组成，在每一轮选举中，状态为<code>election</code>节点之间互相交换投票信息，并根据自己获得的选票信息(发现更好的候选者)不断地更新自己手中的选票。注意，在<code>FLE</code>执行过程中，节点并不会持久化相关状态属性（因此<code>round</code>的值不会被存盘）。</p>
+<blockquote>
+<p>− <code>recvSet</code>: 用于收集状态为<code>election</code>、<code>following</code>及<code>leading</code>的节点的投票信息<br>− <code>outOfElection</code>:  用于收集状态为<code>following</code>及<code>leading</code>的节点的投票信息（说明选举过程已完成）</p>
+</blockquote>
+<p>具体的选举的流程大致如下（更详细的流程可以参考论文)：</p>
+<p>一旦开始选举，节点的初始状态为<code>election</code>，初始化选举超时时间，初始化<code>recvSet</code>及<code>outOfElection</code>。每个节点先为自己投票，递增<code>round</code>值，并把投票(<code>vote</code>包含节点的<code>lastZxid及id</code>)的消息（<code>notification</code>包含<code>vote, id, state及round</code>）广播给其它节点，即将投票信息发送到各节点的消息队列，并等待节点的回复，此后节点循环从其消息队列中取出其它节点发送给它的消息：</p>
+<ul>
+<li>若接收到的消息中的<code>round</code>小于其当前的<code>round</code>，则忽略此消息。</li>
+<li>若接收到的消息中的<code>round</code>大于节点当前的<code>round</code>，则更新自己的 <code>round</code>，并清空上一轮自己获得的选票的信息集合<code>recvSet</code>。此时，如果消息中的选票的<code>lastZxid</code>比自己的要新，则在本地记录自己为此节点投票，即更新<code>recvSet</code>，否则在本地记录为自己投票。最后将投票信息广播到其它节点的消息队列中。</li>
+<li>如果收到的消息的<code>round</code>与节点本地的<code>round</code>相等，即表示两个节点在进行同一轮选举。并且若此消息的<code>state</code>为<code>election</code>并且选票的<code>lastZxid</code>比自己的要新，则在本地记录自己为此节点投票，并广播记录的投票结果。若消息的提案号比自己旧或者跟自己一样，则记录这张选票。</li>
+<li>整个选举过程中（节点的状态保持为<code>election</code>，即节点消息队列中的消息包含的状态），若节点检测到自己或其它某个节点得到超过集群半数的选票，自己切换为<code>leading/following</code>状态，随即进入阶段二(<code>Recovery</code>)（<code>FLE</code>选举后，<code>leader</code>具备最新的历史日志，因此，跳过了<code>Discovery</code>阶段，直接进入<code>Synchronization</code>阶段。否则进入<code>Discovery</code>阶段）。</li>
+<li>另外，如果在选举过程中，从消息队列中检索出的消息的状态为<code>following</code>或者<code>leading</code>，说明此时选举过程已经完成，因此，消息中的<code>vote</code>即为<code>leader</code>的相关的信息。<ul>
+<li>具体而言，如果此时消息中的<code>round</code>与节点相同，先在本地记录选票信息，然后若同时检测到消息中的状态为<code>leading</code>，则节点转为<code>following</code>状态，进入下一阶段，否则若非<code>leading</code>状态，则需检查<code>recvSet</code>来判断消息中的节点是否有资格成为<code>leader</code>。</li>
+<li>否则，如果<code>round</code>不同，此时很有可能是选举已经完成。此时节点需要判断消息被投票的节点（有可能为<code>leader</code>）是否在<code>recvSet</code>或<code>outOfElection</code>字典中具备<code>quorum</code>张选票，同时，还要检查此节点是否给自己发送给投票信息，而正式确认此节点的<code>leading</code>状态。这个额外的检查的目的是为了避免这种情况：当协议非正常运行时，如<code>leader</code>检测到与<code>follower</code>失去了心跳连接，则其会自动转入<code>election</code>状态，但此时<code>follower</code>可能并没有意识到<code>leader</code>已经失效（这需要一定的时间，因为不同于<code>raft</code>，在<code>ZAB</code>协议中，<code>leader</code>及<code>follower</code>是通过各自的方式来检测到需要重新进行选举过程）。如果在<code>follower</code>还未检测到的期间内，恰好有新的节点加入到集群，则新加入的节点可能会收到集群中<code>quorum</code>个当前处于<code>following</code>状态的节点对先前的<code>leader</code>的投票（此时它已转入<code>election</code>状态），因此，此时仍需要此新加入的节点进行额外的判断，即检查它是否会收到<code>leader</code>发给它的投票消息（如果确实存在）。</li>
+</ul>
+</li>
+<li>最后，补充一点，<code>ZAB</code>的选举过程同样加入了超时机制（且很可能并非线性超时），以应对当节点超时时间内未收到任何消息时，重新进入下一轮选举。</li>
+</ul>
+<h2 id="Discovery"><a href="#Discovery" class="headerlink" title="Discovery"></a>Discovery</h2><p><code>Discovery</code>阶段的目的是发现全局（<code>quorum</code>个也符合条件）最新的事务日志，并从此事务日志中获取<code>epoch</code>以构建新的<code>epoch</code>，这可以使历史<code>epoch</code>的<code>leader</code>失效，即不再能提交事务日志。另外，一旦一个处于非<code>leadering</code>状态节点收到其它节点的<code>FOLLOWERINFO</code>消息时，它将拒绝此消息，并重新发起选举。简而言之，此阶段中每一个节点会与它的准<code>leader</code>进行通信，以保证准<code>leader</code>能够获取当前集群中所包含的被提交的最新的事务日志。更详细的流程阐述如下：</p>
+<p> 首先，由<code>follower</code>向其准<code>leader</code>发送<code>FOLLOWERINFO</code>（包含节点的<code>accpetedEpoch</code>）消息。当<code>leader</code>收到<code>quorum</code>个<code>FOLLOWERINFO</code>消息后，从这些消息中选择出最大的<code>epoch</code>值，并向此<code>quorum</code>个<code>follower</code>回复<code>NEWEPOCH</code>（包含最大的<code>epoch</code>）消息。接下来，当<code>follower</code>收到<code>leader</code>的回复后，将<code>NEWEPOCH</code>中的<code>epoch</code>与其本地的<code>epoch</code>进行对比，若回复消息中的<code>epoch</code>更大，则将自己本地的<code>accpetedEpoch</code>设置为<code>NEWEPOCH</code>消息中的<code>epoch</code>值，并向<code>leader</code>回复<code>ACKEPOCH</code>（包含节点的<code>currentEpoch</code>，<code>history</code>及<code>lastZxid</code>）消息。反之，重新进入选举阶段，即进入阶段零。当<code>leader</code>从<code>quorum</code>个节点收到<code>follower</code>的<code>ACKEPOCH</code>消息后，从这些<code>ACKEPOCH</code>消息中(<code>history</code>)查找出最新的（先比较<code>currentEpoch</code>，再比较<code>lastZxid</code>）历史日志信息，并用它覆盖<code>leader</code>本地的<code>history</code>事务日志。随即进入阶段二。</p>
+<h2 id="Synchronization"><a href="#Synchronization" class="headerlink" title="Synchronization"></a>Synchronization</h2><p><code>Synchronization</code>阶段包含了失败恢复的过程，在这个阶段中，<code>leaer</code>向<code>follower</code>同步其最新的历史事务日志。简而言之，<code>leader</code>向<code>follower</code>发送其在阶段一中更新的历史事务日志，而<code>follower</code>将其与自己本地的历史事务日志进行对比，如果<code>follower</code>发现本地的日志集更旧，则会将这些日志应用追加到其本地历史日志集合中，并应答<code>leader</code>。而当<code>leader</code>收到<code>quorum</code>个回复消息后，立即发送<code>commit</code>消息，此时准<code>leader</code>(<code>prospective leader</code>)变成了正式<code>leader</code>(<code>established leader</code>)。更详细的流程阐述如下：</p>
+<p>首先由准<code>leader</code>向<code>quorum</code>发送<code>NEWLEADER</code>（包含阶段一中的最大<code>epoch</code>及<code>history</code>），当<code>follower</code>收到<code>NEWLEADER</code>消息后，其对比消息中的<code>epoch</code>与其本地的<code>acceptedEpoch</code>，若二者相等，则更新自己的<code>currentEpoch</code>并且接收那些比自己新的事务日志，最后，将本地的<code>history</code>设置为消息中的<code>history</code>集合。之后向<code>leader</code>回复<code>ACKNEWLEADER</code>消息。若<code>leader</code>消息中的<code>epoch</code>与本地的不相等，则转为<code>election</code>状态，并进入选举阶段。当<code>leader</code>收到<code>quorum</code>个<code>ACKNEWLEADER</code>消息后，接着向它们发送<code>COMMIT</code>消息，并进入阶段三。而<code>follower</code>收到<code>COMMIT</code>消息后，将上一阶段接收的事务日志进行正式提交，同样进入阶段三。</p>
+<p>事实上，在有些实现中，会对同步阶段进行优化，以提高效率。具体而言，<code>leader</code>实际上拥有两个与日志相关的属性（在前述中，我们只用了<code>history</code>来描述已提交的事务日志），其一为<code>outstandingProposals</code>：每当<code>leader</code>提出一个事务日志，都会将该日志存放至<code>outstandingProposals</code>字典中，一旦议案被过半认同了，就要提交该议案，则从<code>outstandingProposals</code>中删除该议案；其二为<code>toBeApplied</code>：每当准备提交一个议案，就会将该议案存放至<code>toBeApplied</code>中，一旦议案应用到<code>ZooKeeper</code>的内存树中了，就可以将该议案从<code>toBeApplied</code>集合中删除。因此，这将日志同步大致分为两个方面：</p>
+<ul>
+<li>一方面，对于那些已应用的日志（已经从<code>toBeApplied</code>集合中移除）可以通过不同的方式来进行同步：若<code>follower</code>消息中的<code>lastZxid</code>要小于<code>leader</code>设定的某一个事务日志索引(<code>minCommittedLog</code>)，则此时采用快照会更高效。也存在这样一种情况，<code>follower</code>中包含多余的事务日志，此时其<code>lastZxid</code>会大于<code>leader</code>的最新的已提交的事务日志索引(<code>maxCommittedLog</code>)，因此，会把多余的部分删除。最后一种情况是，消息中的<code>lastZxid</code>位于二个索引之间，因此，<code>leader</code>需要把<code>follower</code>缺失的事务日志发送给<code>follower</code>。当然，也会存在二者存在日志冲突的情况，即<code>leader</code>并没有找到<code>lastZxid</code>对应的事务日志，此时需要删除掉<code>follower</code>与<code>leader</code>冲突的部分，然后再进行同步。</li>
+<li>另一方面，对于那些未应用的日志的同步方式为：对于<code>toBeApplied</code>集合中的日志（已提交，但未应用到内存），则直接将大于<code>follower</code>的<code>lastZxid</code>的索引日志发送给<code>follower</code>，同时发送提交命令。对于<code>outstandingProposals</code>的事务日志，则同样依据同样的规则发送给<code>follower</code>，但不会发送提交命令。</li>
+</ul>
+<p>需要注意的的，在进行日志同步时，需要先获取<code>leader</code>的内存数据的读锁（因此在释放读锁之前不能对<code>leader</code>的内存数据进行写操作）。但此同步过程仅涉及到确认需要同步的议案，即将需要被同步的议案放置到对应<code>follower</code>的队列中即可，后续会通过异步方式进行发送。但快照同步则是同步写入阻塞。</p>
+<p>当同步完成后，<code>leader</code>会几<code>follower</code>发送<code>UPTODATE</code>命令，以表示同步完成。此时，<code>leader</code>开始进入心跳检测过程，周期性地向<code>follower</code>发送心跳，并检查是否有<code>quorum</code>节点回复心跳，一旦出现心跳断连，则转为<code>election</code>状态，进入leader选举阶段。</p>
+<h2 id="Broadcast"><a href="#Broadcast" class="headerlink" title="Broadcast"></a>Broadcast</h2><p><code>Broadcast</code>为<code>ZAB</code>正常工作所处的阶段。当进入此阶段，<code>leader</code>会调用<code>ready(epoch)，</code>以使得<code>ZooKeeper</code>应用层能够开始广播事务日志到<code>ZAB</code>协议。同时，此阶段允许动态的加入新节点(<code>follower</code>)，因此，<code>leader</code>必须在新节点加入的时候，与这些节点建立通信连接，并将最新日志同步到这些节点。更详细的流程阐述如下：</p>
+<p>当<code>leader</code>(<code>primary</code>)收到客户端发送的消息（写）请求<code>value</code>，它将消息请求转化为事务日志<code>(epoch, &lt;value,zxid&gt;), zxid=(epoch|counter)</code>，广播出去。当<code>follower</code>从<code>leader</code>收到事务请求时，将此事务日志追加到本地的历史日志<code>history</code>，并向<code>leader</code>回复<code>ACK</code>。而一旦<code>leader</code>收到<code>quorum</code>个<code>ACK</code>后，随即向<code>quorum</code>节点发送<code>COMMIT</code>日志，当<code>follower</code>收到此命令后，会将未提交的日志正式进行提交。需要注意的是，当有新的节点加入时，即在<code>Broadcast</code>阶段，若<code>leader</code>收到<code>FOLLOWINFO</code>消息，则它会依次发送<code>NEWEPOCH</code>和<code>NEWLEADER</code>消息，并带上<code>epoch</code>及<code>history</code>。收到此消息的节点会将设置节点本地的<code>epoch</code>并更新本地历史日志。</p>
+<p>根据在<code>Synchronization</code>提到的两个数据结构<code>outstandingProposals</code>及<code>toBeApplied</code>。因此，事实上，<code>leader</code>会将其提出的事务日志放至<code>outstandingProposals</code>，如果获得了<code>quorum</code>节点的回复，则会将其从<code>outstandingProposals</code>中移除，并将事务日志放入<code>toBeApplied</code>集合，然后开始提交议案，即将事务日志应用到内存中，同时更新<code>lastZxid</code>，并将事务日志保存作缓存，同时更新<code>maxCommittedLog</code>和<code>minCommittedLog</code>。</p>
+<p>最后，讨论<code>ZAB</code>协议中两个额外的细节：</p>
+<ul>
+<li>若<code>leader</code>宕机，<code>outstandingProposals</code>字典及<code>toBeApplied</code>集合便失效（并没有持久化），因此它们对于<code>leader</code>的恢复并不起作用，而只是在<code>Synchronization</code>阶段（该阶段实际上是<code>leader</code>向<code>follower</code>同步日志，即也可以看成是<code>follower</code>挂了，重启后的日志同步过程），且同步过程包含快照同步及日志恢复。</li>
+<li>另外，在日志恢复阶段，协议会将所有最新的事务日志作为已经提交的事务来处理的，换言之，这里面可能会有部分事务日志还未真正提交，而这里全部当做已提交来处理。（这与<code>raft</code>不同，个人认为，这并不会产生太大影响，因为在日志恢复过程中，并不会恢复那些未被<code>quorum</code>节点通过的事务日志，只是在<code>ZAB</code>在提交历史任期的日志的时机与<code>raft</code>不同，<code>rfat</code>不会主动提交历史任期未提交的日志，只在新的<code>leader</code>提交当前任期内的日志时顺便提交历史的未提交但已经复制到<code>quorum</code>节点的日志项）。</li>
+</ul>
+<p>需要注意的是，本文使用的一些术语与<code>Yahoo!</code>官方发表的论文[2]可能不一样（个人参照另外一篇论文[4]阐述），但它们的问题意义相同。而且，对于每个阶段，本文先是大概阐述其流程，然后从实际实现的角度进行拓展，希望不要造成读者的困扰。另外，实际工程实现可能并不完全符合这些阶段，而且<code>ZooKeeper</code>各版本的实现也可能会包含不同的工程优化细节。具体参考论文，当然，查看<code>ZooKeeper</code>源码实现可能更清晰。</p>
+<p>参考文献</p>
+<p>[1] Gray J N. Notes on data base operating systems[M]//Operating Systems. Springer, Berlin, Heidelberg, 1978: 393-481.<br>[2] Junqueira F P, Reed B C, Serafini M. Zab: High-performance broadcast for primary-backup systems[C]//Dependable Systems &amp; Networks (DSN), 2011 IEEE/IFIP 41st International Conference on. IEEE, 2011: 245-256.<br>[3] Reed B, Junqueira F P. A simple totally ordered broadcast protocol[C]//proceedings of the 2nd Workshop on Large-Scale Distributed Systems and Middleware. ACM, 2008: 2.<br>[4] Medeiros A. ZooKeeper’s atomic broadcast protocol: Theory and practice[J]. Aalto University School of Science, 2012, 20.<br>[5] 倪超. 从 Paxos 到 Zookeeper: 分布式一致性原理与实践[J]. 2015.<br>[6]. <a href="https://my.oschina.net/pingpangkuangmo/blog/778927" target="_blank" rel="noopener">ZooKeeper的一致性算法赏析</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E4%B8%80%E8%87%B4%E6%80%A7%E5%8D%8F%E8%AE%AE/" rel="tag"><i class="fa fa-tag"></i> 一致性协议</a>
+              <a href="/tags/%E5%8E%9F%E5%AD%90%E5%B9%BF%E6%92%AD%E5%8D%8F%E8%AE%AE/" rel="tag"><i class="fa fa-tag"></i> 原子广播协议</a>
+              <a href="/tags/%E9%80%89%E4%B8%BE%E7%AE%97%E6%B3%95/" rel="tag"><i class="fa fa-tag"></i> 选举算法</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2018/12/30/2018-12-30-MyBatis%E6%B3%A8%E8%A7%A3%E6%A6%82%E8%A7%88/" rel="next" title="MyBatis注解概览">
+                  <i class="fa fa-chevron-left"></i> MyBatis注解概览
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/01/08/%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94-Raft-%E5%8F%8A-ZAB-%E5%8D%8F%E8%AE%AE/" rel="prev" title="简单对比 Raft 及 ZAB 协议">
+                  简单对比 Raft 及 ZAB 协议 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Leader-Election"><span class="nav-number">1.</span> <span class="nav-text">Leader Election</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Discovery"><span class="nav-number">2.</span> <span class="nav-text">Discovery</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Synchronization"><span class="nav-number">3.</span> <span class="nav-text">Synchronization</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Broadcast"><span class="nav-number">4.</span> <span class="nav-text">Broadcast</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

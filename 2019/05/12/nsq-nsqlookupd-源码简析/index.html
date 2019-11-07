@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="上一篇文章简要介绍了nsq以及它的几个值得注意的特性，以对nsq有大体认识，并在整体上把握nsq的工作流程。这对于后面的源码分析工作会有帮助。本文重点阐述nsqlookup组件设计实现相关的源码。nsqlookupd是一个中心管理服务，负责管理集群(nsqd)的拓扑信息，并且为客户端（消费者）提供最终一致性的发现服务。具体而言，nsqlookupd用作解耦消费者和生产者(nsqd)。因为nsqd节">
+<meta name="keywords" content="分布式系统,消息队列">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nsq nsqlookupd 源码简析">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;05&#x2F;12&#x2F;nsq-nsqlookupd-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="上一篇文章简要介绍了nsq以及它的几个值得注意的特性，以对nsq有大体认识，并在整体上把握nsq的工作流程。这对于后面的源码分析工作会有帮助。本文重点阐述nsqlookup组件设计实现相关的源码。nsqlookupd是一个中心管理服务，负责管理集群(nsqd)的拓扑信息，并且为客户端（消费者）提供最终一致性的发现服务。具体而言，nsqlookupd用作解耦消费者和生产者(nsqd)。因为nsqd节">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.856Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/05/12/nsq-nsqlookupd-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>nsq nsqlookupd 源码简析 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/05/12/nsq-nsqlookupd-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nsq nsqlookupd 源码简析
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-05-12 10:17:39" itemprop="dateCreated datePublished" datetime="2019-05-12T10:17:39+08:00">2019-05-12</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" itemprop="url" rel="index">
+                    <span itemprop="name">消息队列</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>26k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>24 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>上一篇文章简要介绍了<code>nsq</code>以及它的几个值得注意的特性，以对<code>nsq</code>有大体认识，并在整体上把握<code>nsq</code>的工作流程。这对于后面的源码分析工作会有帮助。本文重点阐述<code>nsqlookup</code>组件设计实现相关的源码。<code>nsqlookupd</code>是一个中心管理服务，负责管理集群(<code>nsqd</code>)的拓扑信息，并且为客户端（消费者）提供最终一致性的发现服务。具体而言，<code>nsqlookupd</code>用作解耦消费者和生产者(<code>nsqd</code>)。因为<code>nsqd</code>节点会将<code>topic</code>和<code>channel</code>的信息通过<code>tcp</code>广播到<code>nsqlookupd</code>节点（允许水平扩展）以实施服务注册，而客户端或<code>nsqadmin</code>通过<code>http</code>接口查询<code>nsqlookupd</code>来发现指定<code>topic</code>的生产者。引入<code>nsqlookupd</code>使得整个系统的模块更加清晰，且维护起来更加方便。值得注意的是，<code>nsqlookupd</code>本身对存储在其上的数据不做任何持久化。</p>
+<a id="more"></a>
+
+<p>考虑到<code>nsqlookupd</code>本身所提供的功能比较简单，代码结构并不复杂，因此以<code>nsqlookupd</code>为分析入口。个人建议，查看或分析源码最好从某个业务逻辑流程切入，这样更具针对性，忽略某些旁支或细节，先从宏观上把握整个流程。按照惯例，读者可以自己<code>clone</code>源码进行分析。本文分析<code>nsqlookupd</code>关键流程，较为完整的<a href="https://github.com/qqzeng/nsqio/tree/master/nsq" target="_blank" rel="noopener"><code>nsq</code>源码注释</a>可在这里找到，其注释源码版本为<code>v1.1.0</code>，仅供参考。</p>
+<p>本文主要从三个方面来阐述<code>nsqlookupd</code>：其一，以<code>nsqlookupd</code>命令为切入点，介绍其启动流程；其二，通过启动流程，继续追溯到<code>NSQLookupd</code>的创建及初始化过程。最后，阐述初始化过程中<code>tcp</code>和<code>http</code>请求处理器相关逻辑，并示例分析几个典型请求的详细处理逻辑，比如，<code>nsqd</code>通过<code>tcp</code>协议订阅<code>topic</code>。另外，<code>nsqd</code>通过<code>http</code>协议请求<code>nsqlookupd</code>执行<code>topic</code>的创建过程，以及客户端（消费者）请求<code>nsqlookupd</code>执行<code>topic</code>的查询过程。本文所涉及到源码主要为<code>/nsq/apps/nsqlookupd/</code>、<code>/nsq/nsqlookupd/</code>和<code>/nsq/internal/</code>下的若干子目录，<code>/nsq/apps</code>目录是官方提供的一些工具包，而<code>/nsq/nsqlookupd</code>会对应具体的实现，<code>/nsq/internal</code>则为<code>nsq</code>内部的核心（公共）库，目录结构比较简单，不多阐述。</p>
+<p>当我们在命令行执行<code>nsqlookupd</code>命令时（同时可指定参数），相当于运行了<code>nsq/apps/nsqlookupd</code>程序的<code>main</code>方法。此方法启动了一个进程（服务），并且通过创建<code>NSQLookupd</code>并调用其<code>Main</code>方法执行启动逻辑。</p>
+<h2 id="利用-svc-启动进程"><a href="#利用-svc-启动进程" class="headerlink" title="利用 svc 启动进程"></a>利用 svc 启动进程</h2><p>具体而言，其利用 <a href="https://github.com/judwhite/go-svc/svc" target="_blank" rel="noopener"><code>svc</code></a>的<code>Run</code>方法启动一个进程（守护进程或服务），在 <code>svc.Run</code> 方法中依次调用 <code>Init</code> 和 <code>Start</code> 方法，<code>Init</code> 和 <code>Start</code> 方法都是 <code>no-blocking</code>的；<code>Run</code> 方法会阻塞直到接收到 <code>SIGINT</code>(程序终止信号，如<code>ctrl+c</code>)或<code>SIGTERM</code>（程序结束信号，如<code>kill -15 PID</code>），然后调用 <code>stop</code>方法后退出，这通过传递一个<code>channel</code>及感兴趣的信号集(<code>SIGINT&amp;SGITERM</code>)给 <code>signal.Notify</code> 方法实现；<code>Run</code>方法中阻塞等待从<code>channel</code>中接收消息，一旦收到消息，则调用<code>stop</code>方法返回，进程退出。更多可以查看 <code>golang</code> 标准包的<code>signal.Notify</code>以及<code>svc</code>包是如何协助启动一个进程。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> program <span class="keyword">struct</span> &#123; <span class="comment">// 代表此进程结构，包装了一个 nsqlookupd 实例</span></span><br><span class="line">	once       sync.Once</span><br><span class="line">	nsqlookupd *nsqlookupd.NSQLookupd</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// nsqlookupd 服务程序执行入口</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span> </span></span><br><span class="line"><span class="function">	<span class="title">prg</span> := &amp;<span class="title">program</span></span>&#123;&#125;</span><br><span class="line">	<span class="comment">// 1. 利用 svc 启动一个进程，在 svc.Run 方法中会依次调用 Init 和 Start 方法，Init 和 Start 方法都是 no-blocking的；</span></span><br><span class="line">	<span class="comment">// 2. Run 方法会阻塞直到接收到 SIGINT(程序终止)或SIGTERM(程序结束信号)，然后调用stop方法后退出；</span></span><br><span class="line">	<span class="comment">// 3. 这是通过传递一个 channel 及感兴趣信号集(SIGINT&amp;SGITERM)给 signal.Notify 方法实现；</span></span><br><span class="line">	<span class="comment">// 4. Run方法中阻塞等待从 channel 中接收消息，一旦收到消息，则调用 stop 方法返回，进程退出。</span></span><br><span class="line">	<span class="keyword">if</span> err := svc.Run(prg, syscall.SIGINT, syscall.SIGTERM); err != <span class="literal">nil</span> &#123;</span><br><span class="line">		logFatal(<span class="string">"%s"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *program)</span> <span class="title">Init</span><span class="params">(env svc.Environment)</span> <span class="title">error</span></span> &#123;<span class="comment">// 初始化函数没有做实质性工作</span></span><br><span class="line">	<span class="keyword">if</span> env.IsWindowsService() &#123;</span><br><span class="line">		dir := filepath.Dir(os.Args[<span class="number">0</span>])</span><br><span class="line">		<span class="keyword">return</span> os.Chdir(dir)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// Start 方法包含进程启动的主要执行逻辑</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *program)</span> <span class="title">Start</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 默认初始化 nsqlookupd 配置参数</span></span><br><span class="line">	opts := nsqlookupd.NewOptions()</span><br><span class="line">	<span class="comment">// 2. 根据命令行传递的参数更新默认参数</span></span><br><span class="line">	flagSet := nsqlookupdFlagSet(opts)</span><br><span class="line">	flagSet.Parse(os.Args[<span class="number">1</span>:])</span><br><span class="line">	<span class="comment">// 3. 输出版本号并退出</span></span><br><span class="line">	<span class="keyword">if</span> flagSet.Lookup(<span class="string">"version"</span>).Value.(flag.Getter).Get().(<span class="keyword">bool</span>) &#123;</span><br><span class="line">		fmt.Println(version.String(<span class="string">"nsqlookupd"</span>))</span><br><span class="line">		os.Exit(<span class="number">0</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 解析配置文件获取用户设置参数</span></span><br><span class="line">	<span class="keyword">var</span> cfg <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">interface</span>&#123;&#125;</span><br><span class="line">	configFile := flagSet.Lookup(<span class="string">"config"</span>).Value.String()</span><br><span class="line">	<span class="keyword">if</span> configFile != <span class="string">""</span> &#123;</span><br><span class="line">		_, err := toml.DecodeFile(configFile, &amp;cfg)</span><br><span class="line">		<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">			logFatal(<span class="string">"failed to load config file %s - %s"</span>, configFile, err)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	options.Resolve(opts, flagSet, cfg) <span class="comment">// 5. 合并默认参数及配置文件中的参数</span></span><br><span class="line">	nsqlookupd, err := nsqlookupd.New(opts) <span class="comment">// 6. 创建 nsqlookupd 进程</span></span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		logFatal(<span class="string">"failed to instantiate nsqlookupd"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	p.nsqlookupd = nsqlookupd</span><br><span class="line">	<span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123; <span class="comment">// 7. 执行 nsqlookupd 的主函数</span></span><br><span class="line">		err := p.nsqlookupd.Main()</span><br><span class="line">		<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">			p.Stop()</span><br><span class="line">			os.Exit(<span class="number">1</span>)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;()</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 进程退出方法，注意使用 sync.Once 来保证 nsqlookupd.Exit 方法只被执行一次</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *program)</span> <span class="title">Stop</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	p.once.Do(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		p.nsqlookupd.Exit()</span><br><span class="line">	&#125;)</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /nsq/apps/nsqlookupd.go</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 使用 Run 方法来开启一个进程</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Run</span><span class="params">(service Service, sig ...os.Signal)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	env := environment&#123;&#125;</span><br><span class="line">	<span class="keyword">if</span> err := service.Init(env); err != <span class="literal">nil</span> &#123; <span class="comment">// 1.初始化环境，没什么实质性内容</span></span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">    <span class="keyword">if</span> err := service.Start(); err != <span class="literal">nil</span> &#123; <span class="comment">// 2. 调用上面的 Start 方法来执行进程启动逻辑</span></span><br><span class="line">		<span class="keyword">return</span> err</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> <span class="built_in">len</span>(sig) == <span class="number">0</span> &#123;<span class="comment">// 3. 默认响应 SIGINT和SIGTERM信号</span></span><br><span class="line">		sig = []os.Signal&#123;syscall.SIGINT, syscall.SIGTERM&#125;</span><br><span class="line">	&#125;</span><br><span class="line">    signalChan := <span class="built_in">make</span>(<span class="keyword">chan</span> os.Signal, <span class="number">1</span>) <span class="comment">// 4. 调用 signalNotify 方法，使用阻塞等待信号产生</span></span><br><span class="line">	signalNotify(signalChan, sig...)</span><br><span class="line">	&lt;-signalChan</span><br><span class="line">	<span class="comment">// 5. 在进程退出之前，调用 Stop 方法做清理工作</span></span><br><span class="line">	<span class="keyword">return</span> service.Stop()</span><br><span class="line">&#125; <span class="comment">// /svc/svc/svc_other.go</span></span><br></pre></td></tr></table></figure>
+
+<p>代码中注释已经介绍得比较清晰，这里简单阐述下<code>Start</code>方法的逻辑：首先会通过默认参数创建配置参数实例<code>opts</code>，然后合并命令行参数及配置文件参数（若存在），接下来创建<code>nsqlookupd</code>实例，并调用<code>nsqlookupd.Main</code>函数，这是最关键的步骤。下面展开分析。</p>
+<h2 id="NSQLookupd-启动初始化"><a href="#NSQLookupd-启动初始化" class="headerlink" title="NSQLookupd 启动初始化"></a>NSQLookupd 启动初始化</h2><p>在介绍构造方法前，先贴出<code>NSQLookupd</code>结构：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> NSQLookupd <span class="keyword">struct</span> &#123;</span><br><span class="line">	sync.RWMutex                       <span class="comment">// 读写锁</span></span><br><span class="line">	opts         *Options              <span class="comment">// 参数配置信息</span></span><br><span class="line">	tcpListener  net.Listener          <span class="comment">// tcp 监听器用于监听 tcp 连接</span></span><br><span class="line">	httpListener net.Listener          <span class="comment">// 监听 http 连接</span></span><br><span class="line">    <span class="comment">// sync.WaitGroup 增强体，功能类似于 sync.WaitGroup，一般用于等待所有的 goroutine 全部退出</span></span><br><span class="line">	waitGroup    util.WaitGroupWrapper </span><br><span class="line">    DB           *RegistrationDB       <span class="comment">// 生产者注册信息(topic、channel及producer) DB</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>构造方法中并没有太多逻辑，启用了日志输出，并构建<code>NSQLookupd</code>结构实例，然后开启了<code>tcp</code>和<code>http</code>连接的监听。代码如下所示（省去了一些错误处理及其它无关紧要的代码片段）：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 创建 NSQLookupd 实例</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">New</span><span class="params">(opts *Options)</span> <span class="params">(*NSQLookupd, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="comment">// 1. 启用日志输出</span></span><br><span class="line">	<span class="keyword">if</span> opts.Logger == <span class="literal">nil</span> &#123;</span><br><span class="line">		opts.Logger = log.New(os.Stderr, opts.LogPrefix, log.Ldate|log.Ltime|log.Lmicroseconds)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 创建 NSQLookupd 实例</span></span><br><span class="line">	l := &amp;NSQLookupd&#123;</span><br><span class="line">		opts: opts, <span class="comment">// 配置参数实例</span></span><br><span class="line">		DB:   NewRegistrationDB(), <span class="comment">// topic、channel及producer的存储，一个 map 实例</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 版本号等信息</span></span><br><span class="line">	l.logf(LOG_INFO, version.String(<span class="string">"nsqlookupd"</span>))</span><br><span class="line">	<span class="comment">// 4. 开启 tcp 和 http 连接监听</span></span><br><span class="line">	l.tcpListener, err = net.Listen(<span class="string">"tcp"</span>, opts.TCPAddress)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	l.httpListener, err = net.Listen(<span class="string">"tcp"</span>, opts.HTTPAddress)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> l, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面重点介绍其<code>Main</code>启动方法，即启动一个<code>NSQLookupd</code>实例，具体逻辑比较简单：构建了一个<code>Context</code>实例，它纯粹只是一个<code>NSQLookupd</code>实例的<code>wrapper</code>。然后注册了进程退出前需要执行的<code>hook</code>函数。关键步骤为创建用于处理<code>tcp</code>和<code>http</code>连接的<code>handler</code>，同时异步开启<code>tcp</code>和<code>http</code>连接的监听动作，最后通过一个<code>channel</code>阻塞等待方法退出，详细代码逻辑如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 启动 NSQLookupd 实例</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *NSQLookupd)</span> <span class="title">Main</span><span class="params">()</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 构建 Context 实例， Context 是 NSQLookupd 的一个 wrapper</span></span><br><span class="line">	ctx := &amp;Context&#123;l&#125;</span><br><span class="line">	<span class="comment">// 2. 创建进程退出前需要执行的 hook 函数</span></span><br><span class="line">	exitCh := <span class="built_in">make</span>(<span class="keyword">chan</span> error)</span><br><span class="line">	<span class="keyword">var</span> once sync.Once</span><br><span class="line">	exitFunc := <span class="function"><span class="keyword">func</span><span class="params">(err error)</span></span> &#123;</span><br><span class="line">		once.Do(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">			<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">				l.logf(LOG_FATAL, <span class="string">"%s"</span>, err)</span><br><span class="line">			&#125;</span><br><span class="line">			exitCh &lt;- err</span><br><span class="line">		&#125;)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 3. 创建用于处理 tcp 连接的 handler，并开启 tcp 连接的监听动作</span></span><br><span class="line">    <span class="comment">// tcp协议处理函数其实是 LookupProtocolV1.IOLoop, 它支持 IDENTIFY、REGISTER及UNREGISTER等命令请求的处理</span></span><br><span class="line">	tcpServer := &amp;tcpServer&#123;ctx: ctx&#125;</span><br><span class="line">	l.waitGroup.Wrap(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		<span class="comment">// 3.1 在 protocol.TCPServer 方法中统一处理监听</span></span><br><span class="line">		exitFunc(protocol.TCPServer(l.tcpListener, tcpServer, l.logf))</span><br><span class="line">	&#125;)</span><br><span class="line">	<span class="comment">// 4. 创建用于处理 http 连接的 handler，并开启 http 连接的监听动作</span></span><br><span class="line">    <span class="comment">// 而 http连接处理，它利用了 httpServer，一个高效的请求路由库</span></span><br><span class="line">	httpServer := newHTTPServer(ctx)</span><br><span class="line">	l.waitGroup.Wrap(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		exitFunc(http_api.Serve(l.httpListener, httpServer, <span class="string">"HTTP"</span>, l.logf))</span><br><span class="line">	&#125;)</span><br><span class="line">	<span class="comment">// 5. 阻塞等待错误退出</span></span><br><span class="line">	err := &lt;-exitCh</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// NSQLookupd 服务退出方法中，关闭了网络连接，并且需等待 hook 函数被执行</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(l *NSQLookupd)</span> <span class="title">Exit</span><span class="params">()</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> l.tcpListener != <span class="literal">nil</span> &#123;</span><br><span class="line">		l.tcpListener.Close()</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">if</span> l.httpListener != <span class="literal">nil</span> &#123;</span><br><span class="line">		l.httpListener.Close()</span><br><span class="line">	&#125;</span><br><span class="line">	l.waitGroup.Wait()</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqlookupd/nsqlookupd.go</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="tcp-amp-http-请求处理"><a href="#tcp-amp-http-请求处理" class="headerlink" title="tcp &amp; http 请求处理"></a>tcp &amp; http 请求处理</h2><p><code>Main</code>方法中关键代码为构建<code>tcp</code>及<code>http</code>请求的<code>handler</code>，并异步调用它们以处理请求。</p>
+<h3 id="客户端-tcp-请求处理"><a href="#客户端-tcp-请求处理" class="headerlink" title="客户端 tcp 请求处理"></a>客户端 tcp 请求处理</h3><p>其中<code>tcp</code>请求的<code>handler</code>比较简单：直接使用标准库的<code>tcp</code>相关函数，在一个单独的<code>goroutine</code>中启用了<code>tcp handler</code>。对于监听到每一个连接，开启一个额外的<code>goroutine</code>来处理请求。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// tcp 连接处理器，只是一个统一的入口，当 accept 到一个连接后，将此连接交给对应的 handler 处理</span></span><br><span class="line"><span class="keyword">type</span> TCPHandler <span class="keyword">interface</span> &#123;</span><br><span class="line">	Handle(net.Conn)</span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">TCPServer</span><span class="params">(listener net.Listener, handler TCPHandler, logf lg.AppLogFunc)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	logf(lg.INFO, <span class="string">"TCP: listening on %s"</span>, listener.Addr())</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		clientConn, err := listener.Accept()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 针对每一个连接到 nsqd 的 client，会单独开启一个 goroutine 去处理</span></span><br><span class="line">        <span class="comment">// 实际上是由 /nsq/nsqlookupd/tcp.go 中的 tcpServer.Handle 方法处理</span></span><br><span class="line">		<span class="keyword">go</span> handler.Handle(clientConn)</span><br><span class="line">	&#125;</span><br><span class="line">	logf(lg.INFO, <span class="string">"TCP: closing %s"</span>, listener.Addr())</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /nsq/internal/protocol/tcp_server.go</span></span><br></pre></td></tr></table></figure>
+
+<p>对于<code>accpet</code>到的每一个连接，都交给了<code>tcpServer.Handle</code>方法异步处理。需要注意的是<code>tcpServer.Handle</code>只是对连接进行初步处理，不涉及到具体的业务逻辑。其主要是验证客户端使用的协议版本，然后就调用<code>lookup_protocol_v1.go</code>中的<code>LookupProtocolV1.IOLoop</code>方法处理。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// tcp 连接 handler。 Context/NSQLookupd 的一个 wrapper</span></span><br><span class="line"><span class="keyword">type</span> tcpServer <span class="keyword">struct</span> &#123;</span><br><span class="line">	ctx *Context</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *tcpServer)</span> <span class="title">Handle</span><span class="params">(clientConn net.Conn)</span></span> &#123;</span><br><span class="line">	p.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"TCP: new client(%s)"</span>, clientConn.RemoteAddr())</span><br><span class="line">	<span class="comment">// 在 client 同 NSQLookupd 正式通信前，需要发送一个 4byte 的序列号，以商定协议版本</span></span><br><span class="line">	buf := <span class="built_in">make</span>([]<span class="keyword">byte</span>, <span class="number">4</span>)</span><br><span class="line">	_, err := io.ReadFull(clientConn, buf)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	protocolMagic := <span class="keyword">string</span>(buf)</span><br><span class="line">	p.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"CLIENT(%s): desired protocol magic '%s'"</span>,</span><br><span class="line">		clientConn.RemoteAddr(), protocolMagic)</span><br><span class="line">	<span class="keyword">var</span> prot protocol.Protocol</span><br><span class="line">	<span class="keyword">switch</span> protocolMagic &#123;</span><br><span class="line">	<span class="comment">// 构建 LookupProtocolV1 来真正处理连接的业务请求</span></span><br><span class="line">	<span class="keyword">case</span> <span class="string">"  V1"</span>:</span><br><span class="line">		prot = &amp;LookupProtocolV1&#123;ctx: p.ctx&#125;</span><br><span class="line">	<span class="keyword">default</span>:</span><br><span class="line">		<span class="comment">// 只支持V1版本，否则发送 E_BAD_PROTOCOL，关闭连接</span></span><br><span class="line">		protocol.SendResponse(clientConn, []<span class="keyword">byte</span>(<span class="string">"E_BAD_PROTOCOL"</span>))</span><br><span class="line">		clientConn.Close()</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 调用 prot.IOLoop 方法循环处理指定连接的请求</span></span><br><span class="line">	err = prot.IOLoop(clientConn)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在<code>LookupProtocolV1.IOLoop</code>方法中，它开启了一个循环，为每一个连接创建对应的<code>client</code>（<code>/nsq/nsqlookupd/client_v1</code>的<code>ClientV1</code>）实例，然后读取请求内容，解析请求参数，并调用<code>Exec</code>方法执行请求，最后将结果返回，而在连接关闭时，它会清除<code>client</code>（其实代指的是<code>nsqd</code>实例）在<code>NSQLookupd</code>注册的信息（包括<code>topic</code>、<code>channel</code>和<code>producer</code>等）。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// LookupProtocolV1： Context/NSQLookupd 的一个 wrapper。是 protocol.Protocol 的一个实现。</span></span><br><span class="line"><span class="comment">// nsqd 使用 tcp 接口来广播</span></span><br><span class="line"><span class="keyword">type</span> LookupProtocolV1 <span class="keyword">struct</span> &#123;</span><br><span class="line">	ctx *Context</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">IOLoop</span><span class="params">(conn net.Conn)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line">	<span class="keyword">var</span> line <span class="keyword">string</span></span><br><span class="line">	<span class="comment">// 1. 先创建客户端实例，并构建对应的 reader</span></span><br><span class="line">	client := NewClientV1(conn)</span><br><span class="line">	reader := bufio.NewReader(client)</span><br><span class="line">	<span class="keyword">for</span> &#123;</span><br><span class="line">		<span class="comment">// 2. 读取一行内容，并分离出参数信息</span></span><br><span class="line">		line, err = reader.ReadString(<span class="string">'\n'</span>)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		line = strings.TrimSpace(line)</span><br><span class="line">		params := strings.Split(line, <span class="string">" "</span>)</span><br><span class="line">		<span class="comment">// 3. 调用 Exec 方法获取响应内容</span></span><br><span class="line">		<span class="keyword">var</span> response []<span class="keyword">byte</span></span><br><span class="line">		response, err = p.Exec(client, reader, params)</span><br><span class="line">		<span class="comment">// 4. Exec 方法执行失败，返回对应的异常信息</span></span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 5. 执行成功，则返回响应内容</span></span><br><span class="line">		<span class="keyword">if</span> response != <span class="literal">nil</span> &#123;</span><br><span class="line">			_, err = protocol.SendResponse(client, response)</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 6. 连接关闭时，清除  client(nsqd) 在 NSQLookupd 注册的信息</span></span><br><span class="line">	conn.Close()</span><br><span class="line">	p.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"CLIENT(%s): closing"</span>, client)</span><br><span class="line">	<span class="keyword">if</span> client.peerInfo != <span class="literal">nil</span> &#123;</span><br><span class="line">		registrations := p.ctx.nsqlookupd.DB.LookupRegistrations(client.peerInfo.id)</span><br><span class="line">		<span class="keyword">for</span> _, r := <span class="keyword">range</span> registrations &#123;</span><br><span class="line">			<span class="keyword">if</span> removed, _ := p.ctx.nsqlookupd.DB.RemoveProducer(</span><br><span class="line">                r, client.peerInfo.id); removed &#123;</span><br><span class="line">				p.ctx.nsqlookupd.logf(LOG_INFO, </span><br><span class="line">                    <span class="string">"DB: client(%s) UNREGISTER category:%s key:%s subkey:%s"</span>,</span><br><span class="line">					client, r.Category, r.Key, r.SubKey)</span><br><span class="line">			&#125;</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>先了解<code>Exec</code>如何处理请求的。其实比较简单，对于通过<code>tcp</code>连接所发送请求，只支持<code>PING</code>、<code>IDENTIFY</code>、<code>REGISTER</code>和<code>UNREGISTER</code>这四种类型。针对每一种类型的请求，分别调用它们所关联的请求处理函数。如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">Exec</span><span class="params">(client *ClientV1, reader *bufio.Reader, </span></span></span><br><span class="line"><span class="function"><span class="params">                                params []<span class="keyword">string</span>)</span> <span class="params">([]<span class="keyword">byte</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> params[<span class="number">0</span>] &#123;</span><br><span class="line">	<span class="keyword">case</span> <span class="string">"PING"</span>:</span><br><span class="line">		<span class="keyword">return</span> p.PING(client, params)</span><br><span class="line">	<span class="keyword">case</span> <span class="string">"IDENTIFY"</span>:</span><br><span class="line">		<span class="keyword">return</span> p.IDENTIFY(client, reader, params[<span class="number">1</span>:])</span><br><span class="line">	<span class="keyword">case</span> <span class="string">"REGISTER"</span>:</span><br><span class="line">		<span class="keyword">return</span> p.REGISTER(client, reader, params[<span class="number">1</span>:])</span><br><span class="line">	<span class="keyword">case</span> <span class="string">"UNREGISTER"</span>:</span><br><span class="line">		<span class="keyword">return</span> p.UNREGISTER(client, reader, params[<span class="number">1</span>:])</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span>, protocol.NewFatalClientErr(<span class="literal">nil</span>, <span class="string">"E_INVALID"</span>, </span><br><span class="line">                fmt.Sprintf(<span class="string">"invalid command %s"</span>, params[<span class="number">0</span>]))</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在介绍具体的请求处理逻辑前，先介绍一下在构建<code>NSQLookupd</code>实例时，构建的<code>RegistrationDB</code>实例，因为它代表了客户端往<code>nsqlookupd</code>所注册信息的存储或容器。其实质上是一个<code>map</code>结构，其中<code>key</code>为<code>Registration</code>，值为<code>ProduceMap(map[string]*Producer)</code>。且<code>Registration</code>主要包含了<code>topic</code>和<code>channel</code>的信息，而<code>ProduceMap</code>则包含了生产者(<code>nsqd</code>)的信息。因此，围绕<code>RegistrationDB</code>的操作也比较简单，即对相关的数据的<code>CRUD</code>操作。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// NSQLookupd 的注册信息DB，即为 nqsd 的注册信息</span></span><br><span class="line"><span class="keyword">type</span> RegistrationDB <span class="keyword">struct</span> &#123;</span><br><span class="line">	sync.RWMutex			<span class="comment">// guards registrationMap</span></span><br><span class="line">	registrationMap <span class="keyword">map</span>[Registration]ProducerMap</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Registration <span class="keyword">struct</span> &#123;</span><br><span class="line">	Category <span class="keyword">string</span> 		<span class="comment">// client|channel|topic</span></span><br><span class="line">	Key      <span class="keyword">string</span>			<span class="comment">// topic</span></span><br><span class="line">	SubKey   <span class="keyword">string</span>			<span class="comment">// channel</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Registrations []Registration</span><br><span class="line"><span class="comment">// PeerInfo 封装了 client/sqsd 中与网络通信相关的字段，即client 在 NSQLookupd 端的逻辑视图</span></span><br><span class="line"><span class="keyword">type</span> PeerInfo <span class="keyword">struct</span> &#123;</span><br><span class="line">	lastUpdate       <span class="keyword">int64</span>		<span class="comment">// nsqd 上一次向 NSQLookupd 发送心跳的 timestamp</span></span><br><span class="line">	id               <span class="keyword">string</span>			<span class="comment">// nsqd 实例的 id</span></span><br><span class="line">	RemoteAddress    <span class="keyword">string</span> <span class="string">`json:"remote_address"`</span>		<span class="comment">// ip 地址</span></span><br><span class="line">	Hostname         <span class="keyword">string</span> <span class="string">`json:"hostname"`</span>			<span class="comment">// 主机名</span></span><br><span class="line">	BroadcastAddress <span class="keyword">string</span> <span class="string">`json:"broadcast_address"`</span>	<span class="comment">// 广播地址</span></span><br><span class="line">	TCPPort          <span class="keyword">int</span>    <span class="string">`json:"tcp_port"`</span>			<span class="comment">// TCP 端口</span></span><br><span class="line">	HTTPPort         <span class="keyword">int</span>    <span class="string">`json:"http_port"`</span>			<span class="comment">// http 端口</span></span><br><span class="line">	Version          <span class="keyword">string</span> <span class="string">`json:"version"`</span>			<span class="comment">// nsqd 版本号</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Producer <span class="keyword">struct</span> &#123;</span><br><span class="line">	peerInfo     *PeerInfo		<span class="comment">// client/nsqd 的 PeerInfo</span></span><br><span class="line">	tombstoned   <span class="keyword">bool</span>			<span class="comment">// 标记 nsqd 是否被逻辑删除</span></span><br><span class="line">	tombstonedAt time.Time		<span class="comment">// 若被逻辑删除，则记录时间戳</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">type</span> Producers []*Producer</span><br><span class="line"><span class="keyword">type</span> ProducerMap <span class="keyword">map</span>[<span class="keyword">string</span>]*Producer</span><br><span class="line"><span class="comment">// /nsq/nsqlookupd/registration_db.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 当 nsqd 创建topic或channel时，需要将其注册到 NSQLookupd 的 DB 中</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">AddRegistration</span><span class="params">(k Registration)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 添加一个 <span class="title">Producer</span> 到 <span class="title">registration</span> 集合中，返回此 <span class="title">Producer</span> 之前是否已注册</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">AddProducer</span><span class="params">(k Registration, p *Producer)</span> <span class="title">bool</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 从 <span class="title">Registration</span> 对应的 <span class="title">ProducerMap</span> 移除指定的 <span class="title">client</span>/<span class="title">peer</span></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">RemoveProducer</span><span class="params">(k Registration, id <span class="keyword">string</span>)</span> <span class="params">(<span class="keyword">bool</span>, <span class="keyword">int</span>)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 删除 <span class="title">DB</span> 中指定的 <span class="title">Registration</span> 实例（若此 <span class="title">channel</span> 为 <span class="title">ephemeral</span>，</span></span><br><span class="line"><span class="function">// 则当其对应的 <span class="title">producer</span>/<span class="title">client</span> 集合为空时，会被移除）所对应的 <span class="title">producerMap</span></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">RemoveRegistration</span><span class="params">(k Registration)</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">category</span>、<span class="title">key</span>和 <span class="title">subkey</span> 来查找 <span class="title">Registration</span> 集合。注意 <span class="title">key</span> 或 <span class="title">subkey</span> 中可能包含 通配符*</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">FindRegistrations</span><span class="params">(category <span class="keyword">string</span>, key <span class="keyword">string</span>, subkey <span class="keyword">string</span>)</span> <span class="title">Registrations</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">category</span>、<span class="title">key</span>和 <span class="title">subkey</span> 来查找 <span class="title">Producer</span> 集合。注意 <span class="title">key</span> 或 <span class="title">subkey</span> 中可能包含 通配符*</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">FindProducers</span><span class="params">(category <span class="keyword">string</span>, key <span class="keyword">string</span>, subkey <span class="keyword">string</span>)</span> <span class="title">Producers</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">peer</span> <span class="title">id</span> 来查找 <span class="title">Registration</span> 集合。</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(r *RegistrationDB)</span> <span class="title">LookupRegistrations</span><span class="params">(id <span class="keyword">string</span>)</span> <span class="title">Registrations</span> </span></span><br><span class="line"><span class="function">// /<span class="title">nsq</span>/<span class="title">nsqlookupd</span>/<span class="title">registration_db</span>.<span class="title">go</span></span></span><br></pre></td></tr></table></figure>
+
+<p>接下来具体介绍各具体的命令请求是如下处理的，其中<code>PING</code>命令用于维持<code>nsqd</code>与<code>nsqlookupd</code>实例之间的连接通信，其处理也比较简单，更新一下此客户端的活跃时间<code>lastUpdate</code>，并回复<code>OK</code>。当我们使用<code>nsqd --lookupd-tcp-address=127.0.0.1:4160</code>启动一个<code>nsqd</code>实例时，它会在它的<code>Main</code>方法中使用一个额外的<code>goroutine</code>来开启<code>lookupd</code>扫描。当第一次执行时，它会向它知道的<code>nsqlookupd</code>地址（通过配置文件或命令行指定）建立连接。当<code>nsqd</code>与<code>nsqlookupd</code>连接建立成功后，会向<code>nsqlookupd</code>发送一个<code>MagicV1</code>的命令请求以校验目前自己所使用的协议版本，然后，会向<code>nsqlookupd</code>发送一个<code>IDENTIFY</code>命令请求，以认证自己身份，在此处理方法中会将客户端构造成<code>Producer</code>添加到<code>RegistrationDB</code>，并且返回自己的一些信息，当<code>nsqd</code>收到这些信息后，会遍历自己所有的<code>topic</code>，针对每一个<code>topic</code>，若其没有关联的<code>channel</code>，则发送只包含<code>topic</code>的<code>REGISTER</code>命令请求，否则还会遍历<code>topic</code>所关联的<code>channel</code>集合，针对每一个<code>channel</code>，发送一个包含<code>topic</code>和<code>channel</code>的<code>REGISTER</code>命令。所谓的<code>REGISTER</code>命令请求表示<code>nsqd</code>向 <code>nsqlookupd</code> 发送注册 <code>topic</code>的请求，当<code>nsqlookupd</code>收到<code>REGISTER</code>命令请求时，且若消息中带有<code>channel</code>时，会为此客户端会注册两个<code>producer</code>，即分别针对<code>channel</code>和<code>topic</code>构建。注意，在这里个人对<code>nsqd</code>启动后与<code>nsqdlookupd</code>建立连接以及<code>REGISTER</code>的过程阐述得比较详细，希望读者能够对一个二者的交互有一个全局的把握，但这里面涉及到<code>nsqd</code>启动的过程，会在后续的文章中详细阐述。而各命令请求处理逻辑则比较简单：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// PING 消息： client 在发送其它命令之前，可能会先发送一个 PING 消息。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">PING</span><span class="params">(client *ClientV1, params []<span class="keyword">string</span>)</span> <span class="params">([]<span class="keyword">byte</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">if</span> client.peerInfo != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="comment">// we could get a PING before other commands on the same client connection</span></span><br><span class="line">		cur := time.Unix(<span class="number">0</span>, atomic.LoadInt64(&amp;client.peerInfo.lastUpdate))</span><br><span class="line">		now := time.Now()</span><br><span class="line">		<span class="comment">// 打印 PING 日志</span></span><br><span class="line">		p.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"CLIENT(%s): pinged (last ping %s)"</span>, client.peerInfo.id,</span><br><span class="line">			now.Sub(cur))</span><br><span class="line">		<span class="comment">// 更新上一次PING的时间</span></span><br><span class="line">		atomic.StoreInt64(&amp;client.peerInfo.lastUpdate, now.UnixNano())</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 回复 OK</span></span><br><span class="line">	<span class="keyword">return</span> []<span class="keyword">byte</span>(<span class="string">"OK"</span>), <span class="literal">nil</span></span><br><span class="line">&#125;  <span class="comment">// /nsq/nsqlookup/lookup_protocol_v1.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// client 向 NSQLookupd 发送认证身份的消息。 注意在此过程中会将客户端构造成Producer添加到 Registration DB中。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">IDENTIFY</span><span class="params">(client *ClientV1, reader *bufio.Reader, </span></span></span><br><span class="line"><span class="function"><span class="params">                                    params []<span class="keyword">string</span>)</span> <span class="params">([]<span class="keyword">byte</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="keyword">var</span> err error</span><br><span class="line"></span><br><span class="line">	<span class="comment">// 1. client 不能重复发送 IDENTIFY 消息</span></span><br><span class="line">	<span class="keyword">if</span> client.peerInfo != <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, protocol.NewFatalClientErr(err, <span class="string">"E_INVALID"</span>, <span class="string">"cannot IDENTIFY again"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 读取消息体的长度</span></span><br><span class="line">	<span class="keyword">var</span> bodyLen <span class="keyword">int32</span></span><br><span class="line">	err = binary.Read(reader, binary.BigEndian, &amp;bodyLen)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 3. 读取消息体内容，包含生产者的信息</span></span><br><span class="line">	body := <span class="built_in">make</span>([]<span class="keyword">byte</span>, bodyLen)</span><br><span class="line">	_, err = io.ReadFull(reader, body)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 4. 根据消息体构建 PeerInfo 实例</span></span><br><span class="line">	peerInfo := PeerInfo&#123;id: client.RemoteAddr().String()&#125;</span><br><span class="line">	err = json.Unmarshal(body, &amp;peerInfo)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	peerInfo.RemoteAddress = client.RemoteAddr().String()</span><br><span class="line">	<span class="comment">// 5. 检验属性不能为空，同时更新上一次PING的时间</span></span><br><span class="line">	<span class="keyword">if</span> peerInfo.BroadcastAddress == <span class="string">""</span> || peerInfo.TCPPort == <span class="number">0</span> </span><br><span class="line">    || peerInfo.HTTPPort == <span class="number">0</span> || peerInfo.Version == <span class="string">""</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, protocol.NewFatalClientErr(<span class="literal">nil</span>, <span class="string">"E_BAD_BODY"</span>, <span class="string">"IDENTIFY missing fields"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	atomic.StoreInt64(&amp;peerInfo.lastUpdate, time.Now().UnixNano())</span><br><span class="line">	<span class="comment">// 6. 将此 client 构建成一个 Producer 注册到 DB中</span></span><br><span class="line">	client.peerInfo = &amp;peerInfo</span><br><span class="line">	<span class="keyword">if</span> p.ctx.nsqlookupd.DB.AddProducer(Registration&#123;<span class="string">"client"</span>, <span class="string">""</span>, <span class="string">""</span>&#125;,</span><br><span class="line">                                       &amp;Producer&#123;peerInfo: client.peerInfo&#125;) &#123;</span><br><span class="line">		p.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"DB: client(%s) REGISTER category:%s key:%s subkey:%s"</span>, client, <span class="string">"client"</span>, <span class="string">""</span>, <span class="string">""</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 7. 构建响应消息，包含 NSQLookupd 的 hostname、port及 version</span></span><br><span class="line">	data := <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">interface</span>&#123;&#125;)</span><br><span class="line">	data[<span class="string">"tcp_port"</span>] = p.ctx.nsqlookupd.RealTCPAddr().Port</span><br><span class="line">	data[<span class="string">"http_port"</span>] = p.ctx.nsqlookupd.RealHTTPAddr().Port</span><br><span class="line">	data[<span class="string">"version"</span>] = version.Binary</span><br><span class="line">	hostname, err := os.Hostname()</span><br><span class="line">	<span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">		log.Fatalf(<span class="string">"ERROR: unable to get hostname %s"</span>, err)</span><br><span class="line">	&#125;</span><br><span class="line">	data[<span class="string">"broadcast_address"</span>] = p.ctx.nsqlookupd.opts.BroadcastAddress</span><br><span class="line">	data[<span class="string">"hostname"</span>] = hostname</span><br><span class="line">	response, err := json.Marshal(data)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> response, <span class="literal">nil</span></span><br><span class="line">&#125;  <span class="comment">// /nsq/nsqlookup/lookup_protocol_v1.go</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//  Client 向 NSQLookupd 发送取消注册/订阅 topic 的消息。即为 REGISTER 的逆过程</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">UNREGISTER</span><span class="params">(client *ClientV1, reader *bufio.Reader, </span></span></span><br><span class="line"><span class="function"><span class="params">                                      params []<span class="keyword">string</span>)</span> <span class="params">([]<span class="keyword">byte</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 必须先要发送 IDENTIFY 消息进行身份认证</span></span><br><span class="line">	<span class="keyword">if</span> client.peerInfo == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, protocol.NewFatalClientErr(<span class="literal">nil</span>, <span class="string">"E_INVALID"</span>, <span class="string">"client must IDENTIFY"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 获取 client 注册的 topic 和 channel(若有的话)</span></span><br><span class="line">	topic, channel, err := getTopicChan(<span class="string">"UNREGISTER"</span>, params)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 3. 若 channel 不为空，则在 DB 中移除一个 Producer 实例，</span></span><br><span class="line">    <span class="comment">// 其键(Category)为 channel 类型的 Registration。</span></span><br><span class="line">	<span class="keyword">if</span> channel != <span class="string">""</span> &#123;</span><br><span class="line">		key := Registration&#123;<span class="string">"channel"</span>, topic, channel&#125;</span><br><span class="line">		removed, left := p.ctx.nsqlookupd.DB.RemoveProducer(key, client.peerInfo.id)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 对于 ephemeral 类型的 channel，</span></span><br><span class="line">        <span class="comment">// 若它未被任何 Producer 订阅，则需要移除此 channel 代表的 Registration 对象</span></span><br><span class="line">		<span class="comment">// for ephemeral channels, remove the channel as well if it has no producers</span></span><br><span class="line">		<span class="keyword">if</span> left == <span class="number">0</span> &amp;&amp; strings.HasSuffix(channel, <span class="string">"#ephemeral"</span>) &#123;</span><br><span class="line">			p.ctx.nsqlookupd.DB.RemoveRegistration(key)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">		<span class="comment">// 4. 取消注册 topic。因此它会删除掉 类型(Category)为 channel </span></span><br><span class="line">        <span class="comment">// 且 Key 为 topic 且 subKey不限的　Registration 集合；</span></span><br><span class="line">		<span class="comment">// 也会删除 Category 为 topic 且 Key 为 topic且 subKey为""的　Registration集合</span></span><br><span class="line">		registrations := p.ctx.nsqlookupd.DB.FindRegistrations(<span class="string">"channel"</span>, topic, <span class="string">"*"</span>)</span><br><span class="line">		<span class="keyword">for</span> _, r := <span class="keyword">range</span> registrations &#123;</span><br><span class="line">			removed, _ := p.ctx.nsqlookupd.DB.RemoveProducer(r, client.peerInfo.id)</span><br><span class="line">			<span class="comment">// ...</span></span><br><span class="line">		key := Registration&#123;<span class="string">"topic"</span>, topic, <span class="string">""</span>&#125;</span><br><span class="line">		removed, left := p.ctx.nsqlookupd.DB.RemoveProducer(key, client.peerInfo.id)</span><br><span class="line">		<span class="comment">// ...</span></span><br><span class="line">		<span class="comment">// 同样，对于 ephemeral 类型的 topic，若它没有被任何 Producer 订阅，</span></span><br><span class="line">            <span class="comment">// 则需要移除此 channel 代表的 Registration 对象。</span></span><br><span class="line">		<span class="keyword">if</span> left == <span class="number">0</span> &amp;&amp; strings.HasSuffix(topic, <span class="string">"#ephemeral"</span>) &#123;</span><br><span class="line">			p.ctx.nsqlookupd.DB.RemoveRegistration(key)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="keyword">return</span> []<span class="keyword">byte</span>(<span class="string">"OK"</span>), <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqlookup/lookup_protocol_v1.go</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="tcp-请求-REGISTER-处理过程"><a href="#tcp-请求-REGISTER-处理过程" class="headerlink" title="tcp 请求 REGISTER 处理过程"></a>tcp 请求 REGISTER 处理过程</h4><p>这里简要阐述<code>REGISTER</code>请求处理的过程：当<code>nsqlookupd</code>收到<code>REGISTER</code>命令请求后，它首先确认对方是否已经发送过<code>IDENTIFY</code>命令请求，确认完成后，解析请求中的<code>topic</code>名称和<code>channel</code>名称，然后，进一步检查<code>topic</code>和<code>channel</code>命名的合法性，最后若<code>channel</code>不为空，则向<code>RegistrationDB</code>中添加一个<code>Producer</code> 实例，其<code>Category</code>为<code>channel</code>类型的<code>Registration</code>。同样，若<code>topic</code>不为空，则还需要向<code>RegistrationDB</code>中添加一个<code>Producer</code>实例，其<code>Category</code>为<code>topic</code> 类型的 <code>Registration</code>。最后返回<code>OK</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//  Client 向 NSQLookupd 发送注册 topic 的消息。注意，当消息中带有 channel 时，</span></span><br><span class="line"><span class="comment">// 对于此 client会注册两个 producer，分别针对 channel 和 topic</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(p *LookupProtocolV1)</span> <span class="title">REGISTER</span><span class="params">(client *ClientV1, reader *bufio.Reader, </span></span></span><br><span class="line"><span class="function"><span class="params">                                    params []<span class="keyword">string</span>)</span> <span class="params">([]<span class="keyword">byte</span>, error)</span></span> &#123;</span><br><span class="line">	<span class="comment">// 1. 必须先要发送 IDENTIFY 消息进行身份认证。</span></span><br><span class="line">	<span class="keyword">if</span> client.peerInfo == <span class="literal">nil</span> &#123;</span><br><span class="line">		<span class="keyword">return</span> <span class="literal">nil</span>, protocol.NewFatalClientErr(<span class="literal">nil</span>, <span class="string">"E_INVALID"</span>, <span class="string">"client must IDENTIFY"</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 2. 获取 client 注册的 topic 和 channel(若有的话)</span></span><br><span class="line">	topic, channel, err := getTopicChan(<span class="string">"REGISTER"</span>, params)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="comment">// 3. 若 channel 不为空，则向 DB 中添加一个 Producer 实例，其键(Category)为 channel 类型的 Registration</span></span><br><span class="line">	<span class="keyword">if</span> channel != <span class="string">""</span> &#123;</span><br><span class="line">		key := Registration&#123;<span class="string">"channel"</span>, topic, channel&#125;</span><br><span class="line">		<span class="keyword">if</span> p.ctx.nsqlookupd.DB.AddProducer(key, &amp;Producer&#123;peerInfo: client.peerInfo&#125;) &#123;</span><br><span class="line">			p.ctx.nsqlookupd.logf(</span><br><span class="line">                LOG_INFO, <span class="string">"DB: client(%s) REGISTER category:%s key:%s subkey:%s"</span>,</span><br><span class="line">				client, <span class="string">"channel"</span>, topic, channel)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 若 topic 不为空，则还需要向 DB 中添加一个 Producer 实例，其键(Category)为 topic 类型的 Registration</span></span><br><span class="line">	key := Registration&#123;<span class="string">"topic"</span>, topic, <span class="string">""</span>&#125;</span><br><span class="line">	<span class="keyword">if</span> p.ctx.nsqlookupd.DB.AddProducer(key, &amp;Producer&#123;peerInfo: client.peerInfo&#125;) &#123;</span><br><span class="line">		p.ctx.nsqlookupd.logf(</span><br><span class="line">            LOG_INFO, <span class="string">"DB: client(%s) REGISTER category:%s key:%s subkey:%s"</span>,</span><br><span class="line">			client, <span class="string">"topic"</span>, topic, <span class="string">""</span>)</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 5. 返回 OK</span></span><br><span class="line">	<span class="keyword">return</span> []<span class="keyword">byte</span>(<span class="string">"OK"</span>), <span class="literal">nil</span></span><br><span class="line">&#125;  <span class="comment">// /nsq/nsqlookup/lookup_protocol_v1.go</span></span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是，这几个接口都是<code>tcp</code>连接请求的对应的处理函数，并非是<code>http</code>请求（可以通过命令行的方式发起）所对应的处理函数。<code>nsq</code>官方提供了一个<code>go-nsq</code>的客户端库。我们可以通过这个库来显式调试这些命令请求处理函数，当然源码包下也有对应的测试文件<code>/nsq/nsqlookupd/nsqlookupd_test.go</code>。到此为止通过<code>tcp</code>协议发起的请求的处理逻辑已经阐述完毕。下面介绍<code>http</code>协议的请求处理逻辑。</p>
+<h3 id="客户端-http-请求处理"><a href="#客户端-http-请求处理" class="headerlink" title="客户端 http 请求处理"></a>客户端 http 请求处理</h3><p>前面提到，在<code>NSQLookupd.Main</code>方法中，同样创建了一个<code>http</code>请求处理器<code>httpServer</code>，并设置了请求的监听器<code>http_api.Serve</code>。它们的功能及用法可以<a href="https://nsq.io/components/nsqlookupd.html" target="_blank" rel="noopener">参考这里</a>。我们先来简单了解<code>http</code>请求的监听器是怎样工作的。很简单，它同样使用的是标准库中的<code>http</code>相关的接口，即调用<code>server.Serve</code>函数监听连接请求，但其采用的是自定义的<code>handler</code>，即前方所提到的<code>httprouter</code>来作为请求路由处理器。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// http 连接处理器，类似于 tcp_server 只是一个统一的入口，具体监听动作是在标准包 http.Server.Serve 方法中完成</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Serve</span><span class="params">(listener net.Listener, handler http.Handler, proto <span class="keyword">string</span>, logf lg.AppLogFunc)</span> <span class="title">error</span></span> &#123;</span><br><span class="line">	logf(lg.INFO, <span class="string">"%s: listening on %s"</span>, proto, listener.Addr())</span><br><span class="line">	server := &amp;http.Server&#123;</span><br><span class="line">		Handler:  handler,</span><br><span class="line">		ErrorLog: log.New(logWriter&#123;logf&#125;, <span class="string">""</span>, <span class="number">0</span>),</span><br><span class="line">	&#125;</span><br><span class="line">	err := server.Serve(listener)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	logf(lg.INFO, <span class="string">"%s: closing %s"</span>, proto, listener.Addr())</span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而<code>http</code>请求处理的重点在于<code>http</code>请求的路由器，即<code>/nsq/nsqlookupd/http.go</code>中所定义的<code>httpServer</code>，其仅仅是<a href="https://github.com/julienschmidt/httprouter" target="_blank" rel="noopener"><code>httprouter</code></a>的一个<code>wrapper</code>。关于<code>httprouter</code>具体工作原理，读者可以阅读源码（比较短）或参考其它文章。这里简要介绍一下<code>httpServer</code>实例化的过程，首先会创建<code>httprouter</code>实例，然后设置参数信息，比如对于<code>403</code>、<code>404</code>和<code>500</code>等错误的<code>handler</code>。接下来，构建<code>httpServer</code>实例，然后通过<code>httprouter</code>实例来添加特定的路由规则。各具体的请求处理器也比较简单，纯粹就调用<code>RegistrationDB</code>相关接口，不多阐述，读者可深入源码查看。最后，值得学习的是，程度采用装饰者模式构建强大且灵活的请求处理器。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// http 连接的 handler。</span></span><br><span class="line"><span class="comment">// 客户端（消费者）使用这些 http　接口来发现和管理。</span></span><br><span class="line"><span class="comment">// 实现了 http.Handler 接口，实现了 ServeHTTP(ResponseWriter, *Request) 处理函数</span></span><br><span class="line"><span class="keyword">type</span> httpServer <span class="keyword">struct</span> &#123;</span><br><span class="line">	ctx    *Context</span><br><span class="line">	router http.Handler</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// http 请求处理器构造函数</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newHTTPServer</span><span class="params">(ctx *Context)</span> *<span class="title">httpServer</span></span> &#123;</span><br><span class="line">	log := http_api.Log(ctx.nsqlookupd.logf)</span><br><span class="line">	<span class="comment">// 1. 创建 httprouter 实例。httprouter是一个高效的请求路由器，使用了一个后缀树来存储路由信息。</span></span><br><span class="line">	<span class="comment">// 更多 https://github.com/julienschmidt/httprouter 或参考博客 https://learnku.com/articles/27591</span></span><br><span class="line">	router := httprouter.New()</span><br><span class="line">	<span class="comment">// 2. 配置参数信息</span></span><br><span class="line">	router.HandleMethodNotAllowed = <span class="literal">true</span></span><br><span class="line">	router.PanicHandler = http_api.LogPanicHandler(ctx.nsqlookupd.logf)</span><br><span class="line">	router.NotFound = http_api.LogNotFoundHandler(ctx.nsqlookupd.logf)</span><br><span class="line">	router.MethodNotAllowed = http_api.LogMethodNotAllowedHandler(ctx.nsqlookupd.logf)</span><br><span class="line">	<span class="comment">// 3. 对此 httprouter 进行包装，构建 httpServer 实例</span></span><br><span class="line">	s := &amp;httpServer&#123;</span><br><span class="line">		ctx:    ctx,</span><br><span class="line">		router: router,</span><br><span class="line">	&#125;</span><br><span class="line">	<span class="comment">// 4. 为 httprouter 实例添加特定路由规则</span></span><br><span class="line">	<span class="comment">// 对于 PING 请求而言，其 handler 为调用 Decorate 后的返回值，</span></span><br><span class="line">	<span class="comment">// 以 pingHandler 作为被装饰函数，可变的装饰参数列表为 log, http_api.PlainText（用于返回纯文本内容）</span></span><br><span class="line">	<span class="comment">// 后面的程序结构类似</span></span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/ping"</span>, http_api.Decorate(s.pingHandler, log, http_api.PlainText))</span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/info"</span>, http_api.Decorate(s.doInfo, log, http_api.V1))</span><br><span class="line"></span><br><span class="line">	<span class="comment">// v1 negotiate</span></span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/debug"</span>, http_api.Decorate(s.doDebug, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/lookup"</span>, http_api.Decorate(s.doLookup, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/topics"</span>, http_api.Decorate(s.doTopics, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/channels"</span>, http_api.Decorate(s.doChannels, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"GET"</span>, <span class="string">"/nodes"</span>, http_api.Decorate(s.doNodes, log, http_api.V1))</span><br><span class="line"></span><br><span class="line">	<span class="comment">// only v1</span></span><br><span class="line">	router.Handle(<span class="string">"POST"</span>, <span class="string">"/topic/create"</span>, http_api.Decorate(s.doCreateTopic, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"POST"</span>, <span class="string">"/topic/delete"</span>, http_api.Decorate(s.doDeleteTopic, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"POST"</span>, <span class="string">"/channel/create"</span>, http_api.Decorate(s.doCreateChannel, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"POST"</span>, <span class="string">"/channel/delete"</span>, http_api.Decorate(s.doDeleteChannel, log, http_api.V1))</span><br><span class="line">	router.Handle(<span class="string">"POST"</span>, <span class="string">"/topic/tombstone"</span>, http_api.Decorate(s.doTombstoneTopicProducer, log, http_api.V1))</span><br><span class="line"></span><br><span class="line">	<span class="comment">// debug</span></span><br><span class="line">	router.HandlerFunc(<span class="string">"GET"</span>, <span class="string">"/debug/pprof"</span>, pprof.Index)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	<span class="keyword">return</span> s</span><br><span class="line">&#125; <span class="comment">// /nsq/nsqlookupd/http.go</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *httpServer)</span> <span class="title">ServeHTTP</span><span class="params">(w http.ResponseWriter, req *http.Request)</span></span> &#123;</span><br><span class="line">	s.router.ServeHTTP(w, req)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// PING 请求处理器</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *httpServer)</span> <span class="title">pingHandler</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                 ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// <span class="title">INFO</span>（版本信息）查询请求处理器</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doInfo</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                            ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 查询所有 <span class="title">Category</span> 为 <span class="title">topic</span>的 <span class="title">Registration</span> 的集合所包含的 <span class="title">Key</span> 集合（<span class="title">topic</span>名称集合）</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doTopics</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                              ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 查询所有 <span class="title">Category</span> 为 <span class="title">channel</span>，</span></span><br><span class="line"><span class="function">// 且 <span class="title">topic</span> 为请求参数中指定的 <span class="title">topic</span> 的 <span class="title">Registration</span> 的集合包含的 <span class="title">SubKey</span> 集合（<span class="title">channel</span>名称集合）</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doChannels</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 查询所有 <span class="title">Category</span> 为 <span class="title">topic</span>的 <span class="title">channels</span> 的集合以及<span class="title">producers</span>集合。</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doLookup</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                              ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">topic</span> 来添加注册信息 <span class="title">Registration</span></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doCreateTopic</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                   ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">topic</span> 来删移除注册信息 <span class="title">Registration</span></span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doDeleteTopic</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                   ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 为指定 <span class="title">topic</span> 关联的 <span class="title">producer</span> 设置为 <span class="title">tombstone</span> 状态。</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doTombstoneTopicProducer</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                    ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">topic</span> 和 <span class="title">channel</span> 的名称添加注册信息</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doCreateChannel</span><span class="params">(w http.ResponseWriter, </span></span></span><br><span class="line"><span class="function"><span class="params">                                     req *http.Request, ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span></span><br><span class="line"><span class="function"></span></span><br><span class="line"><span class="function">// 根据 <span class="title">topic</span> 和 <span class="title">channel</span> 的名称移除注册信息</span></span><br><span class="line"><span class="function"><span class="title">func</span> <span class="params">(s *httpServer)</span> <span class="title">doDeleteChannel</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                     ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span> </span></span><br><span class="line"><span class="function">// /<span class="title">nsq</span>/<span class="title">nsqlookupd</span>/<span class="title">http</span>.<span class="title">go</span></span></span><br></pre></td></tr></table></figure>
+
+<h4 id="http-请求-topic-创建-查询处理过程"><a href="#http-请求-topic-创建-查询处理过程" class="headerlink" title="http 请求 topic 创建/查询处理过程"></a>http 请求 topic 创建/查询处理过程</h4><p>最后，笔者简要介绍，消费者请求<code>nsqlookupd</code>的完成的请求服务。比如，当消费者需要查询某个<code>topic</code>在哪些<code>nsqd</code>上时，它可以通过<code>/lookup</code>的<code>http GET</code>请求来查询结果，<code>nsqlookupd</code>所提供的查询的指定<code>topic</code>信息的接口为：<code>curl &#39;http://127.0.0.1:4161/lookup?topic=test-topic&#39;</code>，从返回结果为此<code>topic</code>所关联的<code>channels</code>列表和<code>producer</code>列表。其具体处理流程不再阐述，比较简单，其详细代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 查询所有 Category 为 topic的 channels 的集合以及producers集合。</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *httpServer)</span> <span class="title">doLookup</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                              ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	reqParams, err := http_api.NewReqParams(req) <span class="comment">// 1. 解析请求参数</span></span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	topicName, err := reqParams.Get(<span class="string">"topic"</span>) <span class="comment">// 2. 获取请求查询的 topic</span></span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">    <span class="comment">// 3. 根据 topic 查询 registration</span></span><br><span class="line">	registration := s.ctx.nsqlookupd.DB.FindRegistrations(<span class="string">"topic"</span>, topicName, <span class="string">""</span>)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">    <span class="comment">// 4. 根据 topic 查询 channel 列表</span></span><br><span class="line">	channels := s.ctx.nsqlookupd.DB.FindRegistrations(<span class="string">"channel"</span>, topicName, <span class="string">"*"</span>).SubKeys()</span><br><span class="line">    <span class="comment">// 5. 根据 topic 查询 producer 列表</span></span><br><span class="line">	producers := s.ctx.nsqlookupd.DB.FindProducers(<span class="string">"topic"</span>, topicName, <span class="string">""</span>)</span><br><span class="line">	<span class="comment">// 6. 过滤掉那些 inActive 的 producers，同时也过滤那些 tombstone 状态的 producers</span></span><br><span class="line">	producers = producers.FilterByActive(s.ctx.nsqlookupd.opts.InactiveProducerTimeout,</span><br><span class="line">		s.ctx.nsqlookupd.opts.TombstoneLifetime)</span><br><span class="line">	<span class="keyword">return</span> <span class="keyword">map</span>[<span class="keyword">string</span>]<span class="keyword">interface</span>&#123;&#125;&#123; <span class="comment">// 7. 返回 topic 所关联的 channel 和 producer 列表</span></span><br><span class="line">		<span class="string">"channels"</span>:  channels,</span><br><span class="line">		<span class="string">"producers"</span>: producers.PeerInfo(),</span><br><span class="line">	&#125;, <span class="literal">nil</span></span><br><span class="line">&#125; <span class="comment">// /nsq/nsqlookupd/http.go</span></span><br></pre></td></tr></table></figure>
+
+<p>同样，也介绍一个<code>nsqd</code>请求<code>nsqlookupd</code>通过<code>http</code>协议完成的请求服务。比如，当<code>nsqd</code>需要请求<code>nsqlookupd</code>注册<code>topic</code>信息时，其可通过<code>/topic/create</code>的<code>http POST</code>请求来创建，而参数为<code>topic</code>名称，对应的请求处理函数为<code>doCreateTopic</code>，且没有返回值，处理函数的具体逻辑即为通过<code>topic</code>创建一个<code>Registration</code>实例，然后添加到<code>RegistrationDB</code>中。相关代码如下：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 根据 topic 来添加注册信息 Registration</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *httpServer)</span> <span class="title">doCreateTopic</span><span class="params">(w http.ResponseWriter, req *http.Request, </span></span></span><br><span class="line"><span class="function"><span class="params">                                   ps httprouter.Params)</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	reqParams, err := http_api.NewReqParams(req) <span class="comment">// 1. 解析请求参数</span></span><br><span class="line">	<span class="comment">// ... </span></span><br><span class="line">	topicName, err := reqParams.Get(<span class="string">"topic"</span>) <span class="comment">// 2. 获取请求创建的 topic</span></span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	s.ctx.nsqlookupd.logf(LOG_INFO, <span class="string">"DB: adding topic(%s)"</span>, topicName)</span><br><span class="line">	key := Registration&#123;<span class="string">"topic"</span>, topicName, <span class="string">""</span>&#125; <span class="comment">// 3. 构建一个 Registration</span></span><br><span class="line">	<span class="comment">// 4. 将其添加到 RegistrationDB（value 为空的 map）</span></span><br><span class="line">    s.ctx.nsqlookupd.DB.AddRegistration(key) </span><br><span class="line">	<span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">nil</span></span><br><span class="line">&#125;<span class="comment">// /nsq/nsqlookupd/http.go</span></span><br></pre></td></tr></table></figure>
+
+<p>至此，关于<code>nsqlookupd</code>相关的逻辑的源码已经分析完毕。相比<code>nsqd</code>要简单，没有复杂的流程。</p>
+<p>简单小结，本文以执行<code>nsqlookupd</code>命令为切入点，先是简要分析了<code>nsqlookupd</code>其利用<code>svc</code>启动一个进程的过程。进而分析了<code>NSQLookupd</code>的<code>Main</code>方法的执行流程，其核心逻辑为创建了<code>tcp</code>及<code>http</code>请求的处理器，并注册了监听函数。本文的重点在于分析<code>tcp</code>请求处理器的详细内容，附带阐述了<code>nsqd</code>实例启动后与<code>nsqlookupd</code>实例的一个交互过程，具体包括<code>IDENTIFY</code>、<code>REGISTER</code>及<code>PING</code>等命令请求。然后，对于<code>http</code>请求处理器也进行了简要分析，侧重于处理器的创建过程。最后，对于<code>http</code>请求的方式，以两个示例分别阐述了客户端（消费者）及<code>nsqd</code>请求<code>nsqlookupd</code>完成<code>topic</code>查询和<code>topic</code>注册过程。更详细内容可以参考笔者简要<a href="https://github.com/qqzeng/nsqio/tree/master/nsq" target="_blank" rel="noopener">注释的源码</a>。</p>
+<p>参考文献</p>
+<p>[1].  <a href="https://github.com/nsqio/nsq" target="_blank" rel="noopener">https://github.com/nsqio/nsq</a><br>[2]. <a href="https://nsq.io/overview/quick_start.html" target="_blank" rel="noopener">https://nsq.io/overview/quick_start.html</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag"><i class="fa fa-tag"></i> 消息队列</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/05/11/nsq-%E7%AE%80%E4%BB%8B%E5%92%8C%E7%89%B9%E6%80%A7%E7%90%86%E8%A7%A3/" rel="next" title="nsq 简介和特性理解">
+                  <i class="fa fa-chevron-left"></i> nsq 简介和特性理解
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/05/13/nsq-nsqd-%E6%9C%8D%E5%8A%A1%E5%90%AF%E5%8A%A8%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="nsq nsqd 服务启动源码简析">
+                  nsq nsqd 服务启动源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#利用-svc-启动进程"><span class="nav-number">1.</span> <span class="nav-text">利用 svc 启动进程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#NSQLookupd-启动初始化"><span class="nav-number">2.</span> <span class="nav-text">NSQLookupd 启动初始化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#tcp-amp-http-请求处理"><span class="nav-number">3.</span> <span class="nav-text">tcp &amp; http 请求处理</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#客户端-tcp-请求处理"><span class="nav-number">3.1.</span> <span class="nav-text">客户端 tcp 请求处理</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#tcp-请求-REGISTER-处理过程"><span class="nav-number">3.1.1.</span> <span class="nav-text">tcp 请求 REGISTER 处理过程</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#客户端-http-请求处理"><span class="nav-number">3.2.</span> <span class="nav-text">客户端 http 请求处理</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#http-请求-topic-创建-查询处理过程"><span class="nav-number">3.2.1.</span> <span class="nav-text">http 请求 topic 创建/查询处理过程</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

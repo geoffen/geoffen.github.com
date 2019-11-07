@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="前段时间写的分布式系统相关lab，都是使用go语言，还挺有趣的这门语言，但至今也没系统了解过它。不得不说，纯粹了解或学习语言特性，长时间下来会有点枯燥。个人更习惯阅读开源项目，以更深入了解其在实际工程项目的最佳实践（但似乎不能对语言特性本质有太多的了解，尴尬）。很自然地选择了一个对于初学者比较经典的starter project，一个分布式实时消息队列——nsq。大家比较熟悉的消息中间件可能是像R">
+<meta name="keywords" content="分布式系统,消息队列">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nsq 简介和特性理解">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;05&#x2F;11&#x2F;nsq-%E7%AE%80%E4%BB%8B%E5%92%8C%E7%89%B9%E6%80%A7%E7%90%86%E8%A7%A3&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="前段时间写的分布式系统相关lab，都是使用go语言，还挺有趣的这门语言，但至今也没系统了解过它。不得不说，纯粹了解或学习语言特性，长时间下来会有点枯燥。个人更习惯阅读开源项目，以更深入了解其在实际工程项目的最佳实践（但似乎不能对语言特性本质有太多的了解，尴尬）。很自然地选择了一个对于初学者比较经典的starter project，一个分布式实时消息队列——nsq。大家比较熟悉的消息中间件可能是像R">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;mq-comparison.png?raw=true">
+<meta property="og:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;nsqd-message-pub-sub-process.gif?raw=true">
+<meta property="og:updated_time" content="2019-10-23T11:31:00.870Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https:&#x2F;&#x2F;github.com&#x2F;qqzeng&#x2F;qqzeng.github.io&#x2F;blob&#x2F;hexo&#x2F;static&#x2F;mq-comparison.png?raw=true">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/05/11/nsq-%E7%AE%80%E4%BB%8B%E5%92%8C%E7%89%B9%E6%80%A7%E7%90%86%E8%A7%A3/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>nsq 简介和特性理解 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/05/11/nsq-%E7%AE%80%E4%BB%8B%E5%92%8C%E7%89%B9%E6%80%A7%E7%90%86%E8%A7%A3/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          nsq 简介和特性理解
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2019-05-11 21:51:04" itemprop="dateCreated datePublished" datetime="2019-05-11T21:51:04+08:00">2019-05-11</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" itemprop="url" rel="index">
+                    <span itemprop="name">消息队列</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>3.7k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>3 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>前段时间写的分布式系统相关<code>lab</code>，都是使用<code>go</code>语言，还挺有趣的这门语言，但至今也没系统了解过它。不得不说，纯粹了解或学习语言特性，长时间下来会有点枯燥。个人更习惯阅读开源项目，以更深入了解其在实际工程项目的最佳实践（但似乎不能对语言特性本质有太多的了解，尴尬）。很自然地选择了一个对于初学者比较经典的<code>starter project</code>，一个<strong>分布式实时消息队列</strong>——<code>nsq</code>。大家比较熟悉的消息中间件可能是像<code>RabbitMQ</code>、<code>ActiveMQ</code>、<code>RocketMQ</code>以及<code>kafaka</code>之类的。我个人对这些消息中间件并没有实践经验，但感觉<code>nsq</code>更轻量级（代码量也少），而且正如官方对其的定义，其最主要优势在于<strong>分布式</strong>和<strong>实时</strong>。具体对比，可以参考<code>golang 2017</code>开发者大会上的一张图。<code>nsq</code>遵循的是一个去中心化的的拓扑结构，其具备<strong>高可用性</strong>（无单点故障<code>SPOF</code>）、<strong>可扩展</strong>（支持水平扩展节点）、<strong>低延迟</strong>（采用<code>push</code>的方式）、<strong>可靠消息传递</strong>（消息可被持久化和失败重入队列）、<strong>组合式负载均衡</strong>（消息推送为随机负载均衡）以及<strong>消费者自动发现和连接生产者</strong>（通过服务发现与注册系统实现）等特性。笔者打算后面通过一系列博文，深入到<code>nsq</code>源码，简析其各模块（组件）的设计实现。</p>
+<a id="more"></a>
+
+<p>按照惯例，先声明下阅读本文章的前提。本文不会详细介绍<a href="https://nsq.io/overview/quick_start.html" target="_blank" rel="noopener">nsq</a>基本特性，也不会过多阐述消息队列的基本功能和使用场景，也不会涉及到<code>nsq</code>如何使用及其最佳实践。换言之，阅读本文前最好对这些有初步了解，以在整体上有所把握和体会。关于<code>nsq</code>可参考官方文档的文献[1]、[2]、[3]和[4]，或者其它中文文章[4]。本文先简要介绍<code>nsq</code>各组件及基本工作流程，然后详细阐述<code>nsq</code>几个值得注意的特性。若有理解错误的地方，欢迎指正！</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/blob/hexo/static/mq-comparison.png?raw=true" alt="mq-comparison"></p>
+<h2 id="nsq-基本介绍"><a href="#nsq-基本介绍" class="headerlink" title="nsq 基本介绍"></a>nsq 基本介绍</h2><p>在本文最前面，简要阐述了<code>nsq</code>的几个重要特性（官方文档列举的更全），我们会重点阐述这些特性。关于它们中的一些，我们深入到代码以了解其是如何实现的。而其它的典型的包括：易于部署，因为它没有太多依赖配置（通过命令行就可以配置）；支持安全传输层协议 (<code>TLS</code>)；还提供了多种语言的客户端功能库；最后附带一个简易的集群管理界面<code>nsqadmin</code>。<code>nsq</code>主要包括两个组件<code>nsqd</code>和<code>nsqlookupd</code>，和一个管理界面<code>nsqdadmin</code>：</p>
+<ul>
+<li><code>nsqd</code>是一个负责接收、排队、转发消息到客户端的守护进程；</li>
+<li><code>nsqlookupd</code>是一个管理集群(<code>nsqd</code>)拓扑信息并提供最终一致性的服务注册与发现的守护进程；</li>
+<li><code>nsqadmin</code>是一个管理界面，提供实时的集群中<code>topic</code>、<code>channel</code>和<code>message</code>的统计信息，还提供与这些实体相关的各种管理接口。</li>
+</ul>
+<p>在这里简单阐述整个系统的典型流程。除了上述几个组件外，另外两个核心的概念为主题(<code>topic</code>)和通道<code>channel</code>，当然消息(<code>message</code>)也是重要的。它们的简单阐述如下：</p>
+<ul>
+<li><code>message</code>即代表的是数据，它被生产者创建并发送到指定的<code>topic</code>，而消费者可以从指定的<code>topic</code>和<code>channel</code>接收并消费消息。且每个被<code>nsqd</code>接收到的消息至少会被发送一次给消费者，因为消息消费超时会触发重入队过程，且消息附带有一个投递次数属性，以使得客户端对投递次数过大的消息灵活处理。</li>
+<li><code>topic</code>代表生产者投递消息的一个逻辑键值，它可以将消息进行分类。一个<code>nsqd</code>上可包含多个<code>topic</code>，且它们可以不必在生产者投递消息前就创建，换言之，<code>topic</code>可在其第一次接收到生产者投递的消息时创建。</li>
+<li><code>channel</code>代表消费者订阅某个<code>nsqd</code>上的<code>topic</code>的消息。你可以仍旧将它视作一个消息队列，只不过它与消费者相关。每当生产者将消息发布到一个<code>topic</code>上，消息会被<strong>拷贝</strong>（深拷贝，即构建一个消息副本）到与<code>topic</code>关联的所有的<code>channel</code>。而且，多个消费者可以订阅同一个<code>channel</code>，<code>channel</code>会将其接收到的消息<strong>随机</strong>（即随机负载均衡）发送到与其关联的一个客户端。同<code>topic</code>类似，<code>channel</code>也可不用提前创建，消费者在第一次订阅消息（在指定<code>topic</code>的某个<code>channel</code>）的时候会创建此<code>channel</code>（若其不存在）。最后，<code>channel</code>从<code>topic</code>接收的消息首先会在内存中排队，当达到内存队列长度上限，就被写到持久化存储。</li>
+</ul>
+<p><code>nsqd</code>在启动时通常会建与各<code>nsqlookupd</code>的连接。<code>nsqlookupd</code>为其提供目录服务，即<code>nsqd</code>可将<code>topic</code>、<code>channel</code>及<code>nsqd</code>(生产者)的信息注册到<code>nsqlookupd</code>，并且可通过与<code>nsqlookupd</code>之间的<code>TCP</code>连接动态更新自己的状态信息（<code>topic</code>及<code>channel</code>信息等）。而消费者可通过<code>http</code>请求连接到<code>nsqlookupd</code>，以查找其感兴趣的<code>nsqd</code>的地址。正是通过这种设计使得消费者与生产者分离，从而降低系统复杂性。在获取到生产者(<code>nsqd</code>)的地址后（准确而言，还包括<code>topic</code>及<code>channel</code>） ，消费者（<code>nsq</code>客户端）可直接连接到<code>nsqd</code>，以等待对方发送消息（不是主动去拉到消息，而是等被对方推送消息）。另外，为了提供更好的吞吐量，<code>nsq</code>允许消费者显式地向<code>nsqd</code>声明其能够处理的消息数量，这可以提高消息的吞吐量（避免消费者积压消息的情况）。针对每一个消息，当消费者消费完成后，其需要回复<code>nsqd</code>一个<code>FIN</code>消息，否则消息会被重入队，然后再一次被发送给消费者。最后，有一点需要注意，客户端（消费者）一次性只能订阅一个<code>channel</code>。官方文档提供的消息流动图如下：</p>
+<p><img src="https://github.com/qqzeng/qqzeng.github.io/blob/hexo/static/nsqd-message-pub-sub-process.gif?raw=true" alt="mq-comparison"></p>
+<h2 id="关键特性"><a href="#关键特性" class="headerlink" title="关键特性"></a>关键特性</h2><p>个人在阅读官方文档之后，对于其描述的一些特性比较模糊，甚至有一些误解，在后面的进一步了解过程（甚至有些东西未深入到源码是不太能理解的），因此个人总结下如下几点是需要特别理解和注意的：</p>
+<ul>
+<li><code>nsq</code>官方所声称的<strong>去中心化分布式</strong>特征，指的是，因为各节点(<code>nsqd</code>甚至也包括<code>nsqlookupd</code>)之间不会产生状态（数据）共享或依赖，因此可以直接通过添加节点来提升系统处理能力（即系统可通过水平扩展来来线性提升处理能力），且单个节点宕机不会影响其它节点的功能。因此，正是因为节点之间没有状态共享，没有数据冗余或副本的概念，使得它也不需要使用复杂的一致性算法来保证数据的一致；</li>
+<li>虽然官方声称其是具体<strong>可靠消息传递</strong>，但是需要注意的是，其的确也存在消息丢失的情形，因为虽然它通过提供消息持久化来缓解这一问题，但并没有根本解决这一问题，一旦宕机，内存中的消息会丢失，当然你可以将内存队列长度<code>mem_queue_size</code>参数设置地更小一些以缓解此问题。甚至，你可以节点作冗余操作，以保证数据丢失的可能性在实际生产中几乎不可能发生（注意不是不可能发生），但对于那些需要高可靠性的消息发布的应用场景，<code>nsq</code>是无法保证的。</li>
+<li>还有，官方文档提到一点，<code>nsq</code>并没有<code>kafaka</code>那么强大，它不能保证<strong>消息的严格顺序</strong>，换言之，生产者创建的消息可以随时（不确定性）地以任何顺序进入到<code>nsqd</code>的消息队列。典型地，官方推荐将消息生产者与<code>nsqd</code>实例协同部署，即部署在同一台机器上，这样即使发生网络分区，也不会影响生产者消息的投递，明显在此种情况下消息投递的效率理论上会被其它情况下的消息投递效率。但官方提供了一种解决方案，即将消息打上时间戳。尽管如此，它仍然不适合需要保证严格消息顺序的情况下。</li>
+<li><code>nsq</code>保证的消息<strong>至少一次</strong>会被发送给生产者。换言之，消息可能被多次发送给消费者。因此，消费者应该能够识别消息重复(<code>message de-duplicate</code>)，或者保证消息所涉及的操作幂等性(<code>idempotent</code>)。更具体地，造成消息被多次发送的原因包括，客户端连接断开或消息超时时间内未返回响应，这些都会导致消息的重入队操作(<code>requeue</code>)。</li>
+<li>关于<code>nsqlookupd</code>，其也是可<strong>水平扩展</strong>的，但各节点实例之间也是没有任何联系的，结合业务逻辑来阐述，即每个<code>nsqdlookupd</code>实例可分别接收部分或全部的<code>nsqd</code>实例的服务注册请求，这只需要客户端在连接到<code>nsqlookupd</code>获取所有的生产者(及<code>topic</code>和<code>channel</code>)信息后，对获取的数据进行一个<code>union</code>操作即可，便可得到整个系统中生产者的拓扑信息（这即是官方文档中所描述的将发现服务设计成<code>eventually consistent</code>）。</li>
+<li>最后，不得不说的一点是，正是因为上面所描述的各种不足，造就了<code>nsq</code>的<strong>精简设计</strong>。简单实在是太重要了！因为简单意味着容易进行故障或bug查找，同时，容易部署和使用方便。不得不说，当满足了应用的基本功能之后，简单往往是最重要的一个因素。</li>
+</ul>
+<p>小结一下，本文先简要介绍了<code>nsq</code>的各个组件及基本工作流程，然后重点阐述了几个值得关注的特性，这些特性（包括未讨论的）以及<code>nsq</code>的各个组件，会在后面的博文中阐述。为了更好地理解<code>nsq</code>，个人建议，先仔细阅读官方文档，并简单实践，若有兴趣，深入源码查看会收获更多。</p>
+<p>参考文献</p>
+<p>[1]. <a href="https://nsq.io/overview/features_and_guarantees.html" target="_blank" rel="noopener">nsq Features &amp; Guarantees</a><br>[2]. <a href="https://nsq.io/overview/design.html" target="_blank" rel="noopener">nsq Design</a><br>[3]. <a href="https://nsq.io/overview/quick_start.html" target="_blank" rel="noopener">nsq Quick Start</a><br>[4]. <a href="https://speakerdeck.com/snakes/nsq-nyc-golang-meetup" target="_blank" rel="noopener">nsq - NYC Golang Meetup</a><br>[5]. <a href="https://juejin.im/entry/59ddae8151882578bb480d0e" target="_blank" rel="noopener">消息中间件NSQ深入与实践</a></p>
+
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" rel="tag"><i class="fa fa-tag"></i> 分布式系统</a>
+              <a href="/tags/%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="tag"><i class="fa fa-tag"></i> 消息队列</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/04/20/2019-04-20-%E6%9C%8D%E5%8A%A1%E7%AB%AF%E7%9A%84%E6%9D%83%E9%89%B4%E6%96%B9%E5%BC%8F/" rel="next" title="服务端的权鉴方式">
+                  <i class="fa fa-chevron-left"></i> 服务端的权鉴方式
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/05/12/nsq-nsqlookupd-%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/" rel="prev" title="nsq nsqlookupd 源码简析">
+                  nsq nsqlookupd 源码简析 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#nsq-基本介绍"><span class="nav-number">1.</span> <span class="nav-text">nsq 基本介绍</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#关键特性"><span class="nav-number">2.</span> <span class="nav-text">关键特性</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>

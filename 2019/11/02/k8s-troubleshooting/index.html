@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.0.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=7.4.2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=7.4.2">
+  <link rel="mask-icon" href="/images/logo.svg?v=7.4.2" color="#222">
+  <link rel="alternate" href="/atom.xml" title="一汀烟雨杏花寒" type="application/atom+xml">
+
+<link rel="stylesheet" href="/css/main.css?v=7.4.2">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/font-awesome.min.css?v=4.7.0">
+
+
+<script id="hexo-configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Pisces',
+    version: '7.4.2',
+    exturl: false,
+    sidebar: {"position":"left","display":"post","offset":12,"onmobile":false},
+    copycode: {"enable":false,"show_result":false,"style":null},
+    back2top: {"enable":true,"sidebar":true,"scrollpercent":true},
+    bookmark: {"enable":false,"color":"#222","save":"auto"},
+    fancybox: false,
+    mediumzoom: false,
+    lazyload: false,
+    pangu: false,
+    algolia: {
+      appID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    },
+    localsearch: {"enable":true,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},
+    path: 'search.xml',
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    translation: {
+      copy_button: '复制',
+      copy_success: '复制成功',
+      copy_failure: '复制失败'
+    },
+    sidebarPadding: 40
+  };
+</script>
+
+  <meta name="description" content="转载自：https:&#x2F;&#x2F;github.com&#x2F;imroc&#x2F;kubernetes-troubleshooting-guide 分析 ExitCode 定位 Pod 异常退出原因使用 kubectl describe pod &amp;lt;pod name&amp;gt; 查看异常 pod 的状态:123456789101112131415161718192021Containers:  kubedns:">
+<meta name="keywords" content="docker,k8s">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Kubernetes排错指南">
+<meta property="og:url" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;02&#x2F;k8s-troubleshooting&#x2F;index.html">
+<meta property="og:site_name" content="一汀烟雨杏花寒">
+<meta property="og:description" content="转载自：https:&#x2F;&#x2F;github.com&#x2F;imroc&#x2F;kubernetes-troubleshooting-guide 分析 ExitCode 定位 Pod 异常退出原因使用 kubectl describe pod &amp;lt;pod name&amp;gt; 查看异常 pod 的状态:123456789101112131415161718192021Containers:  kubedns:">
+<meta property="og:locale" content="zh-CN">
+<meta property="og:updated_time" content="2019-11-02T00:47:17.664Z">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="http://geoffen.github.io/2019/11/02/k8s-troubleshooting/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome: false,
+    isPost: true,
+    isPage: false,
+    isArchive: false
+  };
+</script>
+<link rel="stylesheet" href="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.css"><style>
+#needsharebutton-postbottom {
+  cursor: pointer;
+  height: 26px;
+  margin-top: 10px;
+  position: relative;
+}
+#needsharebutton-postbottom .btn {
+  border: 1px solid $btn-default-border-color;
+  border-radius: 3px;
+  display: initial;
+  padding: 1px 4px;
+}
+</style>
+  <title>Kubernetes排错指南 | 一汀烟雨杏花寒</title>
+  
+
+
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-meta">
+
+    <div>
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">一汀烟雨杏花寒</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+        <p class="site-subtitle">no error, no warning。</p>
+  </div>
+
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+</div>
+
+
+<nav class="site-nav">
+  
+  <ul id="menu" class="menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-fw fa-home"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-fw fa-user"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-fw fa-tags"></i>标签</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-fw fa-th"></i>分类</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-fw fa-archive"></i>归档</a>
+
+  </li>
+        <li class="menu-item menu-item-commonweal">
+
+    <a href="/404.html" rel="section"><i class="fa fa-fw fa-heartbeat"></i>公益 404</a>
+
+  </li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+
+</nav>
+  <div class="site-search">
+    <div class="popup search-popup">
+    <div class="search-header">
+  <span class="search-icon">
+    <i class="fa fa-search"></i>
+  </span>
+  <div class="search-input-container">
+    <input autocomplete="off" autocorrect="off" autocapitalize="none"
+           placeholder="搜索..." spellcheck="false"
+           type="text" id="search-input">
+  </div>
+  <span class="popup-btn-close">
+    <i class="fa fa-times-circle"></i>
+  </span>
+</div>
+<div id="search-result"></div>
+
+</div>
+<div class="search-pop-overlay"></div>
+
+  </div>
+</div>
+    </header>
+
+    
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content">
+            
+
+  <div class="posts-expand">
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block " lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://geoffen.github.io/2019/11/02/k8s-troubleshooting/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/portrait.jpg">
+      <meta itemprop="name" content="Frank">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="一汀烟雨杏花寒">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          Kubernetes排错指南
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2019-11-02 08:12:50 / 修改时间：08:47:17" itemprop="dateCreated datePublished" datetime="2019-11-02T08:12:50+08:00">2019-11-02</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%8C%81%E7%BB%AD%E9%9B%86%E6%88%90/" itemprop="url" rel="index">
+                    <span itemprop="name">持续集成</span>
+                  </a>
+                </span>
+            </span>
+
+          <br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-file-word-o"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>7.8k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="fa fa-clock-o"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>7 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <blockquote>
+<p>转载自：<a href="https://github.com/imroc/kubernetes-troubleshooting-guide" target="_blank" rel="noopener">https://github.com/imroc/kubernetes-troubleshooting-guide</a></p>
+</blockquote><h2 id="分析-ExitCode-定位-Pod-异常退出原因"><a href="#分析-ExitCode-定位-Pod-异常退出原因" class="headerlink" title="分析 ExitCode 定位 Pod 异常退出原因"></a>分析 ExitCode 定位 Pod 异常退出原因</h2><p>使用 <code>kubectl describe pod &lt;pod name&gt;</code> 查看异常 pod 的状态:</p><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">Containers:</span><br><span class="line">  kubedns:</span><br><span class="line">    Container ID:  docker://5fb8adf9ee62afc6d3f6f3d9590041818750b392dff015d7091eaaf99cf1c945</span><br><span class="line">    Image:         ccr.ccs.tencentyun.com/library/kubedns-amd64:1.14.4</span><br><span class="line">    Image ID:      docker-pullable://ccr.ccs.tencentyun.com/library/kubedns-amd64@sha256:40790881bbe9ef4ae4ff7fe8b892498eecb7fe6dcc22661402f271e03f7de344</span><br><span class="line">    Ports:         10053/UDP, 10053/TCP, 10055/TCP</span><br><span class="line">    Host Ports:    0/UDP, 0/TCP, 0/TCP</span><br><span class="line">    Args:</span><br><span class="line">      --domain=cluster.local.</span><br><span class="line">      --dns-port=10053</span><br><span class="line">      --config-dir=/kube-dns-config</span><br><span class="line">      --v=2</span><br><span class="line">    State:          Running</span><br><span class="line">      Started:      Tue, 27 Aug 2019 10:58:49 +0800</span><br><span class="line">    Last State:     Terminated</span><br><span class="line">      Reason:       Error</span><br><span class="line">      Exit Code:    255</span><br><span class="line">      Started:      Tue, 27 Aug 2019 10:40:42 +0800</span><br><span class="line">      Finished:     Tue, 27 Aug 2019 10:58:27 +0800</span><br><span class="line">    Ready:          True</span><br><span class="line">    Restart Count:  1</span><br></pre></td></tr></table></figure><a id="more"></a>
+
+
+
+<p>在容器列表里看 <code>Last State</code> 字段，其中 <code>ExitCode</code> 即程序上次退出时的状态码，如果不为 0，表示异常退出，我们可以分析下原因。</p>
+<h3 id="退出状态码的区间"><a href="#退出状态码的区间" class="headerlink" title="退出状态码的区间"></a>退出状态码的区间</h3><ul>
+<li>必须在 0-255 之间</li>
+<li>0 表示正常退出</li>
+<li>外界中断将程序退出的时候状态码区间在 129-255，(操作系统给程序发送中断信号，比如 <code>kill -9</code> 是 <code>SIGKILL</code>，<code>ctrl+c</code> 是 <code>SIGINT</code>)</li>
+<li>一般程序自身原因导致的异常退出状态区间在 1-128 (这只是一般约定，程序如果一定要用129-255的状态码也是可以的)</li>
+</ul>
+<p>假如写代码指定的退出状态码时不在 0-255 之间，例如: <code>exit(-1)</code>，这时会自动做一个转换，最终呈现的状态码还是会在 0-255 之间。我们把状态码记为 <code>code</code></p>
+<ul>
+<li>当指定的退出时状态码为负数，那么转换公式如下:</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">256 - (|code| % 256)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>当指定的退出时状态码为正数，那么转换公式如下:</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">code % 256</span><br></pre></td></tr></table></figure>
+
+<h3 id="常见异常状态码"><a href="#常见异常状态码" class="headerlink" title="常见异常状态码"></a>常见异常状态码</h3><ul>
+<li><p>137 (被  <code>SIGKILL</code> 中断信号杀死)</p>
+<ul>
+<li><p>此状态码一般是因为 pod 中容器内存达到了它的资源限制(<code>resources.limits</code>)，一般是内存溢出(OOM)，CPU达到限制只需要不分时间片给程序就可以。因为限制资源是通过 linux 的 cgroup 实现的，所以 cgroup 会将此容器强制杀掉，类似于 <code>kill -9</code>，此时在 <code>describe pod</code> 中可以看到 Reason 是 <code>OOMKilled</code></p>
+</li>
+<li><p>还可能是宿主机本身资源不够用了(OOM)，内核会选取一些进程杀掉来释放内存</p>
+</li>
+<li><p>不管是 cgroup 限制杀掉进程还是因为节点机器本身资源不够导致进程死掉，都可以从系统日志中找到记录:</p>
+<blockquote>
+<p>ubuntu 的系统日志在 <code>/var/log/syslog</code>，centos 的系统日志在 <code>/var/log/messages</code>，都可以用 <code>journalctl -k</code> 来查看系统日志</p>
+</blockquote>
+</li>
+<li><p>也可能是 livenessProbe (存活检查) 失败，kubelet 杀死的 pod</p>
+</li>
+<li><p>还可能是被恶意木马进程杀死</p>
+</li>
+</ul>
+</li>
+<li><p>1 和 255</p>
+<ul>
+<li>这种可能是一般错误，具体错误原因只能看容器日志，因为很多程序员写异常退出时习惯用 <code>exit(1)</code> 或 <code>exit(-1)</code>，-1 会根据转换规则转成 255</li>
+</ul>
+</li>
+</ul>
+<h3 id="状态码参考"><a href="#状态码参考" class="headerlink" title="状态码参考"></a>状态码参考</h3><p>这里罗列了一些状态码的含义：<a href="http://tldp.org/LDP/abs/html/exitcodes.html" target="_blank" rel="noopener">Appendix E. Exit Codes With Special Meanings</a></p>
+<h3 id="Linux-标准中断信号"><a href="#Linux-标准中断信号" class="headerlink" title="Linux 标准中断信号"></a>Linux 标准中断信号</h3><p>Linux 程序被外界中断时会发送中断信号，程序退出时的状态码就是中断信号值加上 128 得到的，比如 <code>SIGKILL</code> 的中断信号值为 9，那么程序退出状态码就为 9+128=137。以下是标准信号值参考：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">Signal     Value     Action   Comment</span><br><span class="line">──────────────────────────────────────────────────────────────────────</span><br><span class="line">SIGHUP        1       Term    Hangup detected on controlling terminal</span><br><span class="line">                                     or death of controlling process</span><br><span class="line">SIGINT        2       Term    Interrupt from keyboard</span><br><span class="line">SIGQUIT       3       Core    Quit from keyboard</span><br><span class="line">SIGILL        4       Core    Illegal Instruction</span><br><span class="line">SIGABRT       6       Core    Abort signal from abort(3)</span><br><span class="line">SIGFPE        8       Core    Floating-point exception</span><br><span class="line">SIGKILL       9       Term    Kill signal</span><br><span class="line">SIGSEGV      11       Core    Invalid memory reference</span><br><span class="line">SIGPIPE      13       Term    Broken pipe: write to pipe with no</span><br><span class="line">                                     readers; see pipe(7)</span><br><span class="line">SIGALRM      14       Term    Timer signal from alarm(2)</span><br><span class="line">SIGTERM      15       Term    Termination signal</span><br><span class="line">SIGUSR1   30,10,16    Term    User-defined signal 1</span><br><span class="line">SIGUSR2   31,12,17    Term    User-defined signal 2</span><br><span class="line">SIGCHLD   20,17,18    Ign     Child stopped or terminated</span><br><span class="line">SIGCONT   19,18,25    Cont    Continue if stopped</span><br><span class="line">SIGSTOP   17,19,23    Stop    Stop process</span><br><span class="line">SIGTSTP   18,20,24    Stop    Stop typed at terminal</span><br><span class="line">SIGTTIN   21,21,26    Stop    Terminal input for background process</span><br><span class="line">SIGTTOU   22,22,27    Stop    Terminal output for background process</span><br></pre></td></tr></table></figure>
+
+<h3 id="C-C-退出状态码"><a href="#C-C-退出状态码" class="headerlink" title="C/C++ 退出状态码"></a>C/C++ 退出状态码</h3><p><code>/usr/include/sysexits.h</code> 试图将退出状态码标准化(仅限 C/C++):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">#define EX_OK           0       /* successful termination */</span><br><span class="line"></span><br><span class="line">#define EX__BASE        64      /* base value for error messages */</span><br><span class="line"></span><br><span class="line">#define EX_USAGE        64      /* command line usage error */</span><br><span class="line">#define EX_DATAERR      65      /* data format error */</span><br><span class="line">#define EX_NOINPUT      66      /* cannot open input */</span><br><span class="line">#define EX_NOUSER       67      /* addressee unknown */</span><br><span class="line">#define EX_NOHOST       68      /* host name unknown */</span><br><span class="line">#define EX_UNAVAILABLE  69      /* service unavailable */</span><br><span class="line">#define EX_SOFTWARE     70      /* internal software error */</span><br><span class="line">#define EX_OSERR        71      /* system error (e.g., can&apos;t fork) */</span><br><span class="line">#define EX_OSFILE       72      /* critical OS file missing */</span><br><span class="line">#define EX_CANTCREAT    73      /* can&apos;t create (user) output file */</span><br><span class="line">#define EX_IOERR        74      /* input/output error */</span><br><span class="line">#define EX_TEMPFAIL     75      /* temp failure; user is invited to retry */</span><br><span class="line">#define EX_PROTOCOL     76      /* remote error in protocol */</span><br><span class="line">#define EX_NOPERM       77      /* permission denied */</span><br><span class="line">#define EX_CONFIG       78      /* configuration error */</span><br><span class="line"></span><br><span class="line">#define EX__MAX 78      /* maximum listed value */</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<h2 id="使用-systemtap-定位疑难杂症"><a href="#使用-systemtap-定位疑难杂症" class="headerlink" title="使用 systemtap 定位疑难杂症"></a>使用 systemtap 定位疑难杂症</h2><h3 id="Ubuntu"><a href="#Ubuntu" class="headerlink" title="Ubuntu"></a>Ubuntu</h3><p>安装 systemtap:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apt install -y systemtap</span><br></pre></td></tr></table></figure>
+
+<p>运行 <code>stap-prep</code> 检查还有什么需要安装:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ stap-prep</span><br><span class="line">Please install linux-headers-4.4.0-104-generic</span><br><span class="line">You need package linux-image-4.4.0-104-generic-dbgsym but it does not seem to be available</span><br><span class="line"> Ubuntu -dbgsym packages are typically in a separate repository</span><br><span class="line"> Follow https://wiki.ubuntu.com/DebuggingProgramCrash to add this repository</span><br><span class="line"></span><br><span class="line">apt install -y linux-headers-4.4.0-104-generic</span><br></pre></td></tr></table></figure>
+
+<p>提示需要 dbgsym 包但当前已有软件源中并不包含，需要使用第三方软件源安装，下面是 dbgsym 安装方法(参考官方wiki: <a href="https://wiki.ubuntu.com/Kernel/Systemtap" target="_blank" rel="noopener">https://wiki.ubuntu.com/Kernel/Systemtap</a>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C8CAB6595FDFF622</span><br><span class="line"></span><br><span class="line">codename=$(lsb_release -c | awk  &apos;&#123;print $2&#125;&apos;)</span><br><span class="line">sudo tee /etc/apt/sources.list.d/ddebs.list &lt;&lt; EOF</span><br><span class="line">deb http://ddebs.ubuntu.com/ $&#123;codename&#125;      main restricted universe multiverse</span><br><span class="line">deb http://ddebs.ubuntu.com/ $&#123;codename&#125;-security main restricted universe multiverse</span><br><span class="line">deb http://ddebs.ubuntu.com/ $&#123;codename&#125;-updates  main restricted universe multiverse</span><br><span class="line">deb http://ddebs.ubuntu.com/ $&#123;codename&#125;-proposed main restricted universe multiverse</span><br><span class="line">EOF</span><br><span class="line"></span><br><span class="line">sudo apt-get update</span><br></pre></td></tr></table></figure>
+
+<p>配置好源后再运行下 <code>stap-prep</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ stap-prep</span><br><span class="line">Please install linux-headers-4.4.0-104-generic</span><br><span class="line">Please install linux-image-4.4.0-104-generic-dbgsym</span><br></pre></td></tr></table></figure>
+
+<p>提示需要装这两个包，我们安装一下:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">apt install -y linux-image-4.4.0-104-generic-dbgsym</span><br><span class="line">apt install -y linux-headers-4.4.0-104-generic</span><br></pre></td></tr></table></figure>
+
+<h3 id="CentOS"><a href="#CentOS" class="headerlink" title="CentOS"></a>CentOS</h3><p>安装 systemtap:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y systemtap</span><br></pre></td></tr></table></figure>
+
+<p>默认没装 <code>debuginfo</code>，我们需要装一下，添加软件源 <code>/etc/yum.repos.d/CentOS-Debug.repo</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[debuginfo]</span><br><span class="line">name=CentOS-$releasever - DebugInfo</span><br><span class="line">baseurl=http://debuginfo.centos.org/$releasever/$basearch/</span><br><span class="line">gpgcheck=0</span><br><span class="line">enabled=1</span><br><span class="line">protect=1</span><br><span class="line">priority=1</span><br></pre></td></tr></table></figure>
+
+<p>执行 <code>stap-prep</code> (会安装 <code>kernel-debuginfo</code>)</p>
+<p>最后检查确保 <code>kernel-debuginfo</code> 和 <code>kernel-devel</code> 均已安装并且版本跟当前内核版本相同，如果有多个版本，就删除跟当前内核版本不同的包(通过<code>uname -r</code>查看当前内核版本)。</p>
+<p>重点检查是否有多个版本的 <code>kernel-devel</code>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ rpm -qa | grep kernel-devel</span><br><span class="line">kernel-devel-3.10.0-327.el7.x86_64</span><br><span class="line">kernel-devel-3.10.0-514.26.2.el7.x86_64</span><br><span class="line">kernel-devel-3.10.0-862.9.1.el7.x86_64</span><br></pre></td></tr></table></figure>
+
+<p>如果存在多个，保证只留跟当前内核版本相同的那个，假设当前内核版本是 <code>3.10.0-862.9.1.el7.x86_64</code>，那么使用 rpm 删除多余的版本:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpm -e kernel-devel-3.10.0-327.el7.x86_64 kernel-devel-3.10.0-514.26.2.el7.x86_64</span><br></pre></td></tr></table></figure>
+
+<h3 id="使用-systemtap-揪出杀死容器的真凶"><a href="#使用-systemtap-揪出杀死容器的真凶" class="headerlink" title="使用 systemtap 揪出杀死容器的真凶"></a>使用 systemtap 揪出杀死容器的真凶</h3><p>Pod 莫名其妙被杀死? 可以使用 systemtap 来监视进程的信号发送，原理是 systemtap 将脚本翻译成 C 代码然后调用 gcc 编译成 linux 内核模块，再通过 <code>modprobe</code> 加载到内核，根据脚本内容在内核做各种 hook，在这里我们就 hook 一下信号的发送，找出是谁 kill 掉了容器进程。</p>
+<p>首先，找到被杀死的 pod 又自动重启的容器的当前 pid，describe 一下 pod:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">......</span><br><span class="line">Container ID:  docker://5fb8adf9ee62afc6d3f6f3d9590041818750b392dff015d7091eaaf99cf1c945</span><br><span class="line">......</span><br><span class="line">Last State:     Terminated</span><br><span class="line">  Reason:       Error</span><br><span class="line">  Exit Code:    137</span><br><span class="line">  Started:      Thu, 05 Sep 2019 19:22:30 +0800</span><br><span class="line">  Finished:     Thu, 05 Sep 2019 19:33:44 +0800</span><br></pre></td></tr></table></figure>
+
+<p>拿到容器 id 反查容器的主进程 pid:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ docker inspect -f &quot;&#123;&#123;.State.Pid&#125;&#125;&quot; 5fb8adf9ee62afc6d3f6f3d9590041818750b392dff015d7091eaaf99cf1c945</span><br><span class="line">7942</span><br></pre></td></tr></table></figure>
+
+<p>通过 <code>Exit Code</code> 可以看出容器上次退出的状态码，如果进程是被外界中断信号杀死的，退出状态码将在 129-255 之间，137 表示进程是被 SIGKILL 信号杀死的，但我们从这里并不能看出是被谁杀死的。</p>
+<p>如果问题可以复现，我们可以使用下面的 systemtap 脚本来监视容器是被谁杀死的(保存为<code>sg.stp</code>):</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">global target_pid = 7942</span><br><span class="line">probe signal.send&#123;</span><br><span class="line">  if (sig_pid == target_pid) &#123;</span><br><span class="line">    printf(&quot;%s(%d) send %s to %s(%d)\n&quot;, execname(), pid(), sig_name, pid_name, sig_pid);</span><br><span class="line">    printf(&quot;parent of sender: %s(%d)\n&quot;, pexecname(), ppid())</span><br><span class="line">    printf(&quot;task_ancestry:%s\n&quot;, task_ancestry(pid2task(pid()), 1));</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>变量 <code>pid</code> 的值替换为查到的容器主进程 pid</li>
+</ul>
+<p>运行脚本:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stap sg.stp</span><br></pre></td></tr></table></figure>
+
+<p>当容器进程被杀死时，脚本捕捉到事件，执行输出:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">pkill(23549) send SIGKILL to server(7942)</span><br><span class="line">parent of sender: bash(23495)</span><br><span class="line">task_ancestry:swapper/0(0m0.000000000s)=&gt;systemd(0m0.080000000s)=&gt;vGhyM0(19491m2.579563677s)=&gt;sh(33473m38.074571885s)=&gt;bash(33473m38.077072025s)=&gt;bash(33473m38.081028267s)=&gt;bash(33475m4.817798337s)=&gt;pkill(33475m5.202486630s)</span><br></pre></td></tr></table></figure>
+
+<p>通过观察 <code>task_ancestry</code> 可以看到杀死进程的所有父进程，在这里可以看到有个叫 <code>vGhyM0</code> 的奇怪进程名，通常是中了木马，需要安全专家介入继续排查。</p>
+<h2 id="非root用户执行docker命令时提示permission-denied"><a href="#非root用户执行docker命令时提示permission-denied" class="headerlink" title="非root用户执行docker命令时提示permission denied"></a>非root用户执行docker命令时提示permission denied</h2><h2 id="原因"><a href="#原因" class="headerlink" title="原因"></a>原因</h2><p>摘自docker mannual上的一段话</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Manage Docker as a non-root user</span><br><span class="line"></span><br><span class="line">The docker daemon binds to a Unix socket instead of a TCP port. By default that Unix socket is owned by the user root and other users can only access it using sudo. The docker daemon always runs as the root user.</span><br><span class="line"></span><br><span class="line">If you don’t want to use sudo when you use the docker command, create a Unix group called docker and add users to it. When the docker daemon starts, it makes the ownership of the Unix socket read/writable by the docker group.</span><br></pre></td></tr></table></figure>
+
+<p>大概的意思就是：docker进程使用Unix Socket而不是TCP端口。而默认情况下，Unix socket属于root用户，需要root权限才能访问。</p>
+<h3 id="解决方法1"><a href="#解决方法1" class="headerlink" title="解决方法1"></a>解决方法1</h3><p>使用sudo获取管理员权限，运行docker命令</p>
+<h3 id="解决方法2"><a href="#解决方法2" class="headerlink" title="解决方法2"></a>解决方法2</h3><p>docker守护进程启动的时候，会默认赋予名字为docker的用户组读写Unix socket的权限，因此只要创建docker用户组，并将当前用户加入到docker用户组中，那么当前用户就有权限访问Unix socket了，进而也就可以执行docker相关命令</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">sudo groupadd docker     #添加docker用户组</span><br><span class="line">sudo gpasswd -a $USER docker     #将登陆用户加入到docker用户组中</span><br><span class="line">newgrp docker     #更新用户组</span><br><span class="line">docker ps    #测试docker命令是否可以使用sudo正常使用</span><br></pre></td></tr></table></figure>
+    </div>
+	
+	<div>
+		
+		<div>
+    
+        <div style="text-align:center;color: #ccc;font-size:14px;">-------------本文结束<i class="fa fa-paw"></i>感谢您的阅读-------------</div>
+    
+</div>
+		
+	</div>
+
+    
+    
+    <div class="post-widgets">
+      <div id="needsharebutton-postbottom">
+        <span class="btn">
+          <i class="fa fa-share-alt" aria-hidden="true"></i>
+        </span>
+      </div>
+    </div>
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/docker/" rel="tag"><i class="fa fa-tag"></i> docker</a>
+              <a href="/tags/k8s/" rel="tag"><i class="fa fa-tag"></i> k8s</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-next post-nav-item">
+                <a href="/2019/11/01/%E8%A7%A3%E5%86%B3Hexo%E7%BD%AE%E9%A1%B6%E9%97%AE%E9%A2%98/" rel="next" title="解决Hexo置顶问题">
+                  <i class="fa fa-chevron-left"></i> 解决Hexo置顶问题
+                </a>
+            </div>
+
+            <span class="post-nav-divider"></span>
+
+            <div class="post-nav-prev post-nav-item">
+                <a href="/2019/11/02/Helm%E6%A8%A1%E6%9D%BF%E6%96%87%E4%BB%B6chart%E7%BC%96%E5%86%99%E8%AF%AD%E6%B3%95%E6%80%BB%E7%BB%93/" rel="prev" title="Helm模板文件chart编写语法总结">
+                  Helm模板文件chart编写语法总结 <i class="fa fa-chevron-right"></i>
+                </a>
+            </div>
+          </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+  </div>
+
+
+          </div>
+          
+
+ <div class="comments" id="comments">
+    
+<script src="https://utteranc.es/client.js"
+        repo="geoffen/blog_comments"
+        issue-term="pathname"
+        theme="github-light"
+        crossorigin="anonymous"
+        async>
+</script>
+
+ </div>
+
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#分析-ExitCode-定位-Pod-异常退出原因"><span class="nav-number">1.</span> <span class="nav-text">分析 ExitCode 定位 Pod 异常退出原因</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#退出状态码的区间"><span class="nav-number">1.1.</span> <span class="nav-text">退出状态码的区间</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#常见异常状态码"><span class="nav-number">1.2.</span> <span class="nav-text">常见异常状态码</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#状态码参考"><span class="nav-number">1.3.</span> <span class="nav-text">状态码参考</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#Linux-标准中断信号"><span class="nav-number">1.4.</span> <span class="nav-text">Linux 标准中断信号</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#C-C-退出状态码"><span class="nav-number">1.5.</span> <span class="nav-text">C/C++ 退出状态码</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#使用-systemtap-定位疑难杂症"><span class="nav-number">2.</span> <span class="nav-text">使用 systemtap 定位疑难杂症</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#Ubuntu"><span class="nav-number">2.1.</span> <span class="nav-text">Ubuntu</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#CentOS"><span class="nav-number">2.2.</span> <span class="nav-text">CentOS</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#使用-systemtap-揪出杀死容器的真凶"><span class="nav-number">2.3.</span> <span class="nav-text">使用 systemtap 揪出杀死容器的真凶</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#非root用户执行docker命令时提示permission-denied"><span class="nav-number">3.</span> <span class="nav-text">非root用户执行docker命令时提示permission denied</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#原因"><span class="nav-number">4.</span> <span class="nav-text">原因</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#解决方法1"><span class="nav-number">4.1.</span> <span class="nav-text">解决方法1</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#解决方法2"><span class="nav-number">4.2.</span> <span class="nav-text">解决方法2</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+  <img class="site-author-image" itemprop="image" alt="Frank"
+    src="/images/portrait.jpg">
+  <p class="site-author-name" itemprop="name">Frank</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">65</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">10</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">66</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="feed-link motion-element">
+    <a href="/atom.xml" rel="alternate">
+      <i class="fa fa-rss"></i>RSS
+    </a>
+  </div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/geoffen" title="GitHub https:&#x2F;&#x2F;github.com&#x2F;geoffen" rel="noopener" target="_blank"><i class="fa fa-fw fa-github"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://weibo.com/234821810" title="Weibo https:&#x2F;&#x2F;weibo.com&#x2F;234821810" rel="noopener" target="_blank"><i class="fa fa-fw fa-weibo"></i>Weibo</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:foreverlovemichael@gmail.com" title="E-Mail mailto:foreverlovemichael@gmail.com" rel="noopener" target="_blank"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="https://twitter.com/losincasablanca" title="Twitter https:&#x2F;&#x2F;twitter.com&#x2F;losincasablanca" rel="noopener" target="_blank"><i class="fa fa-fw fa-twitter"></i>Twitter</a>
+      </span>
+  </div>
+
+
+
+      </div>
+        <div class="back-to-top motion-element">
+          <i class="fa fa-arrow-up"></i>
+          <span>0%</span>
+        </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+<script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<div class="powered-by">
+  <i class="fa fa-user-md"></i><span id="busuanzi_container_site_pv">访问量<span id="busuanzi_value_site_pv"></span>次</span>
+</div>
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2019</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">Frank</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    <span title="站点总字数">620k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    <span title="站点阅读时长">9:23</span>
+</div>
+<!--
+  <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
+  </div>
+  <span class="post-meta-divider">|</span>
+  <div class="theme-info">主题 – <a href="https://pisces.theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Pisces</a> v7.4.2
+  </div>
+-->
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,255' opacity='0.5' zIndex='-1' count='99' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js?v=3.1.0"></script>
+  <script src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  <script src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+<script src="/js/utils.js?v=7.4.2"></script><script src="/js/motion.js?v=7.4.2"></script>
+<script src="/js/schemes/pisces.js?v=7.4.2"></script>
+<script src="/js/next-boot.js?v=7.4.2"></script>
+
+
+
+  
+
+
+
+
+
+
+  <script src="/js/local-search.js?v=7.4.2"></script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+  
+
+  <script src="//cdn.jsdelivr.net/gh/theme-next/theme-next-needmoreshare2@1/needsharebutton.min.js"></script>
+  <script>
+      pbOptions = {};
+        pbOptions.iconStyle = "box";
+        pbOptions.boxForm = "horizontal";
+        pbOptions.position = "bottomCenter";
+        pbOptions.networks = "Weibo,Wechat,Douban,QQZone,Twitter,Facebook";
+      new needShareButton('#needsharebutton-postbottom', pbOptions);
+  </script>
+</body>
+
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>
