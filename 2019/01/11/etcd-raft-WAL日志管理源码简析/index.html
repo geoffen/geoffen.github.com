@@ -59,7 +59,7 @@
 <meta property="og:site_name" content="一汀烟雨杏花寒">
 <meta property="og:description" content="上一篇文章简单分析了etcd-raft 网络传输组件相关的源码。本文会简要分析etcd-raft WAL日志管理部分的源码。WAL(Write-Ahead Logging)即为预写式日志，即在真正执行写操作之前先写日志，这在数据库系统和分布式系统领域很常见。它是为了保证数据的可靠写。日志对于利用一致性协议构建高可用的分布式系统而言至关重要，在etcd raft中，日志也会在各节点之间同步。并且et">
 <meta property="og:locale" content="zh-CN">
-<meta property="og:updated_time" content="2019-10-23T11:31:00.789Z">
+<meta property="og:updated_time" content="2019-11-07T10:24:47.397Z">
 <meta name="twitter:card" content="summary">
 
 <link rel="canonical" href="http://geoffen.github.io/2019/01/11/etcd-raft-WAL%E6%97%A5%E5%BF%97%E7%AE%A1%E7%90%86%E6%BA%90%E7%A0%81%E7%AE%80%E6%9E%90/">
@@ -262,7 +262,7 @@
                   <i class="fa fa-calendar-check-o"></i>
                 </span>
                 <span class="post-meta-item-text">更新于</span>
-                <time title="修改时间：2019-10-23 19:31:00" itemprop="dateModified" datetime="2019-10-23T19:31:00+08:00">2019-10-23</time>
+                <time title="修改时间：2019-11-07 18:24:47" itemprop="dateModified" datetime="2019-11-07T18:24:47+08:00">2019-11-07</time>
               </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -567,12 +567,12 @@
     <span class="post-meta-item-icon">
       <i class="fa fa-area-chart"></i>
     </span>
-    <span title="站点总字数">620k</span>
+    <span title="站点总字数">626k</span>
     <span class="post-meta-divider">|</span>
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">9:23</span>
+    <span title="站点阅读时长">9:29</span>
 </div>
 <!--
   <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0

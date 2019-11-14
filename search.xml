@@ -265,6 +265,15 @@
 <blockquote>
 <p>docker build  –network=host -t docker.elastic.co/kibana/kibana-oss:kibana-logtrail .</p>
 </blockquote>
+<p>或者</p>
+<figure class="highlight dockerfile"><table><tr><td class="code"><pre><span class="line"><span class="keyword">FROM</span> docker.elastic.co/kibana/kibana-oss:<span class="number">6.2</span>.<span class="number">4</span></span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> kibana-plugin install https://github.com/sivasamyk/logtrail/releases/download/v0.1.27/logtrail-6.2.4-0.1.27.zip</span></span><br><span class="line"><span class="keyword">WORKDIR</span><span class="bash"> /config</span></span><br><span class="line"><span class="keyword">USER</span> root</span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> mv /usr/share/kibana/plugins/logtrail/logtrail.json /config/logtrail.json &amp;&amp; \</span></span><br><span class="line"><span class="bash">    ln -s /config/logtrail.json /usr/share/kibana/plugins/logtrail/logtrail.json</span></span><br><span class="line"><span class="keyword">USER</span> kibana</span><br></pre></td></tr></table></figure>
+
+<p>使用configmap</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">apiVersion: v1</span><br><span class="line">kind: ConfigMap</span><br><span class="line">metadata:</span><br><span class="line">  name: logtrail-config</span><br><span class="line">data:</span><br><span class="line">  logtrail.json: |</span><br><span class="line">    &#123;</span><br><span class="line">        &quot;version&quot; : 1,</span><br><span class="line">        &quot;index_patterns&quot; : [</span><br><span class="line">        &#123;      </span><br><span class="line">            &quot;es&quot;: &#123;</span><br><span class="line">                &quot;default_index&quot;: &quot;logstash-*&quot;</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;tail_interval_in_seconds&quot;: 10,</span><br><span class="line">            &quot;es_index_time_offset_in_seconds&quot;: 0,</span><br><span class="line">            &quot;display_timezone&quot;: &quot;local&quot;,</span><br><span class="line">            &quot;display_timestamp_format&quot;: &quot;MMM DD HH:mm:ss&quot;,</span><br><span class="line">            &quot;max_buckets&quot;: 500,</span><br><span class="line">            &quot;default_time_range_in_days&quot; : 0,</span><br><span class="line">            &quot;max_hosts&quot;: 100,</span><br><span class="line">            &quot;max_events_to_keep_in_viewer&quot;: 5000,</span><br><span class="line">            &quot;fields&quot; : &#123;</span><br><span class="line">                &quot;mapping&quot; : &#123;</span><br><span class="line">                    &quot;timestamp&quot; : &quot;@timestamp&quot;,</span><br><span class="line">                    &quot;hostname&quot; : &quot;kubernetes.host&quot;,</span><br><span class="line">                    &quot;program&quot;: &quot;kubernetes.pod_name&quot;,</span><br><span class="line">                    &quot;message&quot;: &quot;log&quot;</span><br><span class="line">                &#125;,</span><br><span class="line">                &quot;message_format&quot;: &quot;&#123;&#123;&#123;log&#125;&#125;&#125;&quot;</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;color_mapping&quot; : &#123;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;]</span><br><span class="line">    &#125; </span><br><span class="line">---</span><br><span class="line">apiVersion: apps/v1beta1</span><br><span class="line">kind: Deployment</span><br><span class="line">metadata:</span><br><span class="line">  name: kibana</span><br><span class="line">  labels:</span><br><span class="line">    component: kibana</span><br><span class="line">spec:</span><br><span class="line">  replicas: 1</span><br><span class="line">  selector:</span><br><span class="line">    matchLabels:</span><br><span class="line">     component: kibana</span><br><span class="line">  template:</span><br><span class="line">    metadata:</span><br><span class="line">      labels:</span><br><span class="line">        component: kibana</span><br><span class="line">    spec:</span><br><span class="line">      containers:</span><br><span class="line">      - name: kibana</span><br><span class="line">        image: sh4d1/kibana-logtrail:6.2.4 # or your image</span><br><span class="line">        volumeMounts:</span><br><span class="line">          - name: logtrail-config</span><br><span class="line">            mountPath: /config</span><br><span class="line">        env:</span><br><span class="line">        - name: CLUSTER_NAME</span><br><span class="line">          value: myesdb # the name of your ES cluster</span><br><span class="line">        resources:</span><br><span class="line">          limits:</span><br><span class="line">            cpu: 1000m</span><br><span class="line">          requests:</span><br><span class="line">            cpu: 100m</span><br><span class="line">        ports:</span><br><span class="line">        - containerPort: 5601</span><br><span class="line">          name: http</span><br><span class="line">      volumes:</span><br><span class="line">        - name: logtrail-config</span><br><span class="line">          configMap:</span><br><span class="line">            name: logtrail-config</span><br></pre></td></tr></table></figure>
+
+<p>Then the important part is the <code>fields</code> section. It will display like:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">timestamp hostname program:message</span><br></pre></td></tr></table></figure>
+
 ]]></content>
       <categories>
         <category>持续集成</category>
@@ -2142,11 +2151,79 @@
 <p> <strong>-m</strong> :提交时的说明文字；</p>
 <p> <strong>-p</strong> :在commit时，将容器暂停。</p>
 <p>3 <strong>docker push [ImageID] [repertory_address]</strong>提交镜像到云仓库</p>
-<p>作者：爱睡觉的树</p>
-<p>链接：</p>
-<p><a href="https://www.jianshu.com/p/a84e8cf33b34" target="_blank" rel="noopener">https://www.jianshu.com/p/a84e8cf33b34</a></p>
-<p>来源：简书</p>
-<p>著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。</p>
+<h2 id="docker容器及镜像清理"><a href="#docker容器及镜像清理" class="headerlink" title="docker容器及镜像清理"></a>docker容器及镜像清理</h2><p>To clean up, all unused containers, images, network, and volumes, use the following command.</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">docker system prune</span><br></pre></td></tr></table></figure>
+
+<p><strong>Recommended:</strong> <a href="http://skillslane.com/offer/learn-docker-technologies-devops-developers/" target="_blank" rel="noopener">Learn Docker Technologies for DevOps and Developers 53</a></p>
+<p>To individually delete all the components, use the following commands.</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">docker container prune</span><br><span class="line">docker image prune</span><br><span class="line">docker network prune</span><br><span class="line">docker volume prune</span><br></pre></td></tr></table></figure>
+
+<p>For Docker versions below 1.13</p>
+<p>To clean up containers, first, you need to clean up your containers. So that all the unwanted images can be deleted without dependency problems.</p>
+<p>Delete all Exited Containers</p>
+<blockquote>
+<p>docker rm $(docker ps -q -f status=exited) </p>
+</blockquote>
+<p>Delete all Stopped Containers</p>
+<blockquote>
+<p>docker rm $(docker ps -a -q)<br>####Delete All Running and Stopped Containers<br>docker stop $(docker ps -a -q)<br>docker rm $(docker ps -a -q)</p>
+</blockquote>
+<h4 id="Delete-all-“none”-Images"><a href="#Delete-all-“none”-Images" class="headerlink" title="Delete all “none” Images"></a>Delete all “none” Images</h4><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">docker rmi $(docker images | grep &quot;^&lt;none&gt;&quot; | awk &apos;&#123; print $3 &#125;&apos;)</span><br></pre></td></tr></table></figure>
+
+<h4 id="Delete-all-Dangling-Images"><a href="#Delete-all-Dangling-Images" class="headerlink" title="Delete all Dangling Images"></a>Delete all Dangling Images</h4><figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">sudo docker rmi $(sudo docker images -f &quot;dangling=true&quot; -q)</span><br></pre></td></tr></table></figure>
+
+
+
+<p>Update Sept. 2016: Docker 1.13: <a href="https://github.com/docker/docker/pull/26108" target="_blank" rel="noopener">PR 26108</a> and <a href="https://github.com/docker/docker/commit/86de7c000f5d854051369754ad1769194e8dd5e1" target="_blank" rel="noopener">commit 86de7c0</a> introduce a few new commands to help facilitate visualizing how much space the docker daemon data is taking on disk and allowing for easily cleaning up “unneeded” excess.</p>
+<p><a href="https://docs.docker.com/engine/reference/commandline/system_prune/" target="_blank" rel="noopener"><strong>docker system prune</strong></a> will delete ALL dangling data (i.e. In order: containers stopped, volumes without containers and images with no containers). Even unused data, with <code>-a</code> option.</p>
+<p>You also have:</p>
+<ul>
+<li><a href="https://docs.docker.com/engine/reference/commandline/container_prune/" target="_blank" rel="noopener"><code>docker container prune</code></a></li>
+<li><a href="https://docs.docker.com/engine/reference/commandline/image_prune/" target="_blank" rel="noopener"><code>docker image prune</code></a></li>
+<li><a href="https://docs.docker.com/engine/reference/commandline/network_prune/" target="_blank" rel="noopener"><code>docker network prune</code></a></li>
+<li><a href="https://docs.docker.com/engine/reference/commandline/volume_prune/" target="_blank" rel="noopener"><code>docker volume prune</code></a></li>
+</ul>
+<p>For <em>unused</em> images, use <code>docker image prune -a</code> (for removing dangling <em>and</em> ununsed images).<br>Warning: ‘<em>unused</em>‘ means “images not referenced by any container”: be careful before using <code>-a</code>.</p>
+<p>As illustrated in <a href="https://stackoverflow.com/users/1207596/a-l" target="_blank" rel="noopener">A L</a>‘s <a href="https://stackoverflow.com/a/50405599/6309" target="_blank" rel="noopener">answer</a>, <code>docker system prune --all</code> will remove all <em>unused</em> images not just dangling ones… which can be a bit too much.</p>
+<p>Combining <code>docker xxx prune</code> with the <a href="https://docs.docker.com/engine/reference/commandline/system_prune/#filtering" target="_blank" rel="noopener"><code>--filter</code> option</a> can be a great way to limit the pruning (<a href="https://docs.docker.com/develop/sdk/#api-version-matrix" target="_blank" rel="noopener">docker SDK API 1.28 minimum, so docker 17.04+</a>)</p>
+<blockquote>
+<p>The currently supported filters are:</p>
+</blockquote>
+<ul>
+<li><code>until (&lt;timestamp&gt;)</code> - only remove containers, images, and networks created before given timestamp</li>
+<li><code>label</code> (<code>label=&lt;key&gt;</code>, <code>label=&lt;key&gt;=&lt;value&gt;</code>, <code>label!=&lt;key&gt;</code>, or <code>label!=&lt;key&gt;=&lt;value&gt;</code>) - only remove containers, images, networks, and volumes with (or <em>without</em>, in case <code>label!=...</code> is used) the specified labels.</li>
+</ul>
+<p>See “<a href="https://docs.docker.com/config/pruning/#prune-images" target="_blank" rel="noopener">Prune images</a>“ for an example.</p>
+<hr>
+<p>Original answer (Sep. 2016)</p>
+<p>I usually do:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">docker rmi $(docker images --filter &quot;dangling=true&quot; -q --no-trunc)</span><br></pre></td></tr></table></figure>
+
+<p>I have an <a href="https://github.com/docker/docker/blob/634a848b8e3bdd8aed834559f3b2e0dfc7f5ae3a/man/docker-images.1.md#options" target="_blank" rel="noopener">alias for removing those [dangling images]</a><a href="https://github.com/docker/docker/blob/634a848b8e3bdd8aed834559f3b2e0dfc7f5ae3a/man/docker-images.1.md#options" target="_blank" rel="noopener">13</a>: <code>drmi</code></p>
+<blockquote>
+<p>The <code>dangling=true</code> filter finds unused images</p>
+</blockquote>
+<p>That way, any intermediate image no longer referenced by a labelled image is removed.</p>
+<p>I do the same <strong>first</strong> for <a href="https://github.com/VonC/b2d/blob/b010ab51974ac7de6162cdcbff795d7b9e84fd67/.bash_aliases#L21" target="_blank" rel="noopener">exited processes (containers)</a></p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">alias drmae=&apos;docker rm $(docker ps -qa --no-trunc --filter &quot;status=exited&quot;)&apos;</span><br></pre></td></tr></table></figure>
+
+<p>As <a href="https://stackoverflow.com/users/95750/haridsv" target="_blank" rel="noopener">haridsv</a> points out <a href="https://stackoverflow.com/questions/32723111/how-to-remove-old-and-unused-docker-images/32723127#comment63457575_32723127" target="_blank" rel="noopener">in the comments</a>:</p>
+<blockquote>
+<p>Technically, <strong>you should first clean up containers before cleaning up images, as this will catch more dangling images and less errors</strong>.</p>
+</blockquote>
+<hr>
+<p><a href="https://github.com/jfrazelle" target="_blank" rel="noopener">Jess Frazelle (jfrazelle)</a> has the <a href="https://github.com/jfrazelle/dotfiles/blob/a7fd3df6ab423e6dd04f27727f653753453db837/.dockerfunc#L8-L11" target="_blank" rel="noopener">bashrc function</a>:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">dcleanup()&#123;</span><br><span class="line">    docker rm -v $(docker ps --filter status=exited -q 2&gt;/dev/null) 2&gt;/dev/null</span><br><span class="line">    docker rmi $(docker images --filter dangling=true -q 2&gt;/dev/null) 2&gt;/dev/null</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<p>To remove old images, and not just “unreferenced-dangling” images, you can consider <a href="https://github.com/spotify/docker-gc" target="_blank" rel="noopener"><strong>docker-gc</strong></a>:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">$ docker images --no-trunc --format &apos;&#123;&#123;.ID&#125;&#125; &#123;&#123;.CreatedSince&#125;&#125; &#123;&#123;.Repository&#125;&#125;&apos; \</span><br><span class="line">    | grep &apos; months&apos; | awk &apos;&#123; print $1 &#125;&apos; \</span><br><span class="line">    | xargs --no-run-if-empty docker rmi</span><br></pre></td></tr></table></figure>
+
+<p>Example of <code>/etc/cron.daily/docker-gc</code> script:</p>
+<figure class="highlight plain"><table><tr><td class="code"><pre><span class="line">#!/bin/sh -e</span><br><span class="line"></span><br><span class="line"># Delete all stopped containers (including data-only containers).</span><br><span class="line">docker ps -a -q --no-trunc --filter &quot;status=exited&quot; | xargs --no-run-if-empty docker rm -v</span><br><span class="line"></span><br><span class="line"># Delete all tagged images more than a month old</span><br><span class="line"># (will fail to remove images still used).</span><br><span class="line">docker images --no-trunc --format &apos;&#123;&#123;.ID&#125;&#125; &#123;&#123;.CreatedSince&#125;&#125;&apos; | grep &apos; months&apos; | awk &apos;&#123; print $1 &#125;&apos; | xargs --no-run-if-empty docker rmi || true</span><br><span class="line"></span><br><span class="line"># Delete all &apos;untagged/dangling&apos; (&lt;none&gt;) images</span><br><span class="line"># Those are used for Docker caching mechanism.</span><br><span class="line">docker images -q --no-trunc --filter dangling=true | xargs --no-run-if-empty docker rmi</span><br><span class="line"></span><br><span class="line"># Delete all dangling volumes.</span><br><span class="line">docker volume ls -qf dangling=true | xargs --no-run-if-empty docker volume rm</span><br></pre></td></tr></table></figure>
+
+
+
 <h2 id="docker-compose-的安装及使用"><a href="#docker-compose-的安装及使用" class="headerlink" title="docker-compose 的安装及使用"></a>docker-compose 的安装及使用</h2><h3 id="简单介绍-1"><a href="#简单介绍-1" class="headerlink" title="简单介绍"></a>简单介绍</h3><blockquote>
 <p>Docker Compose 是一个用来定义和运行复杂应用的 Docker 工具。<br>使用 Docker Compose 不再需要使用 shell 脚本来启动容器。(通过 docker-compose.yml 配置)</p>
 </blockquote>

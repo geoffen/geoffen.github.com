@@ -66,7 +66,7 @@
 <meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;bc7n1S.jpg">
 <meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;wHFvnu.jpg">
 <meta property="og:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;HsYSF3.jpg">
-<meta property="og:updated_time" content="2019-11-06T11:15:21.322Z">
+<meta property="og:updated_time" content="2019-11-14T06:39:24.171Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http:&#x2F;&#x2F;geoffen.github.io&#x2F;2019&#x2F;11&#x2F;06&#x2F;%E5%9C%A8Kubernetes%E4%B8%8A%E6%90%AD%E5%BB%BAEFK%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%B3%BB%E7%BB%9F&#x2F;20180511161547422">
 
@@ -262,10 +262,16 @@
                 <i class="fa fa-calendar-o"></i>
               </span>
               <span class="post-meta-item-text">发表于</span>
-              
 
-              <time title="创建时间：2019-11-06 18:54:02 / 修改时间：19:15:21" itemprop="dateCreated datePublished" datetime="2019-11-06T18:54:02+08:00">2019-11-06</time>
+              <time title="创建时间：2019-11-06 18:54:02" itemprop="dateCreated datePublished" datetime="2019-11-06T18:54:02+08:00">2019-11-06</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-calendar-check-o"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2019-11-14 14:39:24" itemprop="dateModified" datetime="2019-11-14T14:39:24+08:00">2019-11-14</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="fa fa-folder-o"></i>
@@ -284,14 +290,14 @@
                 <i class="fa fa-file-word-o"></i>
               </span>
                 <span class="post-meta-item-text">本文字数：</span>
-              <span>30k</span>
+              <span>32k</span>
             </span>
             <span class="post-meta-item" title="阅读时长">
               <span class="post-meta-item-icon">
                 <i class="fa fa-clock-o"></i>
               </span>
                 <span class="post-meta-item-text">阅读时长 &asymp;</span>
-              <span>27 分钟</span>
+              <span>29 分钟</span>
             </span>
 
         </div>
@@ -565,6 +571,15 @@
 <blockquote>
 <p>docker build  –network=host -t docker.elastic.co/kibana/kibana-oss:kibana-logtrail .</p>
 </blockquote>
+<p>或者</p>
+<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">FROM</span> docker.elastic.co/kibana/kibana-oss:<span class="number">6.2</span>.<span class="number">4</span></span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> kibana-plugin install https://github.com/sivasamyk/logtrail/releases/download/v0.1.27/logtrail-6.2.4-0.1.27.zip</span></span><br><span class="line"><span class="keyword">WORKDIR</span><span class="bash"> /config</span></span><br><span class="line"><span class="keyword">USER</span> root</span><br><span class="line"><span class="keyword">RUN</span><span class="bash"> mv /usr/share/kibana/plugins/logtrail/logtrail.json /config/logtrail.json &amp;&amp; \</span></span><br><span class="line"><span class="bash">    ln -s /config/logtrail.json /usr/share/kibana/plugins/logtrail/logtrail.json</span></span><br><span class="line"><span class="keyword">USER</span> kibana</span><br></pre></td></tr></table></figure>
+
+<p>使用configmap</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line">apiVersion: v1</span><br><span class="line">kind: ConfigMap</span><br><span class="line">metadata:</span><br><span class="line">  name: logtrail-config</span><br><span class="line">data:</span><br><span class="line">  logtrail.json: |</span><br><span class="line">    &#123;</span><br><span class="line">        &quot;version&quot; : 1,</span><br><span class="line">        &quot;index_patterns&quot; : [</span><br><span class="line">        &#123;      </span><br><span class="line">            &quot;es&quot;: &#123;</span><br><span class="line">                &quot;default_index&quot;: &quot;logstash-*&quot;</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;tail_interval_in_seconds&quot;: 10,</span><br><span class="line">            &quot;es_index_time_offset_in_seconds&quot;: 0,</span><br><span class="line">            &quot;display_timezone&quot;: &quot;local&quot;,</span><br><span class="line">            &quot;display_timestamp_format&quot;: &quot;MMM DD HH:mm:ss&quot;,</span><br><span class="line">            &quot;max_buckets&quot;: 500,</span><br><span class="line">            &quot;default_time_range_in_days&quot; : 0,</span><br><span class="line">            &quot;max_hosts&quot;: 100,</span><br><span class="line">            &quot;max_events_to_keep_in_viewer&quot;: 5000,</span><br><span class="line">            &quot;fields&quot; : &#123;</span><br><span class="line">                &quot;mapping&quot; : &#123;</span><br><span class="line">                    &quot;timestamp&quot; : &quot;@timestamp&quot;,</span><br><span class="line">                    &quot;hostname&quot; : &quot;kubernetes.host&quot;,</span><br><span class="line">                    &quot;program&quot;: &quot;kubernetes.pod_name&quot;,</span><br><span class="line">                    &quot;message&quot;: &quot;log&quot;</span><br><span class="line">                &#125;,</span><br><span class="line">                &quot;message_format&quot;: &quot;&#123;&#123;&#123;log&#125;&#125;&#125;&quot;</span><br><span class="line">            &#125;,</span><br><span class="line">            &quot;color_mapping&quot; : &#123;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;]</span><br><span class="line">    &#125; </span><br><span class="line">---</span><br><span class="line">apiVersion: apps/v1beta1</span><br><span class="line">kind: Deployment</span><br><span class="line">metadata:</span><br><span class="line">  name: kibana</span><br><span class="line">  labels:</span><br><span class="line">    component: kibana</span><br><span class="line">spec:</span><br><span class="line">  replicas: 1</span><br><span class="line">  selector:</span><br><span class="line">    matchLabels:</span><br><span class="line">     component: kibana</span><br><span class="line">  template:</span><br><span class="line">    metadata:</span><br><span class="line">      labels:</span><br><span class="line">        component: kibana</span><br><span class="line">    spec:</span><br><span class="line">      containers:</span><br><span class="line">      - name: kibana</span><br><span class="line">        image: sh4d1/kibana-logtrail:6.2.4 # or your image</span><br><span class="line">        volumeMounts:</span><br><span class="line">          - name: logtrail-config</span><br><span class="line">            mountPath: /config</span><br><span class="line">        env:</span><br><span class="line">        - name: CLUSTER_NAME</span><br><span class="line">          value: myesdb # the name of your ES cluster</span><br><span class="line">        resources:</span><br><span class="line">          limits:</span><br><span class="line">            cpu: 1000m</span><br><span class="line">          requests:</span><br><span class="line">            cpu: 100m</span><br><span class="line">        ports:</span><br><span class="line">        - containerPort: 5601</span><br><span class="line">          name: http</span><br><span class="line">      volumes:</span><br><span class="line">        - name: logtrail-config</span><br><span class="line">          configMap:</span><br><span class="line">            name: logtrail-config</span><br></pre></td></tr></table></figure>
+
+<p>Then the important part is the <code>fields</code> section. It will display like:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">timestamp hostname program:message</span><br></pre></td></tr></table></figure>
+
 
     </div>
 	
@@ -746,12 +761,12 @@
     <span class="post-meta-item-icon">
       <i class="fa fa-area-chart"></i>
     </span>
-    <span title="站点总字数">620k</span>
+    <span title="站点总字数">626k</span>
     <span class="post-meta-divider">|</span>
     <span class="post-meta-item-icon">
       <i class="fa fa-coffee"></i>
     </span>
-    <span title="站点阅读时长">9:23</span>
+    <span title="站点阅读时长">9:29</span>
 </div>
 <!--
   <div class="powered-by">由 <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> 强力驱动 v4.0.0
